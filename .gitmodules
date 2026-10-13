@@ -1,0 +1,205 @@
+[submodule "emulator/externals/zlib-ng"]
+	path = emulator/externals/zlib-ng
+	url = https://github.com/shadps4-emu/ext-zlib-ng.git
+	shallow = true
+[submodule "emulator/externals/fmt"]
+	path = emulator/externals/fmt
+	url = https://github.com/shadps4-emu/ext-fmt.git
+	shallow = true
+[submodule "emulator/externals/vulkan-headers"]
+	path = emulator/externals/vulkan-headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+	shallow = true
+[submodule "emulator/externals/vma"]
+	path = emulator/externals/vma
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+	shallow = true
+[submodule "emulator/externals/glslang"]
+	path = emulator/externals/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+	shallow = true
+[submodule "emulator/externals/robin-map"]
+	path = emulator/externals/robin-map
+	url = https://github.com/Tessil/robin-map.git
+	shallow = true
+[submodule "emulator/externals/xbyak"]
+	path = emulator/externals/xbyak
+	url = https://github.com/herumi/xbyak.git
+	shallow = true
+[submodule "emulator/externals/magic_enum"]
+	path = emulator/externals/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
+	shallow = true
+[submodule "emulator/externals/toml11"]
+	path = emulator/externals/toml11
+	url = https://github.com/ToruNiina/toml11.git
+	shallow = true
+[submodule "emulator/externals/zydis"]
+	path = emulator/externals/zydis
+	url = https://github.com/zyantific/zydis.git
+	shallow = true
+[submodule "emulator/externals/sirit"]
+	path = emulator/externals/sirit
+	url = https://github.com/shadps4-emu/sirit.git
+	shallow = true
+[submodule "emulator/externals/xxhash"]
+	path = emulator/externals/xxhash
+	url = https://github.com/Cyan4973/xxHash.git
+	shallow = true
+[submodule "emulator/externals/tracy"]
+	path = emulator/externals/tracy
+	url = https://github.com/shadps4-emu/tracy.git
+	shallow = true
+[submodule "emulator/externals/ext-boost"]
+	path = emulator/externals/ext-boost
+	url = https://github.com/shadps4-emu/ext-boost.git
+	shallow = true
+[submodule "emulator/externals/date"]
+	path = emulator/externals/date
+	url = https://github.com/HowardHinnant/date.git
+	shallow = true
+[submodule "emulator/externals/ffmpeg-core"]
+	path = emulator/externals/ffmpeg-core
+	url = https://github.com/shadps4-emu/ext-ffmpeg-core.git
+	shallow = true
+[submodule "emulator/externals/half"]
+	path = emulator/externals/half
+	url = https://github.com/ROCm/half.git
+	shallow = true
+[submodule "emulator/externals/dear_imgui"]
+	path = emulator/externals/dear_imgui
+	url = https://github.com/shadps4-emu/ext-imgui.git
+	branch = docking
+	shallow = true
+[submodule "emulator/externals/pugixml"]
+	path = emulator/externals/pugixml
+	url = https://github.com/zeux/pugixml.git
+	shallow = true
+[submodule "emulator/externals/discord-rpc"]
+	path = emulator/externals/discord-rpc
+	url = https://github.com/shadps4-emu/ext-discord-rpc.git
+	shallow = true
+[submodule "emulator/externals/LibAtrac9"]
+	path = emulator/externals/LibAtrac9
+	url = https://github.com/shadps4-emu/ext-LibAtrac9.git
+	shallow = true
+[submodule "emulator/externals/libpng"]
+	path = emulator/externals/libpng
+	url = https://github.com/pnggroup/libpng
+	shallow = true
+[submodule "emulator/externals/epoll-shim"]
+	path = emulator/externals/epoll-shim
+	url = https://github.com/jiixyj/epoll-shim.git
+[submodule "emulator/externals/hwinfo"]
+	path = emulator/externals/hwinfo
+	url = https://github.com/shadps4-emu/ext-hwinfo
+	shallow = true
+[submodule "emulator/externals/ext-wepoll"]
+	path = emulator/externals/ext-wepoll
+	url = https://github.com/shadps4-emu/ext-wepoll.git
+	branch = dist
+	shallow = true
+[submodule "emulator/externals/json"]
+	path = emulator/externals/json
+	url = https://github.com/nlohmann/json.git
+[submodule "emulator/externals/miniz"]
+	path = emulator/externals/miniz
+	url = https://github.com/richgel999/miniz
+[submodule "emulator/externals/aacdec/fdk-aac"]
+	path = emulator/externals/aacdec/fdk-aac
+	url = https://android.googlesource.com/platform/external/aac
+[submodule "emulator/externals/freetype"]
+	path = emulator/externals/freetype
+	url = https://github.com/freetype/freetype.git
+	shallow = true
+[submodule "emulator/externals/CLI11"]
+	path = emulator/externals/CLI11
+	url = https://github.com/shadexternals/CLI11.git
+[submodule "emulator/externals/sdl3"]
+	path = emulator/externals/sdl3
+	url = https://github.com/shadexternals/sdl3.git
+	branch = main
+[submodule "emulator/externals/cpp-httplib"]
+	path = emulator/externals/cpp-httplib
+	url = https://github.com/shadexternals/cpp-httplib.git
+[submodule "emulator/externals/openal-soft"]
+	path = emulator/externals/openal-soft
+	url = https://github.com/shadexternals/openal-soft.git
+[submodule "emulator/externals/libusb"]
+	path = emulator/externals/libusb
+	url = https://github.com/shadexternals/libusb.git
+	branch = shadps4
+[submodule "emulator/externals/minimp3"]
+	path = emulator/externals/minimp3
+	url = https://github.com/lieff/minimp3
+	shallow = true
+[submodule "emulator/externals/ImGuiFileDialog"]
+	path = emulator/externals/ImGuiFileDialog
+	url = https://github.com/shadexternals/ImGuiFileDialog.git
+[submodule "emulator/externals/spdlog"]
+	path = emulator/externals/spdlog
+	url = https://github.com/gabime/spdlog.git
+	branch = v2.x
+	shallow = true
+[submodule "emulator/externals/libressl"]
+	path = emulator/externals/libressl
+	url = https://github.com/shadexternals/libressl
+[submodule "emulator/externals/miniupnp"]
+	path = emulator/externals/miniupnp
+	url = https://github.com/miniupnp/miniupnp.git
+[submodule "emulator/externals/mesa-kosmickrisp"]
+	path = emulator/externals/mesa-kosmickrisp
+	url = https://github.com/shadexternals/mesa-kosmickrisp
+	shallow = true
+[submodule "emulator/externals/vulkan-loader"]
+	path = emulator/externals/vulkan-loader
+	url = https://github.com/KhronosGroup/Vulkan-Loader
+	shallow = true
+[submodule "emulator/externals/protobuf"]
+	path = emulator/externals/protobuf
+	url = https://github.com/shadexternals/protobuf.git
+[submodule "emulator/externals/zstd"]
+	path = emulator/externals/zstd
+	url = https://github.com/shadexternals/zstd.git
+[submodule "emulator/externals/zarchive"]
+	path = emulator/externals/zarchive
+	url = https://github.com/shadexternals/ZArchive.git
+[submodule "launcher/externals/sdl3"]
+	path = launcher/externals/sdl3
+	url = https://github.com/shadps4-emu/ext-SDL.git
+	shallow = true
+[submodule "launcher/externals/fmt"]
+	path = launcher/externals/fmt
+	url = https://github.com/shadps4-emu/ext-fmt.git
+	shallow = true
+[submodule "launcher/externals/toml11"]
+	path = launcher/externals/toml11
+	url = https://github.com/ToruNiina/toml11.git
+	shallow = true
+[submodule "launcher/externals/volk"]
+	path = launcher/externals/volk
+	url = https://github.com/zeux/volk.git
+	branch = master
+[submodule "launcher/externals/vulkan-headers"]
+	path = launcher/externals/vulkan-headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+	shallow = true
+[submodule "launcher/externals/json"]
+	path = launcher/externals/json
+	url = https://github.com/nlohmann/json.git
+	branch = develop
+[submodule "launcher/externals/openal-soft"]
+	path = launcher/externals/openal-soft
+	url = https://github.com/shadexternals/openal-soft.git
+	shallow = true
+[submodule "launcher/externals/spdlog"]
+	path = launcher/externals/spdlog
+	url = https://github.com/gabime/spdlog.git
+	branch = v2.x
+	shallow = true
+[submodule "launcher/externals/zstd"]
+	path = launcher/externals/zstd
+	url = https://github.com/shadexternals/zstd.git
+[submodule "launcher/externals/zarchive"]
+	path = launcher/externals/zarchive
+	url = https://github.com/shadexternals/ZArchive.git

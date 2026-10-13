@@ -1,0 +1,57 @@
+// SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#pragma once
+
+#include <QDialog>
+#include <QNetworkAccessManager>
+#include <QTextBrowser>
+#include <QTreeWidget>
+
+#include "gui_settings.h"
+
+namespace Ui {
+class VersionDialog;
+}
+
+class VersionDialog : public QDialog {
+    Q_OBJECT
+signals:
+    void WindowResized(QResizeEvent* event);
+
+public:
+    explicit VersionDialog(std::shared_ptr<gui_settings> gui_settings, QWidget* parent = nullptr);
+    ~VersionDialog();
+    void onItemChanged(QTreeWidgetItem* item, int column);
+    void checkUpdatePre(const bool showMessage);
+    void DownloadListVersion();
+    void InstallSelectedVersion();
+    void addExecutableFromDrop(const QString& exePath);
+
+private Q_SLOTS:
+    void HandleResize(QResizeEvent* event);
+
+private:
+    Ui::VersionDialog* ui;
+    std::shared_ptr<gui_settings> m_gui_settings;
+    QNetworkAccessManager* networkManager;
+    QString m_pendingExecutablePath;
+
+    void LoadInstalledList();
+    QStringList LoadDownloadCache();
+    void SaveDownloadCache(const QStringList& versions);
+    void PopulateDownloadTree(const QStringList& versions);
+    void showPreReleaseUpdateDialog(const QString& localHash, const QString& latestHash,
+                                    const QString& latestTag);
+    void requestChangelog(const QString& localHash, const QString& latestHash,
+                          const QString& latestTag, QTextBrowser* outputView);
+    void installPreReleaseByTag(const QString& tagName);
+    void showDownloadDialog(const QString& tagName, const QString& downloadUrl);
+    void AddCustomExecutable(const QString& exePath);
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+};

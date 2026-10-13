@@ -1,0 +1,4014 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
+     SPDX-License-Identifier: GPL-2.0-or-later -->
+<!DOCTYPE TS>
+<TS version="2.1" language="ar_SA" sourcelanguage="en">
+  <context>
+    <name>AboutDialog</name>
+    <message>
+      <source>About shadPS4</source>
+      <translation>حول محاكي الظل PS4</translation>
+    </message>
+    <message>
+      <source>shadPS4 is an experimental open-source emulator for the PlayStation 4.</source>
+      <translation>محاكي الظل هو محاكي تجريبي مفتوح المصدر مخصص لـ PS4</translation>
+    </message>
+    <message>
+      <source>This software should not be used to play games you have not legally obtained.</source>
+      <translation>لا يجب استخدام هذا المحاكي لتشغيل ألعاب لم يتم الحصول عليها بطريقة قانونية.</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheatsPatches</name>
+    <message>
+      <source>Cheats / Patches for </source>
+      <translation>شفرات / إصلاحات لـ </translation>
+    </message>
+    <message>
+      <source>Cheats/Patches are experimental.\nUse with caution.\n\nDownload cheats individually by selecting the repository and clicking the download button.\nIn the Patches tab, you can download all patches at once, choose which ones you want to use, and save your selection.\n\nSince we do not develop the Cheats/Patches,\nplease report issues to the cheat author.\n\nCreated a new cheat? Visit:\n</source>
+      <translation>الشفرات والإصلاحات هي ميزات تجريبية.\nاستخدمها بحذر.\n\nقم بتنزيل الشفرات بشكل فردي عن طريق اختيار المستودع والضغط على تنزيل.\nفي علامة تبويب الإصلاحات، يمكنك تنزيل جميع الإصلاحات دفعة واحدة، واختيار ما تريد استخدامه، وحفظ اختياراتك.\n\nنظرًا لأننا لا نقوم بتطوير الشفرات والإصلاحات ،\nيرجى الإبلاغ عن أي مشاكل إلى مؤلف الشفرات.\n\nهل قمت بإنشاء شفرة جديدة؟ قم بزيارة:\n</translation>
+    </message>
+    <message>
+      <source>No Image Available</source>
+      <translation>الصورة غير موجودة</translation>
+    </message>
+    <message>
+      <source>Serial: </source>
+      <translation>الرَّقَم التسلسلي: </translation>
+    </message>
+    <message>
+      <source>Version: </source>
+      <translation>الإصدار: </translation>
+    </message>
+    <message>
+      <source>Size: </source>
+      <translation>الحجم: </translation>
+    </message>
+    <message>
+      <source>Select Cheat File:</source>
+      <translation>حدد ملَفّ الشفرات:</translation>
+    </message>
+    <message>
+      <source>Repository:</source>
+      <translation>المستودع:</translation>
+    </message>
+    <message>
+      <source>Download Cheats</source>
+      <translation>تحميل الشفرات</translation>
+    </message>
+    <message>
+      <source>Delete File</source>
+      <translation>حذف الملف</translation>
+    </message>
+    <message>
+      <source>No files selected.</source>
+      <translation>لم يتم تحديد أي ملفات.</translation>
+    </message>
+    <message>
+      <source>You can delete the cheats you don&apos;t want after downloading them.</source>
+      <translation>يمكنك حذف الشفرات التي لا &apos;تريدها بعد تنزيلها.</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the selected file?\n%1</source>
+      <translation>هل ترغب في حذف الملف المحدد؟\n%1</translation>
+    </message>
+    <message>
+      <source>Select Patch File:</source>
+      <translation>اختر مِلَف التصحيح:</translation>
+    </message>
+    <message>
+      <source>Download Patches</source>
+      <translation>تحميل ملفات التصحيح</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>حفظ</translation>
+    </message>
+    <message>
+      <source>Cheats</source>
+      <translation>الشفرات</translation>
+    </message>
+    <message>
+      <source>Patches</source>
+      <translation>التصحيحات</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>No patch selected.</source>
+      <translation>لم يتم تحديد أي مِلَف تصحيح.</translation>
+    </message>
+    <message>
+      <source>Unable to open files.json for reading.</source>
+      <translation>تعذّر فتح مِلَف files.json للقراءة.</translation>
+    </message>
+    <message>
+      <source>No patch file found for the current serial.</source>
+      <translation>لم يتم العثور على مِلَف تصحيح للسيريال الحالي.</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for reading.</source>
+      <translation>تعذر فتح الملف للقراءة.</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for writing.</source>
+      <translation>تعذر فتح الملف للكتابة.</translation>
+    </message>
+    <message>
+      <source>Failed to parse XML: </source>
+      <translation> :فشل في تحليل XML</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>نجاح</translation>
+    </message>
+    <message>
+      <source>Options saved successfully.</source>
+      <translation>تم حفظ الإعدادات.</translation>
+    </message>
+    <message>
+      <source>Invalid Source</source>
+      <translation>المصدر غير صالح</translation>
+    </message>
+    <message>
+      <source>The selected source is invalid.</source>
+      <translation>المصدر المحدد غير صالح.</translation>
+    </message>
+    <message>
+      <source>File Exists</source>
+      <translation>الملف موجود مسبقًا</translation>
+    </message>
+    <message>
+      <source>File already exists. Do you want to replace it?</source>
+      <translation>المِلَف موجود مسبقًا. هل ترغب في استبداله؟</translation>
+    </message>
+    <message>
+      <source>Failed to save file:</source>
+      <translation>:فشل في حفظ الملف</translation>
+    </message>
+    <message>
+      <source>Failed to download file:</source>
+      <translation>:فشل في تنزيل الملف</translation>
+    </message>
+    <message>
+      <source>Cheats Not Found</source>
+      <translation>لم يتم العثور على أي شفرات</translation>
+    </message>
+    <message>
+      <source>No Cheats found for this game in this version of the selected repository,try another repository or a different version of the game.</source>
+      <translation>لم يتم العثور على شفرات لهذه اللعبة في هذا الإصدار من المستودع المحدد. جرّب مستودعًا آخر أو إصدارًا مختلفًا من اللعبة.</translation>
+    </message>
+    <message>
+      <source>Cheats Downloaded Successfully</source>
+      <translation>تم تحميل الشفرات بنجاح</translation>
+    </message>
+    <message>
+      <source>You have successfully downloaded the cheats for this version of the game from the selected repository. You can try downloading from another repository, if it is available it will also be possible to use it by selecting the file from the list.</source>
+      <translation>تم تحميل الشفرات بنجاح لهذه النسخة من اللعبة من المستودع الذي اخترته. إذا أردت، يمكنك تجربة مستودع آخر، وإذا كان متاحًا، يمكنك استخدام الشفرات عن طريق اختيار الملف من القائمة.</translation>
+    </message>
+    <message>
+      <source>Failed to save:</source>
+      <translation>:فشل في الحفظ</translation>
+    </message>
+    <message>
+      <source>Failed to download:</source>
+      <translation>:فشل في التنزيل</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>اكتمل التنزيل</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully! All Patches available for all games have been downloaded, there is no need to download them individually for each game as happens in Cheats. If the patch does not appear, it may be that it does not exist for the specific serial and version of the game.</source>
+      <translation>تم تنزيل التصحيحات بنجاح! تم تنزيل جميع التصحيحات المتوفرة لجميع الألعاب، ولا حاجة إلى تنزيلها بشكل فردي لكل لعبة كما هو الحال مع الشفرات. إذا لم يظهر التصحيح، فقد لا يكون متوفرًا للسيريال أو الإصدار المحدد من اللعبة.</translation>
+    </message>
+    <message>
+      <source>Failed to parse JSON data from HTML.</source>
+      <translation>فشل في تحليل بيانات JSON من HTML.</translation>
+    </message>
+    <message>
+      <source>Failed to retrieve HTML page.</source>
+      <translation>فشل في جلب صفحة HTML.</translation>
+    </message>
+    <message>
+      <source>The game is in version: %1</source>
+      <translation>إصدار اللعبة الحالي: %1</translation>
+    </message>
+    <message>
+      <source>The downloaded patch only works on version: %1</source>
+      <translation>التصحيح الذي تم تنزيله يعمل فقط مع الإصدار:%1</translation>
+    </message>
+    <message>
+      <source>You may need to update your game.</source>
+      <translation>قد تحتاج إلى تحديث لعبتك.</translation>
+    </message>
+    <message>
+      <source>Incompatibility Notice</source>
+      <translation>إشعار بعدم التوافق</translation>
+    </message>
+    <message>
+      <source>Failed to open file:</source>
+      <translation> :فشل في فتح الملف</translation>
+    </message>
+    <message>
+      <source>XML ERROR:</source>
+      <translation> :خطأ في XML</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for writing</source>
+      <translation>فشل في فتح files.json للكتابة</translation>
+    </message>
+    <message>
+      <source>Author: </source>
+      <translation> :المؤلف</translation>
+    </message>
+    <message>
+      <source>Directory does not exist:</source>
+      <translation> :المجلد غير موجود</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for reading.</source>
+      <translation>فشل في فتح files.json للقراءة.</translation>
+    </message>
+    <message>
+      <source>Name:</source>
+      <translation>:الاسم</translation>
+    </message>
+    <message>
+      <source>Can&apos;t apply cheats before the game is started</source>
+      <translation>لا &apos;يمكن تطبيق الشفرات قبل بَدْء اللعبة</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>إغلاق</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheckUpdate</name>
+    <message>
+      <source>Auto Updater</source>
+      <translation>التحديثات التلقائية</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Network error:</source>
+      <translation>خطأ في الشبكة:</translation>
+    </message>
+    <message>
+      <source>The Auto Updater allows up to 60 update checks per hour.\nYou have reached this limit. Please try again later.</source>
+      <translation>تسمح التحديثات التلقائية بـ 60 عملية تحقق من التحديث في الساعة.\nلقد وصلت إلى الحد المسموح به. الرجاء المحاولة لاحقًا.</translation>
+    </message>
+    <message>
+      <source>Failed to parse update information.</source>
+      <translation>فشل في تحليل معلومات التحديث.</translation>
+    </message>
+    <message>
+      <source>No pre-releases found.</source>
+      <translation>لم يتم العثور على أي إصدارات مسبقة.</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation>لم يتم العثور على عنوان URL للتنزيل للأصل المحدد.</translation>
+    </message>
+    <message>
+      <source>Your version is already up to date!</source>
+      <translation>نسختك محدثة بالفعل!</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation>الإصدار الحالي</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation>آخر إصدار</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation>هل تريد التحديث؟</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation>عرض سجل التغييرات</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>تحقق من التحديثات عند بدء التشغيل</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>تحديث</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation>لا</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation>إخفاء سجل التغييرات</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation>تغييرات</translation>
+    </message>
+    <message>
+      <source>Network error occurred while trying to access the URL</source>
+      <translation>حدث خطأ في الشبكة عند محاولة الوصول إلى الموقع</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>اكتمل التنزيل</translation>
+    </message>
+    <message>
+      <source>The update has been downloaded, press OK to install.</source>
+      <translation>تم تنزيل التحديث، اضغط على OK للتثبيت.</translation>
+    </message>
+    <message>
+      <source>Failed to save the update file at</source>
+      <translation>فشل في حفظ ملف التحديث في</translation>
+    </message>
+    <message>
+      <source>Starting Update...</source>
+      <translation>بدء التحديث...</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation>فشل في إنشاء ملف سكريبت التحديث</translation>
+    </message>
+    <message>
+      <source>Auto Updater - GUI</source>
+      <translation>التحديث التلقائي - واجهة المستخدم</translation>
+    </message>
+    <message>
+      <source>Update Available - GUI</source>
+      <translation>تحديث متوفر - واجهة المستخدم</translation>
+    </message>
+  </context>
+  <context>
+    <name>CompatibilityInfoClass</name>
+    <message>
+      <source>Fetching compatibility data, please wait</source>
+      <translation>جاري جلب بيانات التوافق، يرجى الانتظار</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>جاري التحميل...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Unable to update compatibility data! Try again later.</source>
+      <translation>تعذر تحديث بيانات التوافق! حاول مرة أخرى لاحقاً.</translation>
+    </message>
+    <message>
+      <source>Unable to open compatibility_data.json for writing.</source>
+      <translation>تعذر فتح compatibility_data.json للكتابة.</translation>
+    </message>
+    <message>
+      <source>Unknown</source>
+      <translation>غير معروف</translation>
+    </message>
+    <message>
+      <source>Nothing</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Boots</source>
+      <translation>إقلاع</translation>
+    </message>
+    <message>
+      <source>Menus</source>
+      <translation>القائمة</translation>
+    </message>
+    <message>
+      <source>Ingame</source>
+      <translation>داخل اللعبة</translation>
+    </message>
+    <message>
+      <source>Playable</source>
+      <translation>قابل للعب</translation>
+    </message>
+  </context>
+  <context>
+    <name>ControlSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation>إعدادات التحكم</translation>
+    </message>
+    <message>
+      <source>D-Pad</source>
+      <translation>الأسهم+عصا التحكم</translation>
+    </message>
+    <message>
+      <source>Up</source>
+      <translation>فوق</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation>يسار</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation>يمين</translation>
+    </message>
+    <message>
+      <source>Down</source>
+      <translation>تحت</translation>
+    </message>
+    <message>
+      <source>Left Stick</source>
+      <translation>عصا التحكم اليسرى</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation>تحديد الإعدادات</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation>إعدادات عامة</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation>استخدام إعدادات كل لُعْبَة</translation>
+    </message>
+    <message>
+      <source>Face Buttons</source>
+      <translation>الأزرار</translation>
+    </message>
+    <message>
+      <source>Right Stick</source>
+      <translation>عصا التحكم اليمنى</translation>
+    </message>
+    <message>
+      <source>Color Adjustment</source>
+      <translation>تعديل الألوان</translation>
+    </message>
+    <message>
+      <source>Override Lightbar Color</source>
+      <translation>تجاوز لون شريط الإضاءة</translation>
+    </message>
+    <message>
+      <source>Override Color</source>
+      <translation>تجاوز اللون</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>غير قادر على الحفظ</translation>
+    </message>
+    <message>
+      <source>Cannot bind axis values more than once</source>
+      <translation>لا يمكن ربط قيم المحور أكثر من مرة</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>حفظ</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>تطبيق</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>استعادة الإعدادات الافتراضية</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>بدون تعيين</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation>الخيارات</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation>لوحة اللمس - يسار</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation>لوحة اللمس - الوَسَط</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation>لوحة اللمس - الأيمن</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation>مثلث</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation>مربع</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation>دائرة</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation>اكس</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>لا يمكن استخدام نفس الزر لأكثر من وظيفة تم تكرار التعيين في الأزرار التالية:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Press a button</source>
+      <translation>اضغط زر</translation>
+    </message>
+    <message>
+      <source>Move analog stick</source>
+      <translation>حرّك عصا التحكّم</translation>
+    </message>
+    <message>
+      <source>L1 and L2</source>
+      <translation>L1 + L2</translation>
+    </message>
+    <message>
+      <source>Active Gamepad</source>
+      <translation>يد التحكم النشطة</translation>
+    </message>
+    <message>
+      <source>Gamepad ID</source>
+      <translation>معرّف يد التحكم</translation>
+    </message>
+    <message>
+      <source>Default Gamepad</source>
+      <translation>يد التحكم الافتراضية</translation>
+    </message>
+    <message>
+      <source>No default selected</source>
+      <translation>لم يتم اختيار افتراضي</translation>
+    </message>
+    <message>
+      <source>n/a</source>
+      <translation>غير متاح</translation>
+    </message>
+    <message>
+      <source>Set Active Gamepad as Default</source>
+      <translation>تعيين يد التحكم النشطة كافتراضية</translation>
+    </message>
+    <message>
+      <source>Remove Default Gamepad</source>
+      <translation>إزالة يد التحكم الافتراضية</translation>
+    </message>
+    <message>
+      <source>R1 and R2</source>
+      <translation>R1 + R2</translation>
+    </message>
+    <message>
+      <source>ID: </source>
+      <translation>المعرّف:</translation>
+    </message>
+    <message>
+      <source>Default Controller Selected</source>
+      <translation>تم اختيار يد التحكم الافتراضية</translation>
+    </message>
+    <message>
+      <source>Active controller set as default</source>
+      <translation>تم تعيين يد التحكم النشطة كافتراضية</translation>
+    </message>
+    <message>
+      <source>Default Controller Removed</source>
+      <translation>تم إزالة يد التحكم الافتراضية</translation>
+    </message>
+    <message>
+      <source>Default controller setting removed</source>
+      <translation>تمت إزالة إعداد اليد الافتراضية</translation>
+    </message>
+    <message>
+      <source>RED</source>
+      <translation>أحمر</translation>
+    </message>
+    <message>
+      <source>GREEN</source>
+      <translation>أخضر</translation>
+    </message>
+    <message>
+      <source>BLUE</source>
+      <translation>أزرق</translation>
+    </message>
+    <message>
+      <source>Left Stick Deadzone</source>
+      <translation>منطقة عدم الاستجابة للعصا اليسرى</translation>
+    </message>
+    <message>
+      <source>Min Deadzone (def:2 max:127)</source>
+      <translation>أدنى منطقة عدم استجابة (الافتراضي:2 الحد الأقصى:127)</translation>
+    </message>
+    <message>
+      <source>Max Deadzone (def:127 max:127)</source>
+      <translation>أقصى منطقة عدم استجابة (الافتراضي: 127، الحد الأقصى: 127)</translation>
+    </message>
+    <message>
+      <source>Right Stick Deadzone</source>
+      <translation>منطقة عدم الاستجابة للعصا اليمنى</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>تلميح: انقر بزر الفأرة الأيمن لإلغاء تعيين المدخلات</translation>
+    </message>
+  </context>
+  <context>
+    <name>CryptoManagerDialog</name>
+    <message>
+      <source>Crypto Key Manager</source>
+      <translation>إدارة مفاتيح التشفير</translation>
+    </message>
+    <message>
+      <source>Trophy Key: Used for trophy decryption.
+Must be a valid hex string with even length.</source>
+      <translation>مفتاح الكؤوس: يُستخدم لفك تشفير الكؤوس.
+يجب أن تكون القيمة سلسلة سداسية عشرية صالحة وبطول زوجي.</translation>
+    </message>
+    <message>
+      <source>Enter Trophy Key</source>
+      <translation>أدخل مفتاح الكؤوس</translation>
+    </message>
+    <message>
+      <source>Trophy Key:</source>
+      <translation>مفتاح الكؤوس:</translation>
+    </message>
+    <message>
+      <source>Status: Not loaded</source>
+      <translation>الحالة: لم يتم التحميل</translation>
+    </message>
+    <message>
+      <source>Trophy Key</source>
+      <translation>مفتاح الكؤوس</translation>
+    </message>
+    <message>
+      <source>Enter %1</source>
+      <translation>أدخل %1</translation>
+    </message>
+    <message>
+      <source>Exponent1</source>
+      <translation>الأس الأول</translation>
+    </message>
+    <message>
+      <source>Exponent2</source>
+      <translation>الأس الثاني</translation>
+    </message>
+    <message>
+      <source>Public Exponent</source>
+      <translation>الأس العام</translation>
+    </message>
+    <message>
+      <source>Coefficient</source>
+      <translation>المُعامِل</translation>
+    </message>
+    <message>
+      <source>Modulus</source>
+      <translation>المعيار</translation>
+    </message>
+    <message>
+      <source>Prime 1</source>
+      <translation>Prime 1</translation>
+    </message>
+    <message>
+      <source>Prime 2</source>
+      <translation>Prime 2</translation>
+    </message>
+    <message>
+      <source>Private Exponent</source>
+      <translation>الأس الخاص</translation>
+    </message>
+    <message>
+      <source>Fake Keyset</source>
+      <translation>مفاتيح وهمية</translation>
+    </message>
+    <message>
+      <source>RSA key components for fake signing.
+All fields must be valid hex strings with even length.</source>
+      <translation>مكونات مفتاح RSA للتوقيع الوهمي.
+يجب أن تكون جميع الحقول سلاسل سداسية عشرية صحيحة وبطول زوجي.</translation>
+    </message>
+    <message>
+      <source>Debug Rif Keyset</source>
+      <translation>مجموعة مفاتيح Rif لتصحيح الأخطاء</translation>
+    </message>
+    <message>
+      <source>RSA key components for debug RIF files.
+All fields must be valid hex strings with even length.</source>
+      <translation>مكوّنات مفتاح RSA لملفات RIF الخاصة بالتصحيح.
+يجب أن تكون جميع الحقول سلاسل سداسية عشرية صالحة وبطول زوجي.</translation>
+    </message>
+    <message>
+      <source>Pkg Derived Key3</source>
+      <translation>مفتاح Pkg المشتق 3</translation>
+    </message>
+    <message>
+      <source>RSA key components for package decryption.
+All fields must be valid hex strings with even length.</source>
+      <translation>مكوّنات مفتاح RSA لفك تشفير الحُزْمَة.
+يجب أن تكون جميع الحقول سلاسل سداسية عشرية صالحة وبطول زوجي.</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>إغلاق</translation>
+    </message>
+    <message>
+      <source>Warning</source>
+      <translation>تحذير</translation>
+    </message>
+    <message>
+      <source>No key file found or failed to load.
+Please enter your keys and save them.</source>
+      <translation>لم يتم العثور على مِلَفّ المفاتيح أو فشل تحميله.
+يرجى إدخال مفاتيحك وحفظها.</translation>
+    </message>
+    <message>
+      <source>Validation Error</source>
+      <translation>خطأ في التحقق</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>تم بنجاح</translation>
+    </message>
+    <message>
+      <source>Keys saved successfully!</source>
+      <translation>تم حفظ المفاتيح بنجاح!</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Failed to save keys!</source>
+      <translation>تعذر حفظ المفاتيح!</translation>
+    </message>
+    <message>
+      <source>Status: All fields empty</source>
+      <translation>الحالة: جميع الحقول فارغة</translation>
+    </message>
+    <message>
+      <source>Status: Invalid hex values</source>
+      <translation>الحالة: قيم سداسية عشرية غير صالحة</translation>
+    </message>
+    <message>
+      <source>Status: Incomplete</source>
+      <translation>الحالة: غير مكتمل</translation>
+    </message>
+    <message>
+      <source>Status: Valid</source>
+      <translation>الحالة: صالح</translation>
+    </message>
+    <message>
+      <source>Invalid File</source>
+      <translation>ملف غير صالح</translation>
+    </message>
+    <message>
+      <source>Only JSON files are supported.</source>
+      <translation>يتم دعم ملفات JSON فقط.</translation>
+    </message>
+    <message>
+      <source>Unable to open file.</source>
+      <translation>تعذّر فتح الملف.</translation>
+    </message>
+    <message>
+      <source>JSON Error</source>
+      <translation>خطأ JSON</translation>
+    </message>
+    <message>
+      <source>Invalid JSON format.</source>
+      <translation>تنسيق JSON غير صالح.</translation>
+    </message>
+    <message>
+      <source>Keys successfully loaded from JSON!</source>
+      <translation>تم تحميل المفاتيح من JSON بنجاح!</translation>
+    </message>
+    <message>
+      <source>Trophy Key contains invalid hex or has odd length.</source>
+      <translation>يحتوي مفتاح الكؤوس على قيمة سداسية عشرية غير صالحة أو بطول فردي.</translation>
+    </message>
+    <message>
+      <source>%1 contains invalid hex or has odd length.</source>
+      <translation>يحتوي %1 على قيمة سداسية عشرية غير صالحة أو بطول فردي.</translation>
+    </message>
+    <message>
+      <source>Load Key</source>
+      <translation>تحميل المفتاح</translation>
+    </message>
+    <message>
+      <source>Save Key</source>
+      <translation>حفظ المفتاح</translation>
+    </message>
+  </context>
+  <context>
+    <name>EditorDialog</name>
+    <message>
+      <source>Edit Keyboard + Mouse and Controller input bindings</source>
+      <translation>تحرير أزرار الإدخال للوحة المفاتيح و الفأرة ووحدة التحكم</translation>
+    </message>
+    <message>
+      <source>Use Per-Game configs</source>
+      <translation>استخدام إعدادات كل لُعْبَة</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Could not open the file for reading</source>
+      <translation>تعذر فتح المِلَفّ للقراءة</translation>
+    </message>
+    <message>
+      <source>Could not open the file for writing</source>
+      <translation>تعذر فتح المِلَفّ للكتابة</translation>
+    </message>
+    <message>
+      <source>Save Changes</source>
+      <translation>حفظ التغييرات</translation>
+    </message>
+    <message>
+      <source>Do you want to save changes?</source>
+      <translation>هل تريد حفظ التغييرات؟</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>المساعدة</translation>
+    </message>
+    <message>
+      <source>Do you want to reset your custom default config to the original default config?</source>
+      <translation>هل تريد إعادة تعيين الإعدادات الافتراضية المخصصة الخاصة بك إلى الإعدادات الافتراضية الأصلية؟</translation>
+    </message>
+    <message>
+      <source>Do you want to reset this config to your custom default config?</source>
+      <translation>هل تريد إعادة تعيين هذا الإعداد إلى الإعداد الافتراضي المخصص لك؟</translation>
+    </message>
+    <message>
+      <source>Reset to Default</source>
+      <translation>إعادة تعيين إلى الافتراضي</translation>
+    </message>
+  </context>
+  <context>
+    <name>ElfViewer</name>
+    <message>
+      <source>Open Folder</source>
+      <translation>افتح مجلد</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInfoClass</name>
+    <message>
+      <source>Loading game list, please wait :3</source>
+      <translation>جارٍ تحميل قائمة الألعاب، يرجى الانتظار :3</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>...جارٍ التحميل</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInstallDialog</name>
+    <message>
+      <source>shadPS4 - Choose directory</source>
+      <translation>shadPS4 - اختر المجلد</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>استعراض</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Directory to install emulator versions</source>
+      <translation>دليل لتثبيت إصدارات المحاكي</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped games</source>
+      <translation>مجلد الألعاب المستخرجة من جهازك</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped DLC&apos;s</source>
+      <translation>مجلد إضافات DLC المستخرجة من جهازك</translation>
+    </message>
+    <message>
+      <source>Directory with games</source>
+      <translation>دليل مع الألعاب</translation>
+    </message>
+    <message>
+      <source>Directory with DLC&apos;s</source>
+      <translation>مجلد إضافات DLC</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListFrame</name>
+    <message>
+      <source>Icon</source>
+      <translation>أيقونة</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>اسم</translation>
+    </message>
+    <message>
+      <source>Serial</source>
+      <translation>سيريال</translation>
+    </message>
+    <message>
+      <source>Compatibility</source>
+      <translation>التوافق</translation>
+    </message>
+    <message>
+      <source>Region</source>
+      <translation>منطقة</translation>
+    </message>
+    <message>
+      <source>Firmware</source>
+      <translation>البرمجيات الثابتة</translation>
+    </message>
+    <message>
+      <source>Size</source>
+      <translation>حجم</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation>إصدار</translation>
+    </message>
+    <message>
+      <source>Path</source>
+      <translation>مسار</translation>
+    </message>
+    <message>
+      <source>Play Time</source>
+      <translation>وقت اللعب</translation>
+    </message>
+    <message>
+      <source>Never Played</source>
+      <translation>لم تلعب أبداً</translation>
+    </message>
+    <message>
+      <source>h</source>
+      <translation>ا</translation>
+    </message>
+    <message>
+      <source>m</source>
+      <translation>ة</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation>ثانية/ثواني</translation>
+    </message>
+    <message>
+      <source>Compatibility is untested</source>
+      <translation>لم يتم اختبار التوافق</translation>
+    </message>
+    <message>
+      <source>Game does not initialize properly / crashes the emulator</source>
+      <translation>اللعبة لا تبدأ بشكل صحيح / تتسبب في انهيار المحاكي</translation>
+    </message>
+    <message>
+      <source>Game boots, but only displays a blank screen</source>
+      <translation>اللعبة تبدأ بالإقلاع، لكنها تعرض شاشة فارغة فقط</translation>
+    </message>
+    <message>
+      <source>Game displays an image but does not go past the menu</source>
+      <translation>اللعبة تعرض صورة ولكن لا تتجاوز القائمة</translation>
+    </message>
+    <message>
+      <source>Game has game-breaking glitches or unplayable performance</source>
+      <translation>اللعبة بها أخطاء جسيمة أو أداء يجعلها غير قابلة للعب</translation>
+    </message>
+    <message>
+      <source>Game can be completed with playable performance and no major glitches</source>
+      <translation>يمكن إنهاء اللعبة بأداء جيد وبدون أعطال رئيسية</translation>
+    </message>
+    <message>
+      <source>Click to see details on github</source>
+      <translation>اضغط لعرض التفاصيل على GitHub</translation>
+    </message>
+    <message>
+      <source>Last updated</source>
+      <translation>آخر تحديث</translation>
+    </message>
+    <message>
+      <source>Favorite</source>
+      <translation>المفضلة</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListUtils</name>
+    <message>
+      <source>B</source>
+      <translation>بايت</translation>
+    </message>
+    <message>
+      <source>KB</source>
+      <translation>كيلو بايت</translation>
+    </message>
+    <message>
+      <source>MB</source>
+      <translation>ميغابايت</translation>
+    </message>
+    <message>
+      <source>GB</source>
+      <translation>جيجابايت</translation>
+    </message>
+    <message>
+      <source>TB</source>
+      <translation>تيرابايت</translation>
+    </message>
+  </context>
+  <context>
+    <name>GuiContextMenus</name>
+    <message>
+      <source>Cheats / Patches</source>
+      <translation>الشفرات / التصحيحات</translation>
+    </message>
+    <message>
+      <source>SFO Viewer</source>
+      <translation>عارض معلومات اللعبة (SFO)</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>عارض الكؤوس</translation>
+    </message>
+    <message>
+      <source>Open Folder...</source>
+      <translation>فتح المجلد...</translation>
+    </message>
+    <message>
+      <source>Open Game Folder</source>
+      <translation>فتح مجلد اللعبة</translation>
+    </message>
+    <message>
+      <source>Open Save Data Folder</source>
+      <translation>فتح مجلد بيانات الحفظ</translation>
+    </message>
+    <message>
+      <source>Open Log Folder</source>
+      <translation>فتح مجلد السجل</translation>
+    </message>
+    <message>
+      <source>Copy info...</source>
+      <translation>...نسخ المعلومات</translation>
+    </message>
+    <message>
+      <source>Copy Name</source>
+      <translation>نسخ الاسم</translation>
+    </message>
+    <message>
+      <source>Copy Serial</source>
+      <translation>نسخ الرقم التسلسلي</translation>
+    </message>
+    <message>
+      <source>Copy Version</source>
+      <translation>نسخ الإصدار</translation>
+    </message>
+    <message>
+      <source>Copy Size</source>
+      <translation>حجم النسخة</translation>
+    </message>
+    <message>
+      <source>Copy All</source>
+      <translation>نسخ الكل</translation>
+    </message>
+    <message>
+      <source>Delete...</source>
+      <translation>حذف...</translation>
+    </message>
+    <message>
+      <source>Delete Game</source>
+      <translation>حذف اللعبة</translation>
+    </message>
+    <message>
+      <source>Delete Update</source>
+      <translation>حذف التحديث</translation>
+    </message>
+    <message>
+      <source>Delete DLC</source>
+      <translation>حذف DLC</translation>
+    </message>
+    <message>
+      <source>Delete Trophy</source>
+      <translation>حذف الكؤوس</translation>
+    </message>
+    <message>
+      <source>Compatibility...</source>
+      <translation>التوافق...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Game</source>
+      <translation>اللعبة</translation>
+    </message>
+    <message>
+      <source>This game has no update to delete!</source>
+      <translation>لا يوجد تحديث لهذه اللعبة لحذفه!</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>تحديث</translation>
+    </message>
+    <message>
+      <source>This game has no DLC to delete!</source>
+      <translation>لا توجد محتويات إضافية (DLC) لهذه اللعبة لحذفها!</translation>
+    </message>
+    <message>
+      <source>DLC</source>
+      <translation>DLC</translation>
+    </message>
+    <message>
+      <source>Delete %1</source>
+      <translation>حذف %1</translation>
+    </message>
+    <message>
+      <source>Are you sure you want to delete %1&apos;s %2 directory?</source>
+      <translation>هل أنت متأكد من أنك تريد حذف دليل %1&apos;s %2؟</translation>
+    </message>
+    <message>
+      <source>Open Update Folder</source>
+      <translation>فتح مجلد التحديث</translation>
+    </message>
+    <message>
+      <source>Delete Save Data</source>
+      <translation>حذف بيانات الحفظ</translation>
+    </message>
+    <message>
+      <source>This game has no update folder to open!</source>
+      <translation>لا يوجد مجلد تحديث لهذه اللعبة لفتحه!</translation>
+    </message>
+    <message>
+      <source>No log file found for this game!</source>
+      <translation>لم يتم العثور على ملف سجل لهذه اللعبة!</translation>
+    </message>
+    <message>
+      <source>This game has no save data to delete!</source>
+      <translation>لا توجد بيانات حفظ لهذه اللعبة لحذفها!</translation>
+    </message>
+    <message>
+      <source>This game has no saved trophies to delete!</source>
+      <translation>لا توجد كؤوس محفوظة لهذه اللعبة لحذفها!</translation>
+    </message>
+    <message>
+      <source>Save Data</source>
+      <translation>بيانات الحفظ</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation>الكؤوس</translation>
+    </message>
+    <message>
+      <source>SFO Viewer for </source>
+      <translation>عارض SFO لـ </translation>
+    </message>
+    <message>
+      <source>Remove from Favorites</source>
+      <translation>إزالة من المفضلة</translation>
+    </message>
+    <message>
+      <source>Add to Favorites</source>
+      <translation>إضافة إلى المفضلة</translation>
+    </message>
+    <message>
+      <source>Game-specific Settings...</source>
+      <translation>إعدادات خاصة باللعبة...</translation>
+    </message>
+    <message>
+      <source>Configure Game-specific Settings</source>
+      <translation>تكوين الإعدادات الخاصة بالألعاب</translation>
+    </message>
+    <message>
+      <source>Create Game-specific Settings from Global Settings</source>
+      <translation>إنشاء إعدادات خاصة باللعبة من الإعدادات العامة</translation>
+    </message>
+    <message>
+      <source>Delete Game-specific Settings</source>
+      <translation>حذف إعدادات خاصة باللعبة</translation>
+    </message>
+    <message>
+      <source>Update Database</source>
+      <translation>تحديث قاعدة البيانات</translation>
+    </message>
+    <message>
+      <source>View Report</source>
+      <translation>عرض التقرير</translation>
+    </message>
+    <message>
+      <source>Submit a Report</source>
+      <translation>إرسال تقرير</translation>
+    </message>
+    <message>
+      <source>Confirm deletion</source>
+      <translation>تأكيد الحذف</translation>
+    </message>
+    <message>
+      <source>Delete game-specific settings?</source>
+      <translation>حذف الإعدادات الخاصة باللعبة؟</translation>
+    </message>
+    <message>
+      <source>Launch...</source>
+      <translation>تشغيل...</translation>
+    </message>
+    <message>
+      <source>Launch with game specific configs (default)</source>
+      <translation>تشغيل مع الإعدادات الخاصة باللعبة (افتراضي)</translation>
+    </message>
+    <message>
+      <source>Launch with global config only</source>
+      <translation>تشغيل مع التكوين العالمي فقط</translation>
+    </message>
+    <message>
+      <source>Launch with default settings</source>
+      <translation>تشغيل مع الإعدادات الافتراضية</translation>
+    </message>
+    <message>
+      <source>Couldn&apos;t submit report, because the latest log for the game failed on the following check, and therefore would be an invalid report:</source>
+      <translation>تعذّر&apos;t إرسال التقرير، لأن أحدث سجل للعبة لم يجتز الفحص التالي، ولذلك سيكون التقرير غير صالح:</translation>
+    </message>
+    <message>
+      <source>Ok</source>
+      <translation>موافق</translation>
+    </message>
+    <message>
+      <source>Info</source>
+      <translation>معلومات</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Selected Emulator Version</source>
+      <translation>إنشاء اختصار لإصدار المحاكي المحدد</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Specified Emulator Version</source>
+      <translation>إنشاء اختصار لإصدار المحاكي المحدد</translation>
+    </message>
+    <message>
+      <source>Create Shortcut</source>
+      <translation>إنشاء اختصار</translation>
+    </message>
+    <message>
+      <source>Shortcut creation</source>
+      <translation>إنشاء اختصار</translation>
+    </message>
+    <message>
+      <source>Shortcut created successfully!</source>
+      <translation>تم إنشاء الاختصار بنجاح!</translation>
+    </message>
+    <message>
+      <source>Error creating shortcut!</source>
+      <translation>خطأ في إنشاء اختصار!</translation>
+    </message>
+    <message>
+      <source>Failed to convert icon.</source>
+      <translation>فشل تحويل الأيقونة.</translation>
+    </message>
+    <message>
+      <source>Delete Shader Cache</source>
+      <translation>حذف التخزين المؤقت للمظللات</translation>
+    </message>
+    <message>
+      <source>This game does not have any saved Shader Cache to delete!</source>
+      <translation>لا يوجد تخزين مؤقت للمظللات محفوظ لهذه اللعبة لحذفه!</translation>
+    </message>
+    <message>
+      <source>Shader Cache</source>
+      <translation>التخزين المؤقت للمظللات</translation>
+    </message>
+    <message>
+      <source>This game has no save folder to open!</source>
+      <translation>لا يوجد لهذه اللعبة مجلد حفظ لفتحه!</translation>
+    </message>
+    <message>
+      <source>A trophy key is required to use the Trophy Viewer. This can be inputted by clicking Settings - Manage Cryptographic keys.</source>
+      <translation>يتطلب استخدام عارض الكؤوس مفتاح الكؤوس. يمكنك إدخاله من الإعدادات - إدارة مفاتيح التشفير.</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation>المستخدم</translation>
+    </message>
+    <message>
+      <source>Add with Selected Emulator Version</source>
+      <translation type="unfinished">Add with Selected Emulator Version</translation>
+    </message>
+    <message>
+      <source>Add with Specified Emulator Version</source>
+      <translation type="unfinished">Add with Specified Emulator Version</translation>
+    </message>
+    <message>
+      <source>Add to Steam</source>
+      <translation type="unfinished">Add to Steam</translation>
+    </message>
+    <message>
+      <source>Zar Compression</source>
+      <translation type="unfinished">Zar Compression</translation>
+    </message>
+    <message>
+      <source>Compress game to zar</source>
+      <translation type="unfinished">Compress game to zar</translation>
+    </message>
+    <message>
+      <source>Compress update to zar</source>
+      <translation type="unfinished">Compress update to zar</translation>
+    </message>
+    <message>
+      <source>This is already packed as a ZArchive.</source>
+      <translation type="unfinished">This is already packed as a ZArchive.</translation>
+    </message>
+    <message>
+      <source>This folder could not be found on disk.</source>
+      <translation type="unfinished">This folder could not be found on disk.</translation>
+    </message>
+    <message>
+      <source>Convert %1 to ZArchive</source>
+      <translation type="unfinished">Convert %1 to ZArchive</translation>
+    </message>
+    <message>
+      <source>ZArchive Files (*.zar)</source>
+      <translation type="unfinished">ZArchive Files (*.zar)</translation>
+    </message>
+    <message>
+      <source>%1 already exists. Overwrite it?</source>
+      <translation type="unfinished">%1 already exists. Overwrite it?</translation>
+    </message>
+    <message>
+      <source>This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</source>
+      <translation type="unfinished">This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</translation>
+    </message>
+    <message>
+      <source>
+
+Continue?</source>
+      <translation type="unfinished">
+
+Continue?</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Failed to convert to ZArchive:
+%1</source>
+      <translation type="unfinished">Failed to convert to ZArchive:
+%1</translation>
+    </message>
+    <message>
+      <source>Conversion finished. Delete the original folder now to free up disk space?
+
+%1</source>
+      <translation type="unfinished">Conversion finished. Delete the original folder now to free up disk space?
+
+%1</translation>
+    </message>
+    <message>
+      <source>The archive was created, but the original folder could not be fully deleted. You can remove it manually.</source>
+      <translation type="unfinished">The archive was created, but the original folder could not be fully deleted. You can remove it manually.</translation>
+    </message>
+    <message>
+      <source>Packing: %1</source>
+      <translation type="unfinished">Packing: %1</translation>
+    </message>
+    <message>
+      <source>
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</source>
+      <translation type="unfinished">
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</translation>
+    </message>
+    <message>
+      <source>Convert to ZArchive</source>
+      <translation type="unfinished">Convert to ZArchive</translation>
+    </message>
+  </context>
+  <context>
+    <name>HelpDialog</name>
+    <message>
+      <source>Quickstart</source>
+      <translation>البدء السريع</translation>
+    </message>
+    <message>
+      <source>FAQ</source>
+      <translation>الأسئلة الأكثر شيوعاً</translation>
+    </message>
+    <message>
+      <source>Syntax</source>
+      <translation>البنية</translation>
+    </message>
+    <message>
+      <source>Special Bindings</source>
+      <translation>الارتباطات الخاصة</translation>
+    </message>
+    <message>
+      <source>Keybindings</source>
+      <translation>تعيين الأزرار</translation>
+    </message>
+  </context>
+  <context>
+    <name>Hotkeys</name>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation>تخصيص مفاتيح الاختصار</translation>
+    </message>
+    <message>
+      <source>Show FPS Counter</source>
+      <translation>عرض عداد الإطارات</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>بدون تعيين</translation>
+    </message>
+    <message>
+      <source>Quit Emulation</source>
+      <translation>إنهاء المحاكاة</translation>
+    </message>
+    <message>
+      <source>Reload Button Mappings</source>
+      <translation>إعادة تحميل تعيينات الأزرار</translation>
+    </message>
+    <message>
+      <source>Toggle Fullscreen</source>
+      <translation>تبديل ملء الشاشة</translation>
+    </message>
+    <message>
+      <source>Toggle Pause</source>
+      <translation>تبديل إيقاف مؤقت</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Joystick Emulation</source>
+      <translation>تبديل محاكاة الماوس لعصا التحكم</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Gyro Emulation</source>
+      <translation>تبديل محاكاة الفأرة كجيروسكوب</translation>
+    </message>
+    <message>
+      <source>Tip: Up to three simultaneous inputs can be assigned for each hotkey</source>
+      <translation>تلميح: يمكن تعيين حتى ثلاث عمليات إدخال متزامنة لكل مفتاح اختصار</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>حفظ</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>تطبيق</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>استعادة الإعدادات الافتراضية</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>تعذّر الحفظ</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>لا يمكن تعيين الإدخال نفسه لأكثر من وظيفة. توجد إدخالات مكررة معيّنة للأزرار التالية:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Waiting for inputs</source>
+      <translation>انتظار المدخلات</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>تلميح: انقر بزر الفأرة الأيمن لإلغاء تعيين المدخلات</translation>
+    </message>
+    <message>
+      <source>Volume Up</source>
+      <translation>رفع مستوى الصوت</translation>
+    </message>
+    <message>
+      <source>Volume Down</source>
+      <translation>خفض مستوى الصوت</translation>
+    </message>
+    <message>
+      <source>Hotkeys</source>
+      <translation>مفاتيح الاختصار</translation>
+    </message>
+    <message>
+      <source>Placeholder</source>
+      <translation>عنصر نائب</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot</source>
+      <translation>التقاط صورة للشاشة</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot w/ Overlays</source>
+      <translation>التقاط لقطة شاشة مع الطبقات</translation>
+    </message>
+    <message>
+      <source>Open Emulator Settings</source>
+      <translation>فتح إعدادات المحاكي</translation>
+    </message>
+  </context>
+  <context>
+    <name>IpcClient</name>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation>تعذر العثور على مشغّل المحاكي</translation>
+    </message>
+    <message>
+      <source>No game is running</source>
+      <translation>لا يوجد تطبيق قيد التشغيل</translation>
+    </message>
+  </context>
+  <context>
+    <name>KBMSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation>إعدادات جهاز التحكم</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>غير معين</translation>
+    </message>
+    <message>
+      <source>Left Analog Halfmode</source>
+      <translation>تقليل سرعة عصا التحكم اليسرى للنصف</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation>تحديد الإعدادات</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation>إعدادات عامة</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation>استخدام إعدادات خاصة لكل لعبه</translation>
+    </message>
+    <message>
+      <source>Text Editor</source>
+      <translation>محرّر النصوص</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>المساعدة</translation>
+    </message>
+    <message>
+      <source>Mouse to Joystick</source>
+      <translation>تحويل الماوس إلى عصا التحكم</translation>
+    </message>
+    <message>
+      <source>*press F7 ingame to activate</source>
+      <translation>* اضغط F7 داخل اللعبة للتفعيل</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation>الخيارات</translation>
+    </message>
+    <message>
+      <source>Mouse Movement Parameters</source>
+      <translation>إعدادات حركة الماوس</translation>
+    </message>
+    <message>
+      <source>note: click Help Button/Special Keybindings for more information</source>
+      <translation>ملاحظة: لمزيد من المعلومات عن التعيينات الخاصة، اضغط على زر المساعدة</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation>مثلث</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation>مربع</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation>دائرة</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation>اكس</translation>
+    </message>
+    <message>
+      <source>Right Analog Halfmode</source>
+      <translation>وضع النصف للعصا اليمنى (نصف الحساسية أو نصف الحركة)</translation>
+    </message>
+    <message>
+      <source>Speed Offset (def 0.125):</source>
+      <translation>تعويض السرعة (الافتراضي 0.125):</translation>
+    </message>
+    <message>
+      <source>Copy from Common Config</source>
+      <translation>نسخ من الإعدادات العامة</translation>
+    </message>
+    <message>
+      <source>Deadzone Offset (def 0.50):</source>
+      <translation>تعويض منطقة الخمول (الافتراضي 0.50):</translation>
+    </message>
+    <message>
+      <source>Speed Multiplier (def 1.0):</source>
+      <translation>معدل مضاعفة السرعة (التلقائي 1.0):</translation>
+    </message>
+    <message>
+      <source>Copy values from Common Config</source>
+      <translation>نسخ القيم من الإعدادات العامة</translation>
+    </message>
+    <message>
+      <source>Do you want to overwrite existing mappings with the mappings from the Common Config?</source>
+      <translation>هل تريد استبدال التعيينات الحالية بالتعيينات من الإعدادات العامة؟</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>تعذّر الحفظ</translation>
+    </message>
+    <message>
+      <source>Press a key</source>
+      <translation>اضغط زرًا</translation>
+    </message>
+    <message>
+      <source>Cannot set mapping</source>
+      <translation>تعذّر تعيين الزر</translation>
+    </message>
+    <message>
+      <source>Mousewheel cannot be mapped to stick outputs</source>
+      <translation>لا يمكن تعيين عجلة الفأرة لمخرجات العصا</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>حفظ</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>تطبيق</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>استعادة الإعدادات الافتراضية</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>لا يمكن استخدام نفس الزر لأكثر من وظيفة. تم تكرار التعيين في الأزرار التالية:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation>لوحة اللمس - يسار</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation>لوحة اللمس - الوَسَط</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation>لوحة اللمس - الأيمن</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>تلميح: انقر بزر الماوس الأيمن لإلغاء تعيين الإدخالات</translation>
+    </message>
+    <message>
+      <source>Output</source>
+      <translation>الإخراج</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation>المدخلات</translation>
+    </message>
+    <message>
+      <source>Alternate Input 1</source>
+      <translation>الإدخال البديل 1</translation>
+    </message>
+    <message>
+      <source>Alternate Input 2</source>
+      <translation>الإدخال البديل 2</translation>
+    </message>
+    <message>
+      <source>Dpad Up</source>
+      <translation>لوحة الاتجاهات للأعلى</translation>
+    </message>
+    <message>
+      <source>Dpad Down</source>
+      <translation>لوحة الاتجاهات للأسفل</translation>
+    </message>
+    <message>
+      <source>Dpad Left</source>
+      <translation>لوحة الاتجاهات لليسار</translation>
+    </message>
+    <message>
+      <source>Dpad Right</source>
+      <translation>لوحة الاتجاهات لليمين</translation>
+    </message>
+    <message>
+      <source>Left Stick Up</source>
+      <translation>العصا اليسرى للأعلى</translation>
+    </message>
+    <message>
+      <source>Left Stick Down</source>
+      <translation>العصا اليسرى للأسفل</translation>
+    </message>
+    <message>
+      <source>Left Stick Left</source>
+      <translation>العصا اليسرى لليسار</translation>
+    </message>
+    <message>
+      <source>Left Stick Right</source>
+      <translation>العصا اليسرى لليمين</translation>
+    </message>
+    <message>
+      <source>Right Stick Up</source>
+      <translation>العصا اليمنى للأعلى</translation>
+    </message>
+    <message>
+      <source>Right Stick Down</source>
+      <translation>العصا اليمنى للأسفل</translation>
+    </message>
+    <message>
+      <source>Right Stick Left</source>
+      <translation>العصا اليمنى لليسار</translation>
+    </message>
+    <message>
+      <source>Right Stick Right</source>
+      <translation>العصا اليمنى لليمين</translation>
+    </message>
+    <message>
+      <source>L1</source>
+      <translation>L1</translation>
+    </message>
+    <message>
+      <source>R1</source>
+      <translation>R1</translation>
+    </message>
+    <message>
+      <source>L2</source>
+      <translation>L2</translation>
+    </message>
+    <message>
+      <source>R2</source>
+      <translation>R2</translation>
+    </message>
+    <message>
+      <source>L3</source>
+      <translation>L3</translation>
+    </message>
+    <message>
+      <source>R3</source>
+      <translation>R3</translation>
+    </message>
+  </context>
+  <context>
+    <name>LogPresetsDialog</name>
+    <message>
+      <source>Log Filter Presets</source>
+      <translation>إعدادات تصفية السجل المسبقة</translation>
+    </message>
+    <message>
+      <source>Comment</source>
+      <translation>تعليق</translation>
+    </message>
+    <message>
+      <source>Filter</source>
+      <translation>تصفية</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>تحميل</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>إغلاق</translation>
+    </message>
+    <message>
+      <source>Add a new preset after the selected row</source>
+      <translation>إضافة إعداد مسبق جديد بعد الصف المحدد</translation>
+    </message>
+    <message>
+      <source>Remove selected presets</source>
+      <translation>إزالة الإعدادات المسبقة المحددة</translation>
+    </message>
+    <message>
+      <source>Load the selected preset</source>
+      <translation>تحميل الإعداد المسبق المحدد</translation>
+    </message>
+  </context>
+  <context>
+    <name>MainWindow</name>
+    <message>
+      <source>Open/Add Elf Folder</source>
+      <translation>فتح / إضافة مجلد Elf</translation>
+    </message>
+    <message>
+      <source>Boot Game</source>
+      <translation>تشغيل اللعبة</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>تحقق من التحديثات</translation>
+    </message>
+    <message>
+      <source>About shadPS4</source>
+      <translation>shadPS4 حول</translation>
+    </message>
+    <message>
+      <source>Configure...</source>
+      <translation>...تكوين</translation>
+    </message>
+    <message>
+      <source>Recent Games</source>
+      <translation>الألعاب الأخيرة</translation>
+    </message>
+    <message>
+      <source>Open shadPS4 Folder</source>
+      <translation>فتح مجلد shadPS4</translation>
+    </message>
+    <message>
+      <source>Exit</source>
+      <translation>خروج</translation>
+    </message>
+    <message>
+      <source>Exit shadPS4</source>
+      <translation>الخروج من shadPS4</translation>
+    </message>
+    <message>
+      <source>Exit the application.</source>
+      <translation>إغلاق التطبيق</translation>
+    </message>
+    <message>
+      <source>Show Game List</source>
+      <translation>عرض قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Game List Refresh</source>
+      <translation>تحديث قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Tiny</source>
+      <translation>صغير جدًا</translation>
+    </message>
+    <message>
+      <source>Small</source>
+      <translation>صغير</translation>
+    </message>
+    <message>
+      <source>Medium</source>
+      <translation>متوسط</translation>
+    </message>
+    <message>
+      <source>Large</source>
+      <translation>كبير</translation>
+    </message>
+    <message>
+      <source>List View</source>
+      <translation>عرض القائمة</translation>
+    </message>
+    <message>
+      <source>Grid View</source>
+      <translation>عرض الشبكة</translation>
+    </message>
+    <message>
+      <source>Elf Viewer</source>
+      <translation>عارض Elf</translation>
+    </message>
+    <message>
+      <source>Game Install Directory</source>
+      <translation>دليل تثبيت اللعبة</translation>
+    </message>
+    <message>
+      <source>Download Cheats/Patches</source>
+      <translation>تنزيل الغش/التصحيحات</translation>
+    </message>
+    <message>
+      <source>Dump Game List</source>
+      <translation>تفريغ قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>عارض الجوائز</translation>
+    </message>
+    <message>
+      <source>No games found. Please add your games to your library first.</source>
+      <translation>لم يتم العثور على ألعاب. يرجى إضافة ألعابك إلى المكتبة أولاً.</translation>
+    </message>
+    <message>
+      <source>Search...</source>
+      <translation>...بحث</translation>
+    </message>
+    <message>
+      <source>File</source>
+      <translation>ملف</translation>
+    </message>
+    <message>
+      <source>View</source>
+      <translation>عرض</translation>
+    </message>
+    <message>
+      <source>Game List Icons</source>
+      <translation>أيقونات قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Game List Mode</source>
+      <translation>وضع قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Settings</source>
+      <translation>الإعدادات</translation>
+    </message>
+    <message>
+      <source>Utils</source>
+      <translation>الأدوات</translation>
+    </message>
+    <message>
+      <source>Themes</source>
+      <translation>السمات</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>مساعدة</translation>
+    </message>
+    <message>
+      <source>Dark</source>
+      <translation>داكن</translation>
+    </message>
+    <message>
+      <source>Light</source>
+      <translation>فاتح</translation>
+    </message>
+    <message>
+      <source>Green</source>
+      <translation>أخضر</translation>
+    </message>
+    <message>
+      <source>Blue</source>
+      <translation>أزرق</translation>
+    </message>
+    <message>
+      <source>Violet</source>
+      <translation>بنفسجي</translation>
+    </message>
+    <message>
+      <source>toolBar</source>
+      <translation>شريط الأدوات</translation>
+    </message>
+    <message>
+      <source>Game List</source>
+      <translation>قائمة الألعاب</translation>
+    </message>
+    <message>
+      <source>Download Cheats For All Installed Games</source>
+      <translation>تحميل الشفرات لجميع الألعاب المثبتة</translation>
+    </message>
+    <message>
+      <source>Download Patches For All Games</source>
+      <translation>تنزيل التصحيحات لجميع الألعاب</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>اكتمل التنزيل</translation>
+    </message>
+    <message>
+      <source>You have downloaded cheats for all the games you have installed.</source>
+      <translation>تم تحميل الشفرات لجميع الألعاب المثبتة.</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully!</source>
+      <translation>!تم تنزيل التصحيحات بنجاح</translation>
+    </message>
+    <message>
+      <source>All Patches available for all games have been downloaded.</source>
+      <translation>.تم تنزيل جميع التصحيحات المتاحة لجميع الألعاب</translation>
+    </message>
+    <message>
+      <source>Games: </source>
+      <translation> :الألعاب</translation>
+    </message>
+    <message>
+      <source>Game Boot</source>
+      <translation>تشغيل اللعبة</translation>
+    </message>
+    <message>
+      <source>Only one file can be selected!</source>
+      <translation>!يمكن تحديد ملف واحد فقط</translation>
+    </message>
+    <message>
+      <source>Run Game</source>
+      <translation>تشغيل اللعبة</translation>
+    </message>
+    <message>
+      <source>Eboot.bin file not found</source>
+      <translation>لم يتم العثور على ملف Eboot.bin</translation>
+    </message>
+    <message>
+      <source>Game is already running!</source>
+      <translation>اللعبة قيد التشغيل بالفعل!</translation>
+    </message>
+    <message>
+      <source>shadPS4</source>
+      <translation>shadPS4</translation>
+    </message>
+    <message>
+      <source>Play</source>
+      <translation>تشغيل</translation>
+    </message>
+    <message>
+      <source>Pause</source>
+      <translation>إيقاف مؤقت</translation>
+    </message>
+    <message>
+      <source>Stop</source>
+      <translation>إيقاف</translation>
+    </message>
+    <message>
+      <source>Restart</source>
+      <translation>إعادة تشغيل</translation>
+    </message>
+    <message>
+      <source>Full Screen</source>
+      <translation>الشاشة الكاملة</translation>
+    </message>
+    <message>
+      <source>Controllers</source>
+      <translation>وحدات التحكم</translation>
+    </message>
+    <message>
+      <source>Keyboard</source>
+      <translation>لوحة المفاتيح</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation>تحديث القائمة</translation>
+    </message>
+    <message>
+      <source>Resume</source>
+      <translation>استئناف</translation>
+    </message>
+    <message>
+      <source>Show Labels Under Icons</source>
+      <translation>إظهار التسميات تحت الأيقونات</translation>
+    </message>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation>تخصيص مفاتيح الاختصار</translation>
+    </message>
+    <message>
+      <source>Version Manager</source>
+      <translation>مدير الإصدارات</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation>لم يتم تحديد الإصدار</translation>
+    </message>
+    <message>
+      <source>No emulator version was selected.
+The Version Manager menu will then open.
+Select an emulator version from the right panel.</source>
+      <translation>لم يتم تحديد إصدار المحاكي.
+سيتم فتح قائمة ”إدارة الإصدارات“.
+حدد إصدار المحاكي من اللوحة اليمنى.</translation>
+    </message>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation>تعذر العثور على محاكي قابل للتنفيذ</translation>
+    </message>
+    <message>
+      <source>Run Emulator</source>
+      <translation>تشغيل المحاكي</translation>
+    </message>
+    <message>
+      <source>Emulator is already running!</source>
+      <translation>المحاكي قيد التشغيل بالفعل!</translation>
+    </message>
+    <message>
+      <source>Invalid game argument provided</source>
+      <translation>تم توفير وسيط اللعبة غير صالح</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Manage Skylanders</source>
+      <translation>مدير Skylanders</translation>
+    </message>
+    <message>
+      <source>Manage Infinity Figures</source>
+      <translation>مدير Infinity Figures</translation>
+    </message>
+    <message>
+      <source>Manage Dimensions Toypad</source>
+      <translation>إدارة ToyPad الخاص بـ Dimensions</translation>
+    </message>
+    <message>
+      <source>Game Log</source>
+      <translation>سجل اللعبة</translation>
+    </message>
+    <message>
+      <source>Show Game Log</source>
+      <translation>عرض سجل اللعبة</translation>
+    </message>
+    <message>
+      <source>Manage Cryptographic Keys</source>
+      <translation>إدارة مفاتيح التشفير</translation>
+    </message>
+    <message>
+      <source>Manage Users</source>
+      <translation>إدارة المستخدمين</translation>
+    </message>
+    <message>
+      <source>bootable files (*.bin *.elf *.oelf *.zar)</source>
+      <translation type="unfinished">bootable files (*.bin *.elf *.oelf *.zar)</translation>
+    </message>
+  </context>
+  <context>
+    <name>QObject</name>
+    <message>
+      <source>Drive Locked</source>
+      <translation>محرك الأقراص مقفل</translation>
+    </message>
+    <message>
+      <source>Drive %1: is locked. Please enter the BitLocker key to access it:</source>
+      <translation>محرك الأقراص %1: مقفل. يرجى إدخال مفتاح BitLocker للوصول إليه:</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Incorrect recovery key. Please try again.</source>
+      <translation>مفتاح الاسترداد غير صحيح. يرجى المحاولة مرة أخرى.</translation>
+    </message>
+  </context>
+  <context>
+    <name>SettingsDialog</name>
+    <message>
+      <source>Settings</source>
+      <translation>الإعدادات</translation>
+    </message>
+    <message>
+      <source>General</source>
+      <translation>عام</translation>
+    </message>
+    <message>
+      <source>System</source>
+      <translation>النظام</translation>
+    </message>
+    <message>
+      <source>Console Language</source>
+      <translation>لغة النظام</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings</source>
+      <translation>التبويب الافتراضي عند فتح الإعدادات</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence</source>
+      <translation>تفعيل حالة الثراء في ديسكورد</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation>الكؤوس</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder</source>
+      <translation>فتح مجلد الصور/الأصوات المخصصة للكؤوس</translation>
+    </message>
+    <message>
+      <source>Logger</source>
+      <translation>سجل الأحداث</translation>
+    </message>
+    <message>
+      <source>Log Type</source>
+      <translation>نوع السجل</translation>
+    </message>
+    <message>
+      <source>Log Filter</source>
+      <translation>مرشح السجل</translation>
+    </message>
+    <message>
+      <source>Open Log Location</source>
+      <translation>فتح موقع السجل</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation>إعدادات المدخلات</translation>
+    </message>
+    <message>
+      <source>Cursor</source>
+      <translation>مؤشر الماوس</translation>
+    </message>
+    <message>
+      <source>Hide Cursor</source>
+      <translation>إخفاء مؤشر الماوس</translation>
+    </message>
+    <message>
+      <source>Hide Cursor Idle Timeout</source>
+      <translation>إخفاء المؤشر بعد فترة الخمول</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Default Device</source>
+      <translation>الجهاز الافتراضي</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation>س</translation>
+    </message>
+    <message>
+      <source>Controller</source>
+      <translation>التحكم</translation>
+    </message>
+    <message>
+      <source>Graphics</source>
+      <translation>الرسوميات</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation>مستخدم</translation>
+    </message>
+    <message>
+      <source>Graphics Device</source>
+      <translation>جهاز الرسوميات</translation>
+    </message>
+    <message>
+      <source>Advanced</source>
+      <translation>الإعدادات المتقدمة</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping</source>
+      <translation>تمكين تصدير الشيدرات</translation>
+    </message>
+    <message>
+      <source>Enable NULL GPU</source>
+      <translation>تمكين GPU فارغ</translation>
+    </message>
+    <message>
+      <source>Enable HDR</source>
+      <translation>تمكين HDR</translation>
+    </message>
+    <message>
+      <source>Paths</source>
+      <translation>المسارات</translation>
+    </message>
+    <message>
+      <source>Game Folders</source>
+      <translation>مجلدات اللعبة</translation>
+    </message>
+    <message>
+      <source>Add...</source>
+      <translation>إضافة...</translation>
+    </message>
+    <message>
+      <source>Remove</source>
+      <translation>إزالة</translation>
+    </message>
+    <message>
+      <source>Debug</source>
+      <translation>التصحيح</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping</source>
+      <translation>تمكين تصدير بيانات التصحيح </translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers</source>
+      <translation>تمكين طبقات التحقق لـ Vulkan</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging</source>
+      <translation>تمكين التصحيح باستخدام RenderDoc</translation>
+    </message>
+    <message>
+      <source>Enable Crash Diagnostics</source>
+      <translation>تمكين تشخيص الأعطال</translation>
+    </message>
+    <message>
+      <source>Collect Shaders</source>
+      <translation>جمع الشيدرات </translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers</source>
+      <translation>نسخ مخازن الرسوميات</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers</source>
+      <translation>علامات التصحيح على المضيف</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers</source>
+      <translation>علامات التصحيح على الضيف</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images</source>
+      <translation>تمكين استرجاع الصور الخطية</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>التحقق من التحديثات عند بدء التشغيل</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation>عرض سجل التغييرات دائمًا</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>التحقق من التحديثات</translation>
+    </message>
+    <message>
+      <source>Title Music</source>
+      <translation>موسيقى الشاشة الرئيسية</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Notification</source>
+      <translation>تعطيل إشعار التروفي</translation>
+    </message>
+    <message>
+      <source>Background Image</source>
+      <translation>صورة الخلفية</translation>
+    </message>
+    <message>
+      <source>Show Background Image</source>
+      <translation>إظهار صورة الخلفية</translation>
+    </message>
+    <message>
+      <source>Opacity</source>
+      <translation>الشفافية</translation>
+    </message>
+    <message>
+      <source>Play title music</source>
+      <translation>تشغيل موسيقى العنوان</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database On Startup</source>
+      <translation>تحديث بيانات التوافق تلقائيًا عند التشغيل</translation>
+    </message>
+    <message>
+      <source>Game Compatibility</source>
+      <translation>توافق الألعاب</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data</source>
+      <translation>عرض بيانات التوافق</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database</source>
+      <translation>تحديث قاعدة بيانات التوافق</translation>
+    </message>
+    <message>
+      <source>Volume</source>
+      <translation>الصوت</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>حفظ</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>تطبيق</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>استعادة الإعدادات الافتراضية</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>إغلاق</translation>
+    </message>
+    <message>
+      <source>Point your mouse at an option to display its description.</source>
+      <translation>✅ مرّر مؤشر الماوس على أي خِيار لعرض وصفه.</translation>
+    </message>
+    <message>
+      <source>Console Language:\nSets the language that the PS4 game uses.\nIt&apos;s recommended to set this to a language the game supports, which will vary by region.</source>
+      <translation>لغة الجهاز:\nتحدد لغة اللعبة التي يستخدمها جهاز PS4.\nيوصى بضبطها على لغة يدعمها الجهاز، والتي قد تختلف حسب المنطقة.</translation>
+    </message>
+    <message>
+      <source>Emulator Language:\nSets the language of the emulator&apos;s user interface.</source>
+      <translation>لغة المحاكي:\nتحدد اللغة المستخدمة في واجهة المحاكي.</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen:\nShows the game&apos;s splash screen (a special image) while the game is starting.</source>
+      <translation>عرض شاشة البداية:\nيعرض شاشة البداية الخاصة باللعبة (صورة مميزة) أثناء بدء التشغيل.</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence:\nDisplays the emulator icon and relevant information on your Discord profile.</source>
+      <translation>تفعيل حالة الثراء في ديسكورد:\nيعرض أيقونة المحاكي ومعلومات ذات صلة على ملفك الشخصي في ديسكورد.</translation>
+    </message>
+    <message>
+      <source>Background Image:\nControl the opacity of the game background image.</source>
+      <translation>صورة الخلفية:\nتحكم في شفافية صورة خلفية اللعبة.</translation>
+    </message>
+    <message>
+      <source>Play Title Music:\nIf a game supports it, enable playing special music when selecting the game in the GUI.</source>
+      <translation>تشغيل موسيقى العنوان:\nفي حال كانت اللعبة تدعم ذلك، يتم تشغيل موسيقى خاصة عند تحديدها في الواجهة.</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Pop-ups:\nDisable in-game trophy notifications. Trophy progress can still be tracked using the Trophy Viewer (right-click the game in the main window).</source>
+      <translation>تعطيل إشعارات التروفي:\nيمنع ظهور إشعارات الجوائز أثناء اللعب، بينما يظل بإمكانك متابعة التقدم من خلال "عارض التروفي" (انقر بزر الفأرة الأيمن على اللعبة في النافذة الرئيسية).</translation>
+    </message>
+    <message>
+      <source>Hide Cursor:\nChoose when the cursor will disappear:\nNever: You will always see the mouse.\nidle: Set a time for it to disappear after being idle.\nAlways: you will never see the mouse.</source>
+      <translation>إخفاء المؤشر:\nاختر متى يتم إخفاء مؤشر الماوس:\nأبدًا: يظهر دائمًا.\nعند الخمول: يختفي بعد فترة من عدم الحركة.\nدائمًا: لا يظهر إطلاقًا.</translation>
+    </message>
+    <message>
+      <source>Hide Idle Cursor Timeout:\nThe duration (seconds) after which the cursor that has been idle hides itself.</source>
+      <translation>مدة إخفاء المؤشر عند الخمول:\nالوقت (بالثواني) الذي ينتظره المؤشر قبل أن يختفي تلقائيًا عند عدم استخدامه.</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data:\nDisplays game compatibility information in table view. Enable &quot;Update Compatibility On Startup&quot; to get up-to-date information.</source>
+      <translation>عرض بيانات التوافق:\nيعرض معلومات توافق الألعاب في عرض جدولي. فعّل &quot;"تحديث التوافق عند بدء التشغيل&quot;" للحصول على أحدث المعلومات.</translation>
+    </message>
+    <message>
+      <source>Update Compatibility On Startup:\nAutomatically update the compatibility database when shadPS4 starts.</source>
+      <translation>تحديث التوافق عند بدء التشغيل:\nيتم تحديث قاعدة بيانات التوافق تلقائيًا عند بدء تشغيل shadPS4.</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database:\nImmediately update the compatibility database.</source>
+      <translation>تحديث قاعدة بيانات التوافق:\nتحديث فوري لقاعدة بيانات التوافق.</translation>
+    </message>
+    <message>
+      <source>Never</source>
+      <translation>أبداً</translation>
+    </message>
+    <message>
+      <source>Idle</source>
+      <translation>خامل</translation>
+    </message>
+    <message>
+      <source>Always</source>
+      <translation>دائماً</translation>
+    </message>
+    <message>
+      <source>Graphics Device:\nOn multiple GPU systems, select the GPU the emulator will use from the drop down list,\nor select &quot;Auto Select&quot; to automatically determine it.</source>
+      <translation>جهاز الرسوميات:\nفي الأنظمة التي تحتوي على أكثر من معالج رسومي، اختر وحدة المعالجة الرسومية GPU التي سيستخدمها المحاكي من القائمة المنسدلة،\nأو اختر "&quot;تحديد تلقائي&quot;" ليتم اختيارها تلقائيًا.</translation>
+    </message>
+    <message>
+      <source>Width/Height:\nSets the size of the emulator window at launch, which can be resized during gameplay.\nThis is different from the in-game resolution.</source>
+      <translation>العرض/الارتفاع:\nتحدد حجم نافذة المحاكي عند التشغيل، ويمكن تغيير حجمها أثناء اللعب.\nيختلف هذا عن دقة اللعبة داخل اللعبة.</translation>
+    </message>
+    <message>
+      <source>Enable HDR:\nEnables HDR in games that support it.\nYour monitor must have support for the BT2020 PQ color space and the RGB10A2 swapchain format.</source>
+      <translation>تشغيل HDR:\n يقوم بتشغيل HDR في الألعاب المدعومة.\nيجب أن تدعم شاشتك أطياف ألوان BT2020 PQ و صيغة تنسيق المبادلة RGB10A2.</translation>
+    </message>
+    <message>
+      <source>Game Folders:\nThe list of folders to check for installed games.</source>
+      <translation>مجلدات اللعبة:\nالمجلدات التي يتم فحصها تلقائيًا للعثور على الألعاب المثبّتة</translation>
+    </message>
+    <message>
+      <source>Add:\nAdd a folder to the list.</source>
+      <translation>إضافة:\nأضف مجلداً إلى القائمة.</translation>
+    </message>
+    <message>
+      <source>Remove:\nRemove a folder from the list.</source>
+      <translation>إزالة:\nأزل مجلداً من القائمة.</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping:\nSaves the import and export symbols and file header information of the currently running PS4 program to a directory.</source>
+      <translation>تمكين تفريغ التصحيح:\nيقوم بحفظ الرموز المستوردة والمصدرة، بالإضافة إلى معلومات رأس الملف للبرنامج الجاري تشغيله على PS4 في مجلد.</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging:\nIf enabled, the emulator will provide compatibility with Renderdoc to allow capture and analysis of the currently rendered frame.</source>
+      <translation>تمكين تصحيح RenderDoc:\nإذا تم التمكين، سيوفر المحاكي توافقًا مع Renderdoc لالتقاط وتحليل الإطار الذي يتم عرضه حاليًا.</translation>
+    </message>
+    <message>
+      <source>Collect Shaders:\nYou need this enabled to edit shaders with the debug menu (Ctrl + F10).</source>
+      <translation>تجميع برامج التظليل:\n يجب أن تقوم بتشغيل هذا لتعديل برامج التظليل باستخدام قائمة تصحيح الأخطاء (Ctrl + F10).</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images:\nEnables async downloading of GPU modified linear images.\nMight fix issues in some games.</source>
+      <translation>تمكين استرجاع الصور الخطية:\nيتيح تحميل الصور الخطية المعدّلة من GPU بشكل غير متزامن.\nقد يساعد في حل المشاكل الرسومية في بعض الألعاب.</translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers:\nGets around race conditions involving GPU submits.\nMay or may not help with PM4 type 0 crashes.</source>
+      <translation>نسخ مخازن الذاكرة الخاصة بالـ GPU:\nيتجاوز مشكلة التزامن المتعلقة بتقديمات GPU.\n قد يساعد أو لا يساعد في حل أعطال PM4 من النوع 0.</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers:\nInserts emulator-side information like markers for specific AMDGPU commands around Vulkan commands, as well as giving resources debug names.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation>علامات تصحيح الأخطاء للمضيف:\nقوم بإدراج معلومات في المحاكي مثل علامات للأوامر AMDGPU المرتبطة بأوامر فولكن، إضافةً إلى تخصيص أسماء لتصحيح الأخطاء للموارد.\nمن الأفضل تفعيل تشخيص الأعطال عند تفعيل هذه الخاصية.\nمفيد لبرامج مثل أداة تصحيح الأخطاء الرسومية.</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers:\nInserts any debug markers the game itself has added to the command buffer.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation>علامات تصحيح الضيف:\nيُدخل أي علامات تصحيح أضافتها اللعبة بنفسها إلى ذاكرة أوامر الرسوميات.\nإذا تم التفعيل الأفضل تمكين "تشخيص الأعطال".\nمفيد لبرامج مثل دوك.</translation>
+    </message>
+    <message>
+      <source>Set the volume of the background music.</source>
+      <translation>ضبط صوت الموسيقى في الخلفية.</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls</source>
+      <translation>تفعيل التحكم بالحركة</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>تصفح</translation>
+    </message>
+    <message>
+      <source>Auto Select</source>
+      <translation>تلقائي</translation>
+    </message>
+    <message>
+      <source>Directory to install games</source>
+      <translation>مجلد تثبيت الألعاب</translation>
+    </message>
+    <message>
+      <source>Video</source>
+      <translation>الفيديو</translation>
+    </message>
+    <message>
+      <source>Display Mode</source>
+      <translation>طريقة العرض</translation>
+    </message>
+    <message>
+      <source>Windowed</source>
+      <translation>نافذة</translation>
+    </message>
+    <message>
+      <source>Fullscreen</source>
+      <translation>شاشة كاملة</translation>
+    </message>
+    <message>
+      <source>Fullscreen (Borderless)</source>
+      <translation>شاشة كاملة (دون حدود)</translation>
+    </message>
+    <message>
+      <source>Window Size</source>
+      <translation>حجم النافذة</translation>
+    </message>
+    <message>
+      <source>W:</source>
+      <translation>العرض:</translation>
+    </message>
+    <message>
+      <source>H:</source>
+      <translation>الارتفاع:</translation>
+    </message>
+    <message>
+      <source>Separate Log Files</source>
+      <translation>ملفات السجل المنفصل</translation>
+    </message>
+    <message>
+      <source>Separate Log Files:\nWrites a separate logfile for each game.</source>
+      <translation>ملفات السجل المنفصلة:\nيتم كتابة سجل منفصل لكل لعبه.</translation>
+    </message>
+    <message>
+      <source>Trophy Notification Position</source>
+      <translation>موقع إشعار الكأس</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation>يسار</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation>يمين</translation>
+    </message>
+    <message>
+      <source>Top</source>
+      <translation>في الأعلى</translation>
+    </message>
+    <message>
+      <source>Bottom</source>
+      <translation>الأسفل</translation>
+    </message>
+    <message>
+      <source>Notification Duration</source>
+      <translation>مدة الإشعار</translation>
+    </message>
+    <message>
+      <source>Portable User Folder</source>
+      <translation>مجلد المستخدم المتنقل</translation>
+    </message>
+    <message>
+      <source>Create Portable User Folder from Common User Folder</source>
+      <translation>إنشاء مجلد مستخدم المتنقل من مجلد المستخدم الشائع</translation>
+    </message>
+    <message>
+      <source>Portable user folder:\nStores shadPS4 settings and data that will be applied only to the shadPS4 build located in the current folder. Restart the app after creating the portable user folder to begin using it.</source>
+      <translation>مجلد المستخدم القابل للنقل:\nتخزين إعدادات وبيانات المحاكي التي ستُطبق فقط على هذا الإصدار في المجلد الحالي. بعد إنشاء مجلد المستخدم القابل للنقل، يجب إعادة تشغيل التطبيق للبدء في استخدامه.</translation>
+    </message>
+    <message>
+      <source>%1 already exists</source>
+      <translation>%1 موجود مسبقاً</translation>
+    </message>
+    <message>
+      <source>%1 successfully created.</source>
+      <translation>تم إنشاء %1 بنجاح.</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder:\nYou can add custom images to the trophies and an audio.\nAdd the files to custom_trophy with the following names:\ntrophy.wav OR trophy.mp3, bronze.png, gold.png, platinum.png, silver.png\nNote: The sound will only work in QT versions.</source>
+      <translation>افتح مجلد الصور/الأصوات الخاصة بالجوائز المخصصة:\nيمكنك إضافة صور مخصصة للجوائز وصوت مرفق.\nأضف الملفات إلى مجلد custom_trophy بالأسماء التالية:\ntrophy.wav أو trophy.mp3، bronze.png، gold.png، platinum.png، silver.png\nملاحظة: الصوت سيعمل فقط في الإصدارات التي تستخدم QT.</translation>
+    </message>
+    <message>
+      <source>Experimental Features</source>
+      <translation>الميزات التجريبية</translation>
+    </message>
+    <message>
+      <source>WARNING: These features are experimental and should not be enabled unless you were told to, or a game requires it. Please ask in the shadPS4 Discord server if you have any questions.</source>
+      <translation>⚠️ تحذير: هذه الميزات تجريبية ويُفضّل عدم تفعيلها إلا إذا طُلب منك، أو إذا كانت مطلوبة لتشغيل لُعْبَة معينة.
+إذا كان لديك أي استفسار، يُرجى السؤال في مجتمع Discord الخاص بـمحاكي الظل PS4.</translation>
+    </message>
+    <message>
+      <source>Enable Background Controller Input</source>
+      <translation>تفعيل إدخال يد التحكم في الخلفية</translation>
+    </message>
+    <message>
+      <source>Enable Controller Background Input:\nAllow shadPS4 to detect controller inputs when the game window is not in focus.</source>
+      <translation>تفعيل إدخال يد التحكم في الخلفية:\nيسمح للمحاكي باكتشاف مدخلات يد التحكم عندما لا تكون نافذة اللعبة نشطة.</translation>
+    </message>
+    <message>
+      <source>Crash Diagnostics:\nCreates a .yaml file with info about the Vulkan state at the time of crashing.\nUseful for debugging &apos;Device lost&apos; errors. If you have this enabled, you should enable Host AND Guest Debug Markers.\nYou need Vulkan Validation Layers enabled and the Vulkan SDK for this to work.</source>
+      <translation>تشخيص الأعطال:\nينشئ ملف YAML يحتوي على معلومات عن حالة Vulkan وقت حدوث العطل.\nمفيد لتصحيح أخطاء &apos;Device lost&apos;. إذا كان هذا مفعّلًا، فعليك تفعيل Host وGuest Debug Markers.\nيتطلب ذلك تفعيل Vulkan Validation Layers وتثبيت Vulkan SDK.</translation>
+    </message>
+    <message>
+      <source>Enable Logging</source>
+      <translation>تمكين السجل</translation>
+    </message>
+    <message>
+      <source>Enable Logging:\nEnables logging.\nDo not change this if you do not know what you&apos;re doing!\nWhen asking for help, make sure this setting is ENABLED.</source>
+      <translation>تفعيل التسجيل:\nيفعّل التسجيل.\nلا تغيّر هذا الإعداد إذا كنت لا تعرف ما&apos; تفعله!\nعند طلب المساعدة، تأكد من أن هذا الإعداد مفعّل.</translation>
+    </message>
+    <message>
+      <source>Present Mode</source>
+      <translation>الوضع الحالي</translation>
+    </message>
+    <message>
+      <source>Mailbox (Vsync)</source>
+      <translation>Mailbox (Vsync)</translation>
+    </message>
+    <message>
+      <source>Fifo (Vsync)</source>
+      <translation>Fifo (Vsync)</translation>
+    </message>
+    <message>
+      <source>Immediate (No Vsync)</source>
+      <translation>فوري (دون مزامنة عمودية)</translation>
+    </message>
+    <message>
+      <source>Select the DLC folder</source>
+      <translation>حدد مجلد DLC</translation>
+    </message>
+    <message>
+      <source>Present Mode:\nConfigures how video output will be presented to your screen.\n\nMailbox: Frames synchronize with your screen&apos;s refresh rate. New frames will replace any pending frames. Reduces latency but may skip frames if running behind.\nFifo: Frames synchronize with your screen&apos;s refresh rate. New frames will be queued behind pending frames. Ensures all frames are presented but may increase latency.\nImmediate: Frames immediately present to your screen when ready. May result in tearing.</source>
+      <translation>وضع العرض:\nيضبط طريقة تقديم مخرجات الفيديو على الشاشة.\n\nMailbox: تتزامن الإطارات مع معدل تحديث الشاشة&apos;s. تستبدل الإطارات الجديدة أي إطارات معلّقة. يقلل ذلك زمن الاستجابة، لكنه قد يتجاوز بعض الإطارات عند التأخر.\nFifo: تتزامن الإطارات مع معدل تحديث الشاشة&apos;s. توضع الإطارات الجديدة في قائمة انتظار خلف الإطارات المعلّقة. يضمن ذلك عرض كل الإطارات، لكنه قد يزيد زمن الاستجابة.\nImmediate: تُعرض الإطارات على الشاشة فور جاهزيتها. قد يؤدي ذلك إلى تمزّق الصورة.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the DLC path.</source>
+      <translation>استعراض:\nاستعرض مجلدًا لتعيينه كمسار DLC.</translation>
+    </message>
+    <message>
+      <source>FSR Settings</source>
+      <translation>إعدادات FSR</translation>
+    </message>
+    <message>
+      <source>Enable FSR</source>
+      <translation>تمكين FSR</translation>
+    </message>
+    <message>
+      <source>Enable RCAS (sharpening)</source>
+      <translation>تفعيل RCAS (زيادة الحدة)</translation>
+    </message>
+    <message>
+      <source>RCAS Attenuation:</source>
+      <translation>تحذير RCAS:</translation>
+    </message>
+    <message>
+      <source>Load Presets...</source>
+      <translation>تحميل الإعداد المسبق...</translation>
+    </message>
+    <message>
+      <source>Log</source>
+      <translation>السجل</translation>
+    </message>
+    <message>
+      <source>Open Log Location:\nOpen the folder where the log file is saved.</source>
+      <translation>فتح موقع السجل:\nيفتح المجلد الذي يُحفظ فيه ملف السجل.</translation>
+    </message>
+    <message>
+      <source>Microphone:\nNone: Does not use the microphone.\nDefault Device: Will use the default device defined in the system.\nOr manually choose the microphone to be used from the list.</source>
+      <translation>الميكروفون:\nبلا: لا يستخدم الميكروفون.\nالجهاز الافتراضي: يستخدم الجهاز الافتراضي المحدد في النظام.\nأو اختر يدويًا الميكروفون المراد استخدامه من القائمة.</translation>
+    </message>
+    <message>
+      <source>Volume:\nAdjust volume for games on a global level, range goes from 0-500% with the default being 100%.</source>
+      <translation>مستوى الصوت:\nيضبط صوت الألعاب على مستوى عام. يتراوح النطاق من 0 إلى 500%، والقيمة الافتراضية 100%.</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings:\nChoose which tab will open, the default is General.</source>
+      <translation>التبويب الافتراضي عند فتح الإعدادات:\nاختر التبويب الذي سيتم فتحه. الافتراضي هو عام.</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls:\nWhen enabled it will use the controller&apos;s motion control if supported.</source>
+      <translation>تفعيل التحكم بالحركة:\nعند التفعيل، سيستخدم التحكم بالحركة الخاص بيد التحكم&apos; إذا كان مدعومًا.</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency</source>
+      <translation>معدل التحديث الداخلي</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency:\nThe frame rate at which the emulator refreshes at (60hz is the baseline, whether the game runs at 30 or 60fps). Changing this may have adverse effects, such as increasing the game speed, or breaking critical game functionality that does not expect this to change!</source>
+      <translation>تردد Vblank:\nمعدل الإطارات الذي يحدّث عنده المحاكي (60hz هو الأساس، سواء كانت اللعبة تعمل بمعدل 30 أو 60fps). قد يؤدي تغيير هذا إلى آثار سلبية، مثل زيادة سرعة اللعبة أو تعطيل وظائف أساسية في اللعبة لا تتوقع تغيير هذه القيمة!</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access</source>
+      <translation>تفعيل الوصول المباشر للذاكرة</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode</source>
+      <translation>تفعيل وضع جهاز التطوير</translation>
+    </message>
+    <message>
+      <source>Set &quot;Network Connected&quot; to True</source>
+      <translation>تعيين "Network Connected" إلى True</translation>
+    </message>
+    <message>
+      <source>Miscellaneous</source>
+      <translation>خيارات متنوعة</translation>
+    </message>
+    <message>
+      <source>Frontend</source>
+      <translation>الواجهة</translation>
+    </message>
+    <message>
+      <source>Experimental</source>
+      <translation>تجريبي</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen When Launching Game</source>
+      <translation>إظهار شاشة البداية عند تشغيل اللعبة</translation>
+    </message>
+    <message>
+      <source>General Frontend Settings</source>
+      <translation>إعدادات الواجهة العامة</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode</source>
+      <translation>تمكين وضع PS4 الجديد</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access:\nEnables arbitrary memory access from the GPU to CPU memory.</source>
+      <translation>تفعيل الوصول المباشر للذاكرة:\nيتيح وصولًا حرًا من GPU إلى ذاكرة CPU.</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode:\nAdds support for PS4 Pro emulation and memory size. Currently causes instability in a large number of tested games.</source>
+      <translation>تفعيل وضع PS4 Neo:\nيضيف دعمًا لمحاكاة PS4 Pro وحجم الذاكرة الخاص به. يتسبب حاليًا في عدم الاستقرار في عدد كبير من الألعاب التي تم اختبارها.</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode:\nAdds support for Devkit console memory size.</source>
+      <translation>تفعيل وضع جهاز التطوير:\nيضيف دعم حجم ذاكرة جهاز التطوير.</translation>
+    </message>
+    <message>
+      <source>Set Network Connected to True:\nForces games to detect an active network connection. Actual online capabilities are not yet supported.</source>
+      <translation>تعيين الاتصال بالشبكة إلى True:\nيجبر الألعاب على اكتشاف وجود اتصال نشط بالشبكة. إمكانات اللعب عبر الإنترنت غير مدعومة حاليًا.</translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers:\nEnables a system that validates the state of the Vulkan renderer and logs information about its internal state.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>تفعيل طبقات التحقق من Vulkan:\nيفعّل نظامًا يتحقق من حالة عارض Vulkan ويسجّل معلومات عن حالته الداخلية.\nسيؤدي ذلك إلى تقليل الأداء، ومن المحتمل أن يغيّر سلوك المحاكاة.\nيتطلب ذلك تثبيت Vulkan SDK.</translation>
+    </message>
+    <message>
+      <source>Audio Device (general)</source>
+      <translation>جهاز الصوت (عام)</translation>
+    </message>
+    <message>
+      <source>Audio Device (DS4 speaker)</source>
+      <translation>جهاز الصوت (مكبر صوت DS4)</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping:\nFor the sake of technical debugging, saves the game&apos;s shaders to a folder as they render.</source>
+      <translation>تفعيل استخراج الشيدرات:\nلأغراض التصحيح التقني، يحفظ شيدرات اللعبة في مجلد أثناء عرضها.</translation>
+    </message>
+    <message>
+      <source>Enable Null GPU:\nFor the sake of technical debugging, disables game rendering as if there were no graphics card. The screen will be black.</source>
+      <translation>تفعيل Null GPU:\nلأغراض التصحيح التقني، يعطّل عرض اللعبة كما لو لم تكن هناك بطاقة رسومات. ستكون الشاشة سوداء.</translation>
+    </message>
+    <message>
+      <source>DLC Path:\nThe folder where game DLC is loaded from.</source>
+      <translation>مسار DLC:\nالمجلد الذي يتم تحميل DLC الخاص باللعبة منه.</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation</source>
+      <translation>تخصيص DMem إضافي</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation:\nForces allocation of the specified amount of additional DMem. Crashes or causes issues in some games.</source>
+      <translation>تخصيص DMem إضافي:\nيفرض تخصيص مقدار محدد من DMem إضافي. قد يتسبب في تعطّل بعض الألعاب أو حدوث مشكلات بها.</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path:\nThe folder where PS4 sysmodules are loaded from.</source>
+      <translation>مسار وحدات نظام PS4:\nالمجلد الذي يتم تحميل وحدات نظام PS4 منه.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the sysmodules path.</source>
+      <translation>استعراض:\nاستعرض مجلدًا لتعيينه كمسار وحدات النظام.</translation>
+    </message>
+    <message>
+      <source>Vulkan Validation (Requires Vulkan SDK)</source>
+      <translation>التحقق من صحة Vulkan (يتطلب Vulkan SDK)</translation>
+    </message>
+    <message>
+      <source>Validation Layers</source>
+      <translation>طبقات التحقق</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation</source>
+      <translation>تفعيل التحقق الأساسي</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation</source>
+      <translation>تفعيل تحقق المزامنة</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation</source>
+      <translation>تفعيل التحقق بمساعدة GPU</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation:\nEnables a system that validates the timing of Vulkan rendering tasks.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>تفعيل التحقق من المزامنة:\nيفعّل نظامًا يتحقق من توقيت مهام عرض Vulkan.\nسيؤدي ذلك إلى تقليل الأداء، ومن المحتمل أن يغيّر سلوك المحاكاة.\nيتطلب ذلك تثبيت Vulkan SDK.</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation:\nEnables the main API validation functions.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>تفعيل التحقق الأساسي:\nيفعّل وظائف التحقق الرئيسية لواجهة API.\nسيؤدي ذلك إلى تقليل الأداء، ومن المحتمل أن يغيّر سلوك المحاكاة.\nيتطلب ذلك تثبيت Vulkan SDK.</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation:\nInstruments shaders with code that validates if they are behaving correctly.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>تفعيل التحقق بمساعدة GPU:\nيضيف تعليمات تحقق داخل الشيدرات للتأكد من أنها تعمل بشكل صحيح.\nسيؤدي ذلك إلى تقليل الأداء، ومن المحتمل أن يغيّر سلوك المحاكاة.\nيتطلب ذلك تثبيت Vulkan SDK.</translation>
+    </message>
+    <message>
+      <source>GUI Language</source>
+      <translation>لغة واجهة المستخدم</translation>
+    </message>
+    <message>
+      <source>GUI Updates</source>
+      <translation>تحديثات واجهة المستخدم</translation>
+    </message>
+    <message>
+      <source>DLC Path</source>
+      <translation>مسار الـ DLC</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path</source>
+      <translation>مسار وحدات PS4</translation>
+    </message>
+    <message>
+      <source>GUI Updates:\nRelease: Official versions released every month that may be very outdated, but are more reliable and tested.\nNightly: Development versions that have all the latest features and fixes, but may contain bugs and are less stable.\n\n*This update applies only to the Qt user interface. To update the emulator core, please use the &apos;Version Manager&apos; menu.</source>
+      <translation>تحديثات الواجهة الرسومية:\nRelease: إصدارات رسمية تصدر كل شهر وقد تكون قديمة جدًا، لكنها أكثر موثوقية وخضعت للاختبار.\nNightly: إصدارات تطويرية تتضمن أحدث الميزات والإصلاحات، لكنها قد تحتوي على أخطاء وتكون أقل استقرارًا.\n\n*ينطبق هذا التحديث على واجهة Qt فقط. لتحديث نواة المحاكي، استخدم قائمة &apos;Version Manager&apos;.</translation>
+    </message>
+    <message>
+      <source>Cannot create portable launcher folder</source>
+      <translation>تعذر إنشاء مجلد المشغّل المحمول</translation>
+    </message>
+    <message>
+      <source>Portable launcherDir folder created</source>
+      <translation>تم إنشاء مجلد المشغّل المحمول</translation>
+    </message>
+    <message>
+      <source>USB Device</source>
+      <translation>جهاز USB</translation>
+    </message>
+    <message>
+      <source>Real USB Device</source>
+      <translation>جهاز USB حقيقي</translation>
+    </message>
+    <message>
+      <source>Skylander Portal</source>
+      <translation>بوابة Skylanders</translation>
+    </message>
+    <message>
+      <source>Infinity Base</source>
+      <translation>Infinity Base</translation>
+    </message>
+    <message>
+      <source>Dimensions Toypad</source>
+      <translation>ToyPad الخاص بـ Dimensions</translation>
+    </message>
+    <message>
+      <source>USB Device:\nReal USB Device: Use a real USB Device attached to the system.\nSkylander Portal: Emulate a Skylander Portal of Power.\nInfinity Base: Emulate a Disney Infinity Base.\nDimensions Toypad: Emulate a Lego Dimensions Toypad.</source>
+      <translation>جهاز USB:\nجهاز USB حقيقي: استخدام جهاز USB حقيقي متصل بالنظام.\nبوابة Skylanders: محاكاة Portal of Power الخاص بـ Skylanders.\nInfinity Base: محاكاة Infinity Base الخاصة بـ Disney Infinity.\nToy Pad الخاص بـ Dimensions: محاكاة Toy Pad الخاص بـ LEGO Dimensions.</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache</source>
+      <translation>تفعيل التخزين المؤقت للمظللات</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file</source>
+      <translation>ضغط ملفات التخزين المؤقت للمظللات في ملف zip</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache:\nStoring compiled shaders to avoid recompilations, reduce stuttering.</source>
+      <translation>تفعيل التخزين المؤقت للمظللات:\nتخزين المظللات المجمعة لتجنب إعادة بنائها، وتقليل التقطيع.</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file:\nThe shader cache files are stored within a single zip file instead of multiple separate files.</source>
+      <translation>ضغط ملفات التخزين المؤقت للمظللات في ملف zip:\nيتم حفظ ملفات التخزين المؤقت للمظللات داخل ملف zip واحد بدلاً من عدة ملفات منفصلة.</translation>
+    </message>
+    <message>
+      <source>Readbacks Mode</source>
+      <translation>وضع القراءات الراجعة</translation>
+    </message>
+    <message>
+      <source>Disabled</source>
+      <translation>معطّل</translation>
+    </message>
+    <message>
+      <source>Readbacks:\nEnable GPU memory readbacks and writebacks.\nThis is required for proper behavior in some games.\nMight cause stability and/or performance issues.</source>
+      <translation>القراءات الراجعة:\nتفعيل قراءة ذاكرة GPU والكتابة الراجعة إليها.\nهذا مطلوب لسلوك صحيح في بعض الألعاب.\nقد يسبب مشاكل في الاستقرار و/أو الأداء.</translation>
+    </message>
+    <message>
+      <source>Relaxed</source>
+      <translation>مخفف</translation>
+    </message>
+    <message>
+      <source>Precise</source>
+      <translation>دقيق</translation>
+    </message>
+    <message>
+      <source>Select shadPS4 Home Path</source>
+      <translation>تحديد مسار مجلد المحاكي الرئيسي</translation>
+    </message>
+    <message>
+      <source>Select the system modules folder</source>
+      <translation>اختر مجلد وحدات النظام</translation>
+    </message>
+    <message>
+      <source>Home Folder Location (Saves, Inputs, Trophy Data)</source>
+      <translation>موقع مجلد البيانات الرئيسية (الحفظ، المدخلات، بيانات الكؤوس)</translation>
+    </message>
+    <message>
+      <source>Home Folder Location:\nThe folder where save data, trophy files, and input configs are stored for all users.</source>
+      <translation>موقع المجلد الرئيسي:\nالمجلد الذي تُحفظ فيه بيانات الحفظ وملفات الكؤوس وإعدادات الإدخال لجميع المستخدمين.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the home folder.</source>
+      <translation>استعراض:\nاستعرض مجلدًا لتعيينه كمجلد رئيسي.</translation>
+    </message>
+    <message>
+      <source>Audio</source>
+      <translation>الصوت</translation>
+    </message>
+    <message>
+      <source>Audio Backend</source>
+      <translation>نظام الصوت</translation>
+    </message>
+    <message>
+      <source>Mic Device</source>
+      <translation>جهاز الميكروفون</translation>
+    </message>
+    <message>
+      <source>Devices</source>
+      <translation>الأجهزة</translation>
+    </message>
+    <message>
+      <source>Camera</source>
+      <translation>الكاميرا</translation>
+    </message>
+    <message>
+      <source>Log Sync</source>
+      <translation>مزامنة السجل</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate</source>
+      <translation>تخطي السجلات المكررة</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration</source>
+      <translation>أقصى مدة لتخطي السجلات</translation>
+    </message>
+    <message>
+      <source> ms</source>
+      <translation> ms</translation>
+    </message>
+    <message>
+      <source>Log Size Limit</source>
+      <translation>حد حجم السجل</translation>
+    </message>
+    <message>
+      <source> B</source>
+      <translation> B</translation>
+    </message>
+    <message>
+      <source>Log Append</source>
+      <translation>إلحاق بالسجل</translation>
+    </message>
+    <message>
+      <source>wincolor</source>
+      <translation>wincolor</translation>
+    </message>
+    <message>
+      <source>msvc</source>
+      <translation>msvc</translation>
+    </message>
+    <message>
+      <source>Log Append:\nAppend to existing logs.</source>
+      <translation>إلحاق السجل:\nإضافة السجلات إلى السجلات الموجودة.</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration:\nInterval without writing same lines (ms) - only if &apos;Log Skip Duplicate&apos; enabled.</source>
+      <translation>أقصى مدة لتخطي السجلات:\nالفاصل الزمني دون كتابة الأسطر نفسها (ms) - يعمل فقط عند تفعيل &apos;Log Skip Duplicate&apos;.</translation>
+    </message>
+    <message>
+      <source>Log Size Limit:\nMaximum size of log files (bytes).</source>
+      <translation>حد حجم السجل:\nالحجم الأقصى لملفات السجل (بالبايت).</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate:\nSave storage by avoiding writing log that is identical.</source>
+      <translation>تخطي السجلات المكررة:\nيوفر مساحة التخزين عبر تجنب كتابة السجلات المتطابقة.</translation>
+    </message>
+    <message>
+      <source>Log Sync:\nSwitch between sync (order) or async (performance).</source>
+      <translation>مزامنة السجل:\nالتبديل بين المتزامن (ترتيب السجلات) وغير المتزامن (الأداء).</translation>
+    </message>
+    <message>
+      <source>Log Type:\nChoose between wincolor or msvc log types.\nwincolor: Default logging for Windows\nmsvc: Logging for debugging</source>
+      <translation>نوع السجل:\nاختر بين نوعي السجل wincolor أو msvc.\nwincolor: التسجيل الافتراضي على Windows\nmsvc: تسجيل مخصص للتصحيح</translation>
+    </message>
+    <message>
+      <source>Log Filter:\nFilters the log to only print specific information.\nExamples: &quot;Core:Debug&quot; &quot;Lib.Pad:Debug Common.Filesystem:Error&quot; &quot;*:Critical&quot;\nLevels: trace, debug, info, warning, error, critical, off - in this order, a specific level silences all levels preceding it in the list and logs every level after it.</source>
+      <translation>فلتر السجل:\nيفلتر السجل لطباعة معلومات محددة فقط.\nأمثلة: &quot;Core:Debug&quot; &quot;Lib.Pad:Debug Common.Filesystem:Error&quot; &quot;*:Critical&quot;\nالمستويات: trace، debug، info، warning، error، critical، off - بهذا الترتيب، أي مستوى محدد سيكتم جميع المستويات التي تسبقه في القائمة ويسجل كل مستوى بعده.</translation>
+    </message>
+    <message>
+      <source>Enable shadNet</source>
+      <translation type="unfinished">Enable shadNet</translation>
+    </message>
+    <message>
+      <source>ShadNet</source>
+      <translation type="unfinished">ShadNet</translation>
+    </message>
+    <message>
+      <source>Server</source>
+      <translation type="unfinished">Server</translation>
+    </message>
+    <message>
+      <source>Signaling Info</source>
+      <translation type="unfinished">Signaling Info</translation>
+    </message>
+    <message>
+      <source>Enable UPNP</source>
+      <translation type="unfinished">Enable UPNP</translation>
+    </message>
+    <message>
+      <source>WebAPI Server</source>
+      <translation type="unfinished">WebAPI Server</translation>
+    </message>
+    <message>
+      <source>shadNet:\nCompatibility is very limited at the moment.\nYou can register at https://www.shadps4.net/shadnet/register/.</source>
+      <translation type="unfinished">shadNet:\nCompatibility is very limited at the moment.\nYou can register at https://www.shadps4.net/shadnet/register/.</translation>
+    </message>
+    <message>
+      <source>Red Zone Protection</source>
+      <translation type="unfinished">Red Zone Protection</translation>
+    </message>
+    <message>
+      <source>Static Patching</source>
+      <translation type="unfinished">Static Patching</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShortcutDialog</name>
+    <message>
+      <source>Select Version</source>
+      <translation>حدد الإصدار</translation>
+    </message>
+    <message>
+      <source>Select version for shortcut creation</source>
+      <translation>حدد الإصدار لإنشاء الاختصار</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation>لم يتم تحديد الإصدار</translation>
+    </message>
+    <message>
+      <source>Select a version first</source>
+      <translation>حدد الإصدار أولاً</translation>
+    </message>
+  </context>
+  <context>
+    <name>SteamShortcut</name>
+    <message>
+      <source>Steam</source>
+      <translation type="unfinished">Steam</translation>
+    </message>
+    <message>
+      <source>%1 is already in your Steam library.</source>
+      <translation type="unfinished">%1 is already in your Steam library.</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Steam installation not found.</source>
+      <translation type="unfinished">Steam installation not found.</translation>
+    </message>
+    <message>
+      <source>No Steam user account found. Please log into Steam at least once.</source>
+      <translation type="unfinished">No Steam user account found. Please log into Steam at least once.</translation>
+    </message>
+    <message>
+      <source>Steam is Running</source>
+      <translation type="unfinished">Steam is Running</translation>
+    </message>
+    <message>
+      <source>Steam is currently running. It will be closed and restarted to apply the shortcut. Continue?</source>
+      <translation type="unfinished">Steam is currently running. It will be closed and restarted to apply the shortcut. Continue?</translation>
+    </message>
+    <message>
+      <source>Steam did not close in time. Shortcut was not added.</source>
+      <translation type="unfinished">Steam did not close in time. Shortcut was not added.</translation>
+    </message>
+    <message>
+      <source>Failed to add game to Steam.</source>
+      <translation type="unfinished">Failed to add game to Steam.</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Steam is restarting.</source>
+      <translation type="unfinished">Added to Steam successfully. Steam is restarting.</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Launch Steam to see the changes.</source>
+      <translation type="unfinished">Added to Steam successfully. Launch Steam to see the changes.</translation>
+    </message>
+  </context>
+  <context>
+    <name>TrophyViewer</name>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>عارض الكؤوس</translation>
+    </message>
+    <message>
+      <source>Select Game:</source>
+      <translation>إختر الُعْبَه:</translation>
+    </message>
+    <message>
+      <source>Progress</source>
+      <translation>مقدار التقدُّم</translation>
+    </message>
+    <message>
+      <source>Show Earned Trophies</source>
+      <translation>عرض الكؤوس المكتسبة</translation>
+    </message>
+    <message>
+      <source>Show Not Earned Trophies</source>
+      <translation>عرض الكؤوس غير المكتسبة</translation>
+    </message>
+    <message>
+      <source>Show Hidden Trophies</source>
+      <translation>عرض الكؤوس المخفية</translation>
+    </message>
+    <message>
+      <source>Select User:</source>
+      <translation>اختر المستخدم:</translation>
+    </message>
+  </context>
+  <context>
+    <name>UserManagerDialog</name>
+    <message>
+      <source>User Manager</source>
+      <translation>إدارة المستخدم</translation>
+    </message>
+    <message>
+      <source>&amp;Create User</source>
+      <translation>&amp;إنشاء مستخدم</translation>
+    </message>
+    <message>
+      <source>&amp;Delete User</source>
+      <translation>&amp;حذف المستخدم</translation>
+    </message>
+    <message>
+      <source>&amp;Rename User</source>
+      <translation>&amp;إعادة تسمية المستخدم</translation>
+    </message>
+    <message>
+      <source>&amp;Set Default User</source>
+      <translation>&amp;تعيين مستخدم افتراضي</translation>
+    </message>
+    <message>
+      <source>&amp;Set Color</source>
+      <translation>&amp;تعيين اللون</translation>
+    </message>
+    <message>
+      <source>&amp;Set Controller Port</source>
+      <translation>&amp;تعيين منفذ يد التحكم</translation>
+    </message>
+    <message>
+      <source>&amp;Close</source>
+      <translation>&amp;إغلاق</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Cannot add more users.</source>
+      <translation>لا يمكن إضافة المزيد من المستخدمين.</translation>
+    </message>
+    <message>
+      <source>Create New User</source>
+      <translation>إنشاء مستخدم جديد</translation>
+    </message>
+    <message>
+      <source>New User ID: %1</source>
+      <translation>معرّف المستخدم الجديد: %1</translation>
+    </message>
+    <message>
+      <source>Username (3–16 chars, letters, numbers, _, -)</source>
+      <translation>اسم المستخدم (3–16 حرفًا، أحرف، أرقام، _، -)</translation>
+    </message>
+    <message>
+      <source>Invalid Username</source>
+      <translation>اسم المستخدم غير صالح</translation>
+    </message>
+    <message>
+      <source>Username must be 3–16 chars and valid.</source>
+      <translation>يجب أن يكون اسم المستخدم صالحًا ويتكون من 3 إلى 16 حرفًا.</translation>
+    </message>
+    <message>
+      <source>Delete Confirmation</source>
+      <translation>تأكيد الحذف</translation>
+    </message>
+    <message>
+      <source>Delete user ID %1?</source>
+      <translation>هل تريد حذف المستخدم بالمعرّف %1؟</translation>
+    </message>
+    <message>
+      <source>Rename User</source>
+      <translation>إعادة تسمية المستخدم</translation>
+    </message>
+    <message>
+      <source>Old Username: %1</source>
+      <translation>اسم المستخدم القديم: %1</translation>
+    </message>
+    <message>
+      <source>Set User Color</source>
+      <translation>تعيين لون المستخدم</translation>
+    </message>
+    <message>
+      <source>Select color:</source>
+      <translation>اختر اللون:</translation>
+    </message>
+    <message>
+      <source>Set Controller Port</source>
+      <translation>تعيين منفذ يد التحكم</translation>
+    </message>
+    <message>
+      <source>Assign port (1-4) to this user:</source>
+      <translation>عيّن منفذًا من 1 إلى 4 لهذا المستخدم:</translation>
+    </message>
+    <message>
+      <source>&amp;Open User Directory</source>
+      <translation>&amp;فتح مجلد المستخدم</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net...</source>
+      <translation type="unfinished">Shad&amp;Net...</translation>
+    </message>
+    <message>
+      <source>On</source>
+      <translation type="unfinished">On</translation>
+    </message>
+    <message>
+      <source>On (%1)</source>
+      <translation type="unfinished">On (%1)</translation>
+    </message>
+    <message>
+      <source>Off</source>
+      <translation type="unfinished">Off</translation>
+    </message>
+    <message>
+      <source>ShadNet Settings - %1</source>
+      <translation type="unfinished">ShadNet Settings - %1</translation>
+    </message>
+    <message>
+      <source>Enable ShadNet for this user</source>
+      <translation type="unfinished">Enable ShadNet for this user</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID)</source>
+      <translation type="unfinished">Account ID (NPID)</translation>
+    </message>
+    <message>
+      <source>Password</source>
+      <translation type="unfinished">Password</translation>
+    </message>
+    <message>
+      <source>Show password</source>
+      <translation type="unfinished">Show password</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID):</source>
+      <translation type="unfinished">Account ID (NPID):</translation>
+    </message>
+    <message>
+      <source>Password:</source>
+      <translation type="unfinished">Password:</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net Settings...</source>
+      <translation type="unfinished">Shad&amp;Net Settings...</translation>
+    </message>
+  </context>
+  <context>
+    <name>VersionDialog</name>
+    <message>
+      <source>Version Manager</source>
+      <translation>مدير الإصدارات</translation>
+    </message>
+    <message>
+      <source>Path to save versions</source>
+      <translation>مسار حفظ الإصدارات</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>استعراض</translation>
+    </message>
+    <message>
+      <source>Installed</source>
+      <translation>مثبت</translation>
+    </message>
+    <message>
+      <source>Selected</source>
+      <translation>محدد</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation>إصدار</translation>
+    </message>
+    <message>
+      <source>Codename</source>
+      <translation>الإسم الرمزي</translation>
+    </message>
+    <message>
+      <source>Date</source>
+      <translation>تاريخ</translation>
+    </message>
+    <message>
+      <source>Add Custom</source>
+      <translation>إضافة مخصص</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>حذف</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation>تحديث القائمة</translation>
+    </message>
+    <message>
+      <source>Download</source>
+      <translation>تنزيل</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release updates at startup</source>
+      <translation>التحقق من وجود تحديثات سابقة للإصدار عند بدء التشغيل</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release Updates</source>
+      <translation>تحقق من التحديثات السابقة للإصدار</translation>
+    </message>
+    <message>
+      <source>Select the folder where the emulator versions will be installed</source>
+      <translation>حدد المجلد حيث سيتم تثبيت إصدارات المحاكي</translation>
+    </message>
+    <message>
+      <source>Select executable</source>
+      <translation>حدد الملف القابل للتنفيذ</translation>
+    </message>
+    <message>
+      <source>Executable (*.exe)</source>
+      <translation>قابل للتنفيذ (*.exe)</translation>
+    </message>
+    <message>
+      <source>Version name</source>
+      <translation>اسم الإصدار</translation>
+    </message>
+    <message>
+      <source>Enter the name of this version as it appears in the list.</source>
+      <translation>أدخل اسم هذا الإصدار كما يظهر في القائمة.</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>خطأ</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>تم بنجاح</translation>
+    </message>
+    <message>
+      <source>Version added successfully.</source>
+      <translation>تمت إضافة الإصدار بنجاح.</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder path.</source>
+      <translation>فشل تحديد مسار المجلد.</translation>
+    </message>
+    <message>
+      <source>Delete version</source>
+      <translation>حذف الإصدار</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the version</source>
+      <translation>هل تريد حذف الإصدار</translation>
+    </message>
+    <message>
+      <source>Version list update</source>
+      <translation>تحديث قائمة الإصدارات</translation>
+    </message>
+    <message>
+      <source>No news, the version list is already updated.</source>
+      <translation>لا يوجد جديد، قائمة الإصدارات تم تحديثها بالفعل.</translation>
+    </message>
+    <message>
+      <source>The latest versions have been added to the list for download.</source>
+      <translation>تمت إضافة أحدث الإصدارات إلى قائمة التنزيل.</translation>
+    </message>
+    <message>
+      <source>Error accessing GitHub API</source>
+      <translation>حدث خطأ أثناء الوصول إلى GitHub API</translation>
+    </message>
+    <message>
+      <source>First you need to choose a location to save the versions in
+&apos;Path to save versions&apos;</source>
+      <translation>يجب أولًا اختيار موقع لحفظ الإصدارات في
+&apos;مسار حفظ الإصدارات&apos;</translation>
+    </message>
+    <message>
+      <source>Do you want to download the version</source>
+      <translation>هل تريد تنزيل الإصدار</translation>
+    </message>
+    <message>
+      <source>No files available for this platform.</source>
+      <translation>لا توجد ملفات متاحة لهذه المنصة.</translation>
+    </message>
+    <message>
+      <source>Downloading %1 , please wait...</source>
+      <translation>جارٍ التنزيل %1 ، يرجى الانتظار...</translation>
+    </message>
+    <message>
+      <source>Could not save file.</source>
+      <translation>تعذر حفظ الملف.</translation>
+    </message>
+    <message>
+      <source>Version %1 has been downloaded and selected.</source>
+      <translation>تم تنزيل الإصدار %1 وتحديده.</translation>
+    </message>
+    <message>
+      <source>Failed to create zip extraction script</source>
+      <translation>فشل إنشاء سكربت استخراج ZIP</translation>
+    </message>
+    <message>
+      <source>The GitHub API response is not a valid JSON array.</source>
+      <translation>استجابة GitHub API ليست مصفوفة JSON صالحة.</translation>
+    </message>
+    <message>
+      <source>Auto Updater - Emulator</source>
+      <translation>التحديث التلقائي - المحاكي</translation>
+    </message>
+    <message>
+      <source>You already have the latest pre-release version.</source>
+      <translation>لديك بالفعل أحدث إصدار تجريبي.</translation>
+    </message>
+    <message>
+      <source>Update Available (Emulator)</source>
+      <translation>تحديث متوفر (محاكي)</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation>الإصدار الحالي</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation>أحدث إصدار</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation>هل تريد التحديث؟</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>تحديث</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation>لا</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation>عرض سجل التغييرات</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation>إخفاء سجل التغييرات</translation>
+    </message>
+    <message>
+      <source>Network error while fetching changelog</source>
+      <translation>خطأ في الشبكة أثناء جلب سجل التغيير</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation>التغييرات</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation>لم يتم العثور على عنوان URL للتنزيل للأصل المحدد.</translation>
+    </message>
+    <message>
+      <source>Network error while downloading</source>
+      <translation>خطأ في الشبكة أثناء التحميل</translation>
+    </message>
+    <message>
+      <source>Failed to save download file</source>
+      <translation>فشل في حفظ ملف التحميل</translation>
+    </message>
+    <message>
+      <source>Complete installation</source>
+      <translation>إكمال التثبيت</translation>
+    </message>
+    <message>
+      <source>Pre-release updated successfully</source>
+      <translation>تم تحديث الإصدار التجريبي بنجاح</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation>فشل إنشاء ملف سكربت التحديث</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation>عرض سجل التغييرات دائمًا</translation>
+    </message>
+    <message>
+      <source>No version selected. Please choose one from the list to delete.</source>
+      <translation>لم يتم تحديد الإصدار. الرجاء اختيار واحد من القائمة للحذف.</translation>
+    </message>
+    <message>
+      <source>Confirm Download</source>
+      <translation>تأكيد التنزيل</translation>
+    </message>
+    <message>
+      <source>Extraction failure.</source>
+      <translation>فشل الاستخراج.</translation>
+    </message>
+    <message>
+      <source>A version with that name already exists.</source>
+      <translation>توجد بالفعل نسخة بهذا الاسم.</translation>
+    </message>
+    <message>
+      <source>Local</source>
+      <translation>محلي</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder to remove.</source>
+      <translation>فشل في تحديد المجلد لإزالته.</translation>
+    </message>
+    <message>
+      <source>Failed to delete folder.</source>
+      <translation>فشل في حذف المجلد.</translation>
+    </message>
+    <message>
+      <source>Unable to get hash of latest pre-release.</source>
+      <translation>تعذّر الحصول على هاش أحدث إصدار تجريبي.</translation>
+    </message>
+    <message>
+      <source>Downloading Pre-release (Nightly), please wait...</source>
+      <translation>جارٍ تنزيل الإصدار التجريبي (Nightly)، يرجى الانتظار...</translation>
+    </message>
+  </context>
+  <context>
+    <name>dimensions_dialog</name>
+    <message>
+      <source>Dimensions Manager</source>
+      <translation>مدير ديمنشنز</translation>
+    </message>
+    <message>
+      <source>Active Dimensions Figures:</source>
+      <translation>شخصيات ديمنشنز النشطة:</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>مسح</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>تحميل</translation>
+    </message>
+    <message>
+      <source>Move</source>
+      <translation>تحرك</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation>شخصية غير معروفة</translation>
+    </message>
+    <message>
+      <source>Select Dimensions File</source>
+      <translation>اختيار ملف Dimensions</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation>شخصية Dimension (*.bin);;</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation>فشل فتح بيانات الشخصية!</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation>فشل فتح ملف الشخصية (%1)!
+قد يكون مستخدمًا بالفعل على القاعدة.</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation>فشل قراءة بيانات الشخصية!</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation>فشل قراءة ملف الشخصية (%1)!
+كان حجم الملف صغيرًا جدًا.</translation>
+    </message>
+  </context>
+  <context>
+    <name>figure_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation>منشئ الشخصيات</translation>
+    </message>
+    <message>
+      <source>Filter by Series:</source>
+      <translation>تصفية حسب السلسلة:</translation>
+    </message>
+    <message>
+      <source>All</source>
+      <translation>الكل</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--غير معروف--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation>معرّف الشخصية:</translation>
+    </message>
+    <message>
+      <source>Series:</source>
+      <translation>السلسلة:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>خطأ في تحويل القيمة</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation>معرّف الشخصية المُدخل غير صالح!</translation>
+    </message>
+    <message>
+      <source>Series number entered is invalid!</source>
+      <translation>معرّف السلسلة المُدخل غير صالح!</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation>إنشاء بيانات شخصية</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation>شخصية إنفينيتي (*.bin)؛؛</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file!</source>
+      <translation>فشل إنشاء بيانات الشخصية!</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file:
+%1</source>
+      <translation>فشل إنشاء بيانات الشخصية:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>infinity_dialog</name>
+    <message>
+      <source>Infinity Manager</source>
+      <translation>مدير Infinity</translation>
+    </message>
+    <message>
+      <source>Active Infinity Figures:</source>
+      <translation>شخصيات إنفينيتي النشطة:</translation>
+    </message>
+    <message>
+      <source>Play Set/Power Disc</source>
+      <translation>مجموعة لعب/قرص قوة</translation>
+    </message>
+    <message>
+      <source>Power Disc Two</source>
+      <translation>قرص القوة الثاني</translation>
+    </message>
+    <message>
+      <source>Power Disc Three</source>
+      <translation>قرص القوة الثالث</translation>
+    </message>
+    <message>
+      <source>Player One</source>
+      <translation>اللاعب الأول</translation>
+    </message>
+    <message>
+      <source>Player One Ability One</source>
+      <translation>القدرة الأولى للاعب الأول</translation>
+    </message>
+    <message>
+      <source>Player One Ability Two</source>
+      <translation>القدرة الثانية للاعب الأول</translation>
+    </message>
+    <message>
+      <source>Player Two</source>
+      <translation>اللاعب الثاني</translation>
+    </message>
+    <message>
+      <source>Player Two Ability One</source>
+      <translation>القدرة الأولى للاعب الثاني</translation>
+    </message>
+    <message>
+      <source>Player Two Ability Two</source>
+      <translation>القدرة الثانية للاعب الثاني</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>مسح</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>تحميل</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation>شخصية غير معروفة</translation>
+    </message>
+    <message>
+      <source>Select Infinity File</source>
+      <translation>اختيار بيانات إنفينيتي</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation>شخصية إنفينيتي (*.bin)؛؛</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation>فشل فتح بيانات الشخصية!</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation>فشل فتح ملف الشخصية (%1)!
+قد يكون مستخدمًا بالفعل على القاعدة.</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation>فشل قراءة بيانات الشخصية!</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation>فشل قراءة ملف الشخصية (%1)!
+كان حجم الملف صغيرًا جدًا.</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation>منشئ الشخصيات</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--غير معروف--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation>معرّف الشخصية:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>خطأ في تحويل القيمة</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation>معرّف الشخصية المُدخل غير صالح!</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation>إنشاء بيانات شخصية</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation>شخصية ديمنشنز (*.bin)؛؛</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file!</source>
+      <translation>فشل إنشاء ملف المجسم!</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file:
+%1</source>
+      <translation>فشل إنشاء ملف المجسم:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_move_dialog</name>
+    <message>
+      <source>Figure Mover</source>
+      <translation>ناقل الشخصيات</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+    <message>
+      <source>Move Here</source>
+      <translation>نقل هنا</translation>
+    </message>
+    <message>
+      <source>Pick up and Place</source>
+      <translation>التقاط ووضع</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_creator_dialog</name>
+    <message>
+      <source>Skylander Creator</source>
+      <translation>منشئ سكايلاندر</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--غير معروف--</translation>
+    </message>
+    <message>
+      <source>ID:</source>
+      <translation>المعرف:</translation>
+    </message>
+    <message>
+      <source>Variant:</source>
+      <translation>المتغيّر:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>إلغاء</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>خطأ في تحويل القيمة</translation>
+    </message>
+    <message>
+      <source>ID entered is invalid!</source>
+      <translation>المعرف الذي تم إدخاله غير صالح!</translation>
+    </message>
+    <message>
+      <source>Variant entered is invalid!</source>
+      <translation>الخيار الذي تم إدخاله غير صالح!</translation>
+    </message>
+    <message>
+      <source>Create Skylander File</source>
+      <translation>إنشاء ملف Skylander</translation>
+    </message>
+    <message>
+      <source>Skylander Object (*.sky);;All Files (*)</source>
+      <translation>كائن سكايلاندر (*.sky);;كل الملفات (*)</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file!</source>
+      <translation>فشل إنشاء بيانات سكايلاندر!</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file:
+%1</source>
+      <translation>فشل إنشاء بيانات سكايلاندر:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_dialog</name>
+    <message>
+      <source>Skylanders Manager</source>
+      <translation>مدير Skylanders</translation>
+    </message>
+    <message>
+      <source>Active Portal Skylanders:</source>
+      <translation>سكايلاندرز النشطة على البوابة:</translation>
+    </message>
+    <message>
+      <source>Skylander %1</source>
+      <translation>Skylander %1</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>مسح</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>إنشاء</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>تحميل</translation>
+    </message>
+    <message>
+      <source>Select Skylander File</source>
+      <translation>حدد ملف Skylander</translation>
+    </message>
+    <message>
+      <source>Skylander (*.sky *.bin *.dmp *.dump);;All Files (*)</source>
+      <translation>سكايلاندر (*.sky *.bin *.dmp *.dump);;كل الملفات (*)</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file!</source>
+      <translation>فشل فتح بيانات سكايلاندر!</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file(%1)!
+File may already be in use on the portal.</source>
+      <translation>فشل فتح ملف Skylander (%1)!
+قد يكون مستخدمًا بالفعل على البوابة.</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file!</source>
+      <translation>فشل قراءة بيانات سكايلاندر!</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file(%1)!
+File was too small.</source>
+      <translation>فشل قراءة ملف Skylander (%1)!
+كان حجم الملف صغيرًا جدًا.</translation>
+    </message>
+    <message>
+      <source>Unknown (Id:%1 Var:%2)</source>
+      <translation>غير معروف (I:%1 Var:%2)</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>لا شيء</translation>
+    </message>
+  </context>
+</TS>

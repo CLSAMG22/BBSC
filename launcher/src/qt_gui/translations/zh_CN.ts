@@ -1,0 +1,4010 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
+     SPDX-License-Identifier: GPL-2.0-or-later -->
+<!DOCTYPE TS>
+<TS version="2.1" language="zh_CN" sourcelanguage="en">
+  <context>
+    <name>AboutDialog</name>
+    <message>
+      <source>About shadPS4</source>
+      <translation>关于 shadPS4</translation>
+    </message>
+    <message>
+      <source>shadPS4 is an experimental open-source emulator for the PlayStation 4.</source>
+      <translation>shadPS4 是一款实验性质的开源 PlayStation 4 模拟器软件。</translation>
+    </message>
+    <message>
+      <source>This software should not be used to play games you have not legally obtained.</source>
+      <translation>本软件不得用于运行未经合法授权而获得的游戏。</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheatsPatches</name>
+    <message>
+      <source>Cheats / Patches for </source>
+      <translation>作弊码/补丁：</translation>
+    </message>
+    <message>
+      <source>Cheats/Patches are experimental.\nUse with caution.\n\nDownload cheats individually by selecting the repository and clicking the download button.\nIn the Patches tab, you can download all patches at once, choose which ones you want to use, and save your selection.\n\nSince we do not develop the Cheats/Patches,\nplease report issues to the cheat author.\n\nCreated a new cheat? Visit:\n</source>
+      <translation>作弊码/补丁是实验性的，\n请小心使用。\n\n通过选择存储库并点击下载按钮，下载该游戏的作弊码。\n在“补丁”选项卡中，您可以一次性下载所有补丁，选择要使用的补丁并保存选择。\n\n由于我们不开发作弊码/补丁，\n请将问题报告给作弊码/补丁的作者。\n\n创建了新的作弊码/补丁？欢迎提交到我们的仓库：\n</translation>
+    </message>
+    <message>
+      <source>No Image Available</source>
+      <translation>没有可用的图片</translation>
+    </message>
+    <message>
+      <source>Serial: </source>
+      <translation>序列号：</translation>
+    </message>
+    <message>
+      <source>Version: </source>
+      <translation>版本：</translation>
+    </message>
+    <message>
+      <source>Size: </source>
+      <translation>大小：</translation>
+    </message>
+    <message>
+      <source>Select Cheat File:</source>
+      <translation>选择作弊码文件：</translation>
+    </message>
+    <message>
+      <source>Repository:</source>
+      <translation>存储库：</translation>
+    </message>
+    <message>
+      <source>Download Cheats</source>
+      <translation>下载作弊码</translation>
+    </message>
+    <message>
+      <source>Delete File</source>
+      <translation>删除文件</translation>
+    </message>
+    <message>
+      <source>No files selected.</source>
+      <translation>没有选择文件。</translation>
+    </message>
+    <message>
+      <source>You can delete the cheats you don&apos;t want after downloading them.</source>
+      <translation>您可以在下载后删除不想要的作弊码。</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the selected file?\n%1</source>
+      <translation>您要删除选中的文件吗？\n%1</translation>
+    </message>
+    <message>
+      <source>Select Patch File:</source>
+      <translation>选择补丁文件：</translation>
+    </message>
+    <message>
+      <source>Download Patches</source>
+      <translation>下载补丁</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Cheats</source>
+      <translation>作弊码</translation>
+    </message>
+    <message>
+      <source>Patches</source>
+      <translation>补丁</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>No patch selected.</source>
+      <translation>没有选择补丁。</translation>
+    </message>
+    <message>
+      <source>Unable to open files.json for reading.</source>
+      <translation>无法打开 files.json 进行读取。</translation>
+    </message>
+    <message>
+      <source>No patch file found for the current serial.</source>
+      <translation>未找到当前序列号的补丁文件。</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for reading.</source>
+      <translation>无法打开文件进行读取。</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for writing.</source>
+      <translation>无法打开文件进行写入。</translation>
+    </message>
+    <message>
+      <source>Failed to parse XML: </source>
+      <translation>解析 XML 失败：</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>成功</translation>
+    </message>
+    <message>
+      <source>Options saved successfully.</source>
+      <translation>选项已成功保存。</translation>
+    </message>
+    <message>
+      <source>Invalid Source</source>
+      <translation>无效的来源</translation>
+    </message>
+    <message>
+      <source>The selected source is invalid.</source>
+      <translation>选择的来源无效。</translation>
+    </message>
+    <message>
+      <source>File Exists</source>
+      <translation>文件已存在</translation>
+    </message>
+    <message>
+      <source>File already exists. Do you want to replace it?</source>
+      <translation>文件已存在，您要替换它吗？</translation>
+    </message>
+    <message>
+      <source>Failed to save file:</source>
+      <translation>保存文件失败：</translation>
+    </message>
+    <message>
+      <source>Failed to download file:</source>
+      <translation>下载文件失败：</translation>
+    </message>
+    <message>
+      <source>Cheats Not Found</source>
+      <translation>未找到作弊码</translation>
+    </message>
+    <message>
+      <source>No Cheats found for this game in this version of the selected repository,try another repository or a different version of the game.</source>
+      <translation>在所选存储库的版本中找不到该游戏的作弊码，请尝试其他存储库或游戏版本。</translation>
+    </message>
+    <message>
+      <source>Cheats Downloaded Successfully</source>
+      <translation>作弊码下载成功</translation>
+    </message>
+    <message>
+      <source>You have successfully downloaded the cheats for this version of the game from the selected repository. You can try downloading from another repository, if it is available it will also be possible to use it by selecting the file from the list.</source>
+      <translation>您已从所选存储库中成功下载了该游戏版本的作弊码。您还可以尝试从其他存储库下载，或通过从列表中选择文件来使用它们。</translation>
+    </message>
+    <message>
+      <source>Failed to save:</source>
+      <translation>保存失败：</translation>
+    </message>
+    <message>
+      <source>Failed to download:</source>
+      <translation>下载失败：</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>下载完成</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully! All Patches available for all games have been downloaded, there is no need to download them individually for each game as happens in Cheats. If the patch does not appear, it may be that it does not exist for the specific serial and version of the game.</source>
+      <translation>补丁下载成功！所有可用的补丁已下载完成，无需像作弊码那样单独下载每个游戏的补丁。如果补丁没有出现，可能是该补丁不适用于当前游戏的序列号和版本。</translation>
+    </message>
+    <message>
+      <source>Failed to parse JSON data from HTML.</source>
+      <translation>无法解析 HTML 中的 JSON 数据。</translation>
+    </message>
+    <message>
+      <source>Failed to retrieve HTML page.</source>
+      <translation>无法获取 HTML 页面。</translation>
+    </message>
+    <message>
+      <source>The game is in version: %1</source>
+      <translation>游戏版本：%1</translation>
+    </message>
+    <message>
+      <source>The downloaded patch only works on version: %1</source>
+      <translation>下载的补丁仅适用于版本：%1</translation>
+    </message>
+    <message>
+      <source>You may need to update your game.</source>
+      <translation>您可能需要更新您的游戏。</translation>
+    </message>
+    <message>
+      <source>Incompatibility Notice</source>
+      <translation>不兼容通知</translation>
+    </message>
+    <message>
+      <source>Failed to open file:</source>
+      <translation>无法打开文件：</translation>
+    </message>
+    <message>
+      <source>XML ERROR:</source>
+      <translation>XML 错误：</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for writing</source>
+      <translation>无法打开 files.json 进行写入</translation>
+    </message>
+    <message>
+      <source>Author: </source>
+      <translation>作者：</translation>
+    </message>
+    <message>
+      <source>Directory does not exist:</source>
+      <translation>目录不存在：</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for reading.</source>
+      <translation>无法打开 files.json 进行读取。</translation>
+    </message>
+    <message>
+      <source>Name:</source>
+      <translation>名称：</translation>
+    </message>
+    <message>
+      <source>Can&apos;t apply cheats before the game is started</source>
+      <translation>在游戏启动之前无法应用作弊码。</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>关闭</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheckUpdate</name>
+    <message>
+      <source>Auto Updater</source>
+      <translation>自动更新程序</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Network error:</source>
+      <translation>网络错误：</translation>
+    </message>
+    <message>
+      <source>The Auto Updater allows up to 60 update checks per hour.\nYou have reached this limit. Please try again later.</source>
+      <translation>自动更新程序每小时最多允许 60 次更新检查。\n您已达到此限制。请稍后再试。</translation>
+    </message>
+    <message>
+      <source>Failed to parse update information.</source>
+      <translation>无法解析更新信息。</translation>
+    </message>
+    <message>
+      <source>No pre-releases found.</source>
+      <translation>未找到预发布版本。</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation>未找到指定资源的下载地址。</translation>
+    </message>
+    <message>
+      <source>Your version is already up to date!</source>
+      <translation>您的版本已经是最新的！</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation>当前版本</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation>最新版本</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation>您想要更新吗？</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation>显示更新日志</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>启动时检查更新</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>更新</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation>否</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation>隐藏更新日志</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation>更新日志</translation>
+    </message>
+    <message>
+      <source>Network error occurred while trying to access the URL</source>
+      <translation>尝试访问网址时发生网络错误</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>下载完成</translation>
+    </message>
+    <message>
+      <source>The update has been downloaded, press OK to install.</source>
+      <translation>更新已下载，请按 OK 安装。</translation>
+    </message>
+    <message>
+      <source>Failed to save the update file at</source>
+      <translation>无法保存更新文件到</translation>
+    </message>
+    <message>
+      <source>Starting Update...</source>
+      <translation>正在开始更新...</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation>无法创建更新脚本文件</translation>
+    </message>
+    <message>
+      <source>Auto Updater - GUI</source>
+      <translation>自动更新器 - 图形界面</translation>
+    </message>
+    <message>
+      <source>Update Available - GUI</source>
+      <translation>可用更新 - 图形界面</translation>
+    </message>
+  </context>
+  <context>
+    <name>CompatibilityInfoClass</name>
+    <message>
+      <source>Fetching compatibility data, please wait</source>
+      <translation>正在获取兼容性数据，请稍等</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>加载中...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Unable to update compatibility data! Try again later.</source>
+      <translation>无法更新兼容性数据！稍后再试。</translation>
+    </message>
+    <message>
+      <source>Unable to open compatibility_data.json for writing.</source>
+      <translation>无法打开 compatibility_data.json 进行写入。</translation>
+    </message>
+    <message>
+      <source>Unknown</source>
+      <translation>未知</translation>
+    </message>
+    <message>
+      <source>Nothing</source>
+      <translation>无法启动</translation>
+    </message>
+    <message>
+      <source>Boots</source>
+      <translation>可启动</translation>
+    </message>
+    <message>
+      <source>Menus</source>
+      <translation>可进入菜单</translation>
+    </message>
+    <message>
+      <source>Ingame</source>
+      <translation>可进入游戏内</translation>
+    </message>
+    <message>
+      <source>Playable</source>
+      <translation>可通关</translation>
+    </message>
+  </context>
+  <context>
+    <name>ControlSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation>配置按键</translation>
+    </message>
+    <message>
+      <source>D-Pad</source>
+      <translation>十字键</translation>
+    </message>
+    <message>
+      <source>Up</source>
+      <translation>上</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation>左</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation>右</translation>
+    </message>
+    <message>
+      <source>Down</source>
+      <translation>下</translation>
+    </message>
+    <message>
+      <source>Left Stick</source>
+      <translation>左摇杆</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation>配置选择</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation>通用配置</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation>每个游戏使用独立的配置</translation>
+    </message>
+    <message>
+      <source>Face Buttons</source>
+      <translation>功能键（动作键）</translation>
+    </message>
+    <message>
+      <source>Right Stick</source>
+      <translation>右摇杆</translation>
+    </message>
+    <message>
+      <source>Color Adjustment</source>
+      <translation>颜色调整</translation>
+    </message>
+    <message>
+      <source>Override Lightbar Color</source>
+      <translation>覆盖灯条颜色</translation>
+    </message>
+    <message>
+      <source>Override Color</source>
+      <translation>覆盖颜色</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>无法保存</translation>
+    </message>
+    <message>
+      <source>Cannot bind axis values more than once</source>
+      <translation>摇杆 X/Y 轴的操作绑定不在同一直线</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>应用</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>恢复默认设置</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>未映射</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation>选项</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation>触摸板左侧</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation>触控板中间</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation>触摸板右侧</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation>三角</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation>方框</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation>圈</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation>叉</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>不能多次绑定任何同一输入。请重新映射以下按键的输入：
+
+%1</translation>
+    </message>
+    <message>
+      <source>Press a button</source>
+      <translation>请按一个按键</translation>
+    </message>
+    <message>
+      <source>Move analog stick</source>
+      <translation>移动模拟摇杆</translation>
+    </message>
+    <message>
+      <source>L1 and L2</source>
+      <translation>L1和L2</translation>
+    </message>
+    <message>
+      <source>Active Gamepad</source>
+      <translation>主手柄</translation>
+    </message>
+    <message>
+      <source>Gamepad ID</source>
+      <translation>手柄 ID</translation>
+    </message>
+    <message>
+      <source>Default Gamepad</source>
+      <translation>默认手柄</translation>
+    </message>
+    <message>
+      <source>No default selected</source>
+      <translation>没有选择默认项</translation>
+    </message>
+    <message>
+      <source>n/a</source>
+      <translation>不可用</translation>
+    </message>
+    <message>
+      <source>Set Active Gamepad as Default</source>
+      <translation>设置主手柄为默认值</translation>
+    </message>
+    <message>
+      <source>Remove Default Gamepad</source>
+      <translation>移除默认手柄</translation>
+    </message>
+    <message>
+      <source>R1 and R2</source>
+      <translation>R1 和 R2</translation>
+    </message>
+    <message>
+      <source>ID: </source>
+      <translation>ID:  </translation>
+    </message>
+    <message>
+      <source>Default Controller Selected</source>
+      <translation>已选中默认控制器</translation>
+    </message>
+    <message>
+      <source>Active controller set as default</source>
+      <translation>主控制器设置为默认</translation>
+    </message>
+    <message>
+      <source>Default Controller Removed</source>
+      <translation>默认控制器已移除</translation>
+    </message>
+    <message>
+      <source>Default controller setting removed</source>
+      <translation>默认控制器设置已删除</translation>
+    </message>
+    <message>
+      <source>RED</source>
+      <translation>红</translation>
+    </message>
+    <message>
+      <source>GREEN</source>
+      <translation>绿</translation>
+    </message>
+    <message>
+      <source>BLUE</source>
+      <translation>蓝</translation>
+    </message>
+    <message>
+      <source>Left Stick Deadzone</source>
+      <translation>左摇杆死区</translation>
+    </message>
+    <message>
+      <source>Min Deadzone (def:2 max:127)</source>
+      <translation>最小死区（默认值：2，最大值：127）</translation>
+    </message>
+    <message>
+      <source>Max Deadzone (def:127 max:127)</source>
+      <translation>最大死区（默认值：127，最大值：127）</translation>
+    </message>
+    <message>
+      <source>Right Stick Deadzone</source>
+      <translation>右摇杆死区</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>提示：右键点击可解除输入映射</translation>
+    </message>
+  </context>
+  <context>
+    <name>CryptoManagerDialog</name>
+    <message>
+      <source>Crypto Key Manager</source>
+      <translation>加密密钥管理器</translation>
+    </message>
+    <message>
+      <source>Trophy Key: Used for trophy decryption.
+Must be a valid hex string with even length.</source>
+      <translation>奖杯密钥：用于奖杯解密。必须是长度（字符数为）偶数的有效十六进制字符串。</translation>
+    </message>
+    <message>
+      <source>Enter Trophy Key</source>
+      <translation>输入奖杯密钥</translation>
+    </message>
+    <message>
+      <source>Trophy Key:</source>
+      <translation>奖杯密钥：</translation>
+    </message>
+    <message>
+      <source>Status: Not loaded</source>
+      <translation>状态：未加载</translation>
+    </message>
+    <message>
+      <source>Trophy Key</source>
+      <translation>奖杯密钥</translation>
+    </message>
+    <message>
+      <source>Enter %1</source>
+      <translation>输入 %1</translation>
+    </message>
+    <message>
+      <source>Exponent1</source>
+      <translation>指数1</translation>
+    </message>
+    <message>
+      <source>Exponent2</source>
+      <translation>指数2</translation>
+    </message>
+    <message>
+      <source>Public Exponent</source>
+      <translation>公共指数</translation>
+    </message>
+    <message>
+      <source>Coefficient</source>
+      <translation>系数</translation>
+    </message>
+    <message>
+      <source>Modulus</source>
+      <translation>模数</translation>
+    </message>
+    <message>
+      <source>Prime 1</source>
+      <translation>素数1</translation>
+    </message>
+    <message>
+      <source>Prime 2</source>
+      <translation>素数2</translation>
+    </message>
+    <message>
+      <source>Private Exponent</source>
+      <translation>私钥指数</translation>
+    </message>
+    <message>
+      <source>Fake Keyset</source>
+      <translation>虚拟密钥集</translation>
+    </message>
+    <message>
+      <source>RSA key components for fake signing.
+All fields must be valid hex strings with even length.</source>
+      <translation>用于虚拟签名的RSA密钥组件。所有字段必须是长度（字符数为）偶数的有效十六进制字符串。</translation>
+    </message>
+    <message>
+      <source>Debug Rif Keyset</source>
+      <translation>调试Rif密钥集</translation>
+    </message>
+    <message>
+      <source>RSA key components for debug RIF files.
+All fields must be valid hex strings with even length.</source>
+      <translation>用于调试RIF文件的RSA密钥组件。所有字段必须是长度（字符数为）偶数的有效十六进制字符串。</translation>
+    </message>
+    <message>
+      <source>Pkg Derived Key3</source>
+      <translation>Pkg 派生密钥3</translation>
+    </message>
+    <message>
+      <source>RSA key components for package decryption.
+All fields must be valid hex strings with even length.</source>
+      <translation>用于解密pkg的RSA密钥组件。所有字段必须是长度（字符数为）偶数的有效十六进制字符串。</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>关闭</translation>
+    </message>
+    <message>
+      <source>Warning</source>
+      <translation>警告</translation>
+    </message>
+    <message>
+      <source>No key file found or failed to load.
+Please enter your keys and save them.</source>
+      <translation>未找到密钥文件或加载失败。
+请输入您的密钥并保存。</translation>
+    </message>
+    <message>
+      <source>Validation Error</source>
+      <translation>验证失败</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>成功</translation>
+    </message>
+    <message>
+      <source>Keys saved successfully!</source>
+      <translation>密钥保存成功！</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Failed to save keys!</source>
+      <translation>保存密钥失败！</translation>
+    </message>
+    <message>
+      <source>Status: All fields empty</source>
+      <translation>状态：所有字段为空</translation>
+    </message>
+    <message>
+      <source>Status: Invalid hex values</source>
+      <translation>状态：无效的十六进制值</translation>
+    </message>
+    <message>
+      <source>Status: Incomplete</source>
+      <translation>状态：未完成</translation>
+    </message>
+    <message>
+      <source>Status: Valid</source>
+      <translation>状态：有效</translation>
+    </message>
+    <message>
+      <source>Invalid File</source>
+      <translation>无效文件</translation>
+    </message>
+    <message>
+      <source>Only JSON files are supported.</source>
+      <translation>只支持 JSON 文件。</translation>
+    </message>
+    <message>
+      <source>Unable to open file.</source>
+      <translation>无法打开文件。</translation>
+    </message>
+    <message>
+      <source>JSON Error</source>
+      <translation>JSON 文件错误</translation>
+    </message>
+    <message>
+      <source>Invalid JSON format.</source>
+      <translation>无效的JSON格式。</translation>
+    </message>
+    <message>
+      <source>Keys successfully loaded from JSON!</source>
+      <translation>已成功从 JSON 装入密钥！</translation>
+    </message>
+    <message>
+      <source>Trophy Key contains invalid hex or has odd length.</source>
+      <translation>奖杯密钥包含无效的十六进制字符或长度为奇数。</translation>
+    </message>
+    <message>
+      <source>%1 contains invalid hex or has odd length.</source>
+      <translation>%1 包含无效的十六进制字符或长度为奇数。</translation>
+    </message>
+    <message>
+      <source>Load Key</source>
+      <translation>加载密钥</translation>
+    </message>
+    <message>
+      <source>Save Key</source>
+      <translation>保存密钥</translation>
+    </message>
+  </context>
+  <context>
+    <name>EditorDialog</name>
+    <message>
+      <source>Edit Keyboard + Mouse and Controller input bindings</source>
+      <translation>编辑键盘鼠标和手柄按键绑定</translation>
+    </message>
+    <message>
+      <source>Use Per-Game configs</source>
+      <translation>每个游戏使用单独的配置</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Could not open the file for reading</source>
+      <translation>无法打开文件进行读取</translation>
+    </message>
+    <message>
+      <source>Could not open the file for writing</source>
+      <translation>无法打开文件进行读取</translation>
+    </message>
+    <message>
+      <source>Save Changes</source>
+      <translation>保存更改</translation>
+    </message>
+    <message>
+      <source>Do you want to save changes?</source>
+      <translation>您要保存更改吗？</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>帮助</translation>
+    </message>
+    <message>
+      <source>Do you want to reset your custom default config to the original default config?</source>
+      <translation>您要将自定义默认配置重置为默认配置吗？</translation>
+    </message>
+    <message>
+      <source>Do you want to reset this config to your custom default config?</source>
+      <translation>您想要将此配置重置为自定义默认配置吗？</translation>
+    </message>
+    <message>
+      <source>Reset to Default</source>
+      <translation>重置为默认</translation>
+    </message>
+  </context>
+  <context>
+    <name>ElfViewer</name>
+    <message>
+      <source>Open Folder</source>
+      <translation>打开文件夹</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInfoClass</name>
+    <message>
+      <source>Loading game list, please wait :3</source>
+      <translation>加载游戏列表中, 请稍等 :3</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>加载中...</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInstallDialog</name>
+    <message>
+      <source>shadPS4 - Choose directory</source>
+      <translation>shadPS4 - 选择文件目录</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>浏览</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Directory to install emulator versions</source>
+      <translation>安装模拟器版本的目录</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped games</source>
+      <translation>你的游戏本体文件转储目录</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped DLC&apos;s</source>
+      <translation>你的DLC文件转储目录</translation>
+    </message>
+    <message>
+      <source>Directory with games</source>
+      <translation>游戏目录</translation>
+    </message>
+    <message>
+      <source>Directory with DLC&apos;s</source>
+      <translation>DLC目录
+
+</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListFrame</name>
+    <message>
+      <source>Icon</source>
+      <translation>图标</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>名称</translation>
+    </message>
+    <message>
+      <source>Serial</source>
+      <translation>序列号</translation>
+    </message>
+    <message>
+      <source>Compatibility</source>
+      <translation>兼容性</translation>
+    </message>
+    <message>
+      <source>Region</source>
+      <translation>区域</translation>
+    </message>
+    <message>
+      <source>Firmware</source>
+      <translation>固件</translation>
+    </message>
+    <message>
+      <source>Size</source>
+      <translation>大小</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation>版本</translation>
+    </message>
+    <message>
+      <source>Path</source>
+      <translation>路径</translation>
+    </message>
+    <message>
+      <source>Play Time</source>
+      <translation>游戏时间</translation>
+    </message>
+    <message>
+      <source>Never Played</source>
+      <translation>未玩过</translation>
+    </message>
+    <message>
+      <source>h</source>
+      <translation>小时</translation>
+    </message>
+    <message>
+      <source>m</source>
+      <translation>分钟</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation>秒</translation>
+    </message>
+    <message>
+      <source>Compatibility is untested</source>
+      <translation>兼容性未经测试</translation>
+    </message>
+    <message>
+      <source>Game does not initialize properly / crashes the emulator</source>
+      <translation>游戏无法正确初始化/模拟器崩溃</translation>
+    </message>
+    <message>
+      <source>Game boots, but only displays a blank screen</source>
+      <translation>游戏启动，但只显示白屏</translation>
+    </message>
+    <message>
+      <source>Game displays an image but does not go past the menu</source>
+      <translation>游戏显示图像但无法通过菜单页面</translation>
+    </message>
+    <message>
+      <source>Game has game-breaking glitches or unplayable performance</source>
+      <translation>游戏有严重的 Bug 或太卡无法游玩</translation>
+    </message>
+    <message>
+      <source>Game can be completed with playable performance and no major glitches</source>
+      <translation>游戏能在可玩的性能下通关且没有重大 Bug</translation>
+    </message>
+    <message>
+      <source>Click to see details on github</source>
+      <translation>点击查看 GitHub 上的详细信息</translation>
+    </message>
+    <message>
+      <source>Last updated</source>
+      <translation>最后更新</translation>
+    </message>
+    <message>
+      <source>Favorite</source>
+      <translation>收藏</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListUtils</name>
+    <message>
+      <source>B</source>
+      <translation>B</translation>
+    </message>
+    <message>
+      <source>KB</source>
+      <translation>KB</translation>
+    </message>
+    <message>
+      <source>MB</source>
+      <translation>MB</translation>
+    </message>
+    <message>
+      <source>GB</source>
+      <translation>GB</translation>
+    </message>
+    <message>
+      <source>TB</source>
+      <translation>TB</translation>
+    </message>
+  </context>
+  <context>
+    <name>GuiContextMenus</name>
+    <message>
+      <source>Cheats / Patches</source>
+      <translation>作弊码/补丁</translation>
+    </message>
+    <message>
+      <source>SFO Viewer</source>
+      <translation>SFO 查看器</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>奖杯查看器</translation>
+    </message>
+    <message>
+      <source>Open Folder...</source>
+      <translation>打开文件夹...</translation>
+    </message>
+    <message>
+      <source>Open Game Folder</source>
+      <translation>打开游戏文件夹</translation>
+    </message>
+    <message>
+      <source>Open Save Data Folder</source>
+      <translation>打开存档数据文件夹</translation>
+    </message>
+    <message>
+      <source>Open Log Folder</source>
+      <translation>打开日志文件夹</translation>
+    </message>
+    <message>
+      <source>Copy info...</source>
+      <translation>复制信息...</translation>
+    </message>
+    <message>
+      <source>Copy Name</source>
+      <translation>复制名称</translation>
+    </message>
+    <message>
+      <source>Copy Serial</source>
+      <translation>复制序列号</translation>
+    </message>
+    <message>
+      <source>Copy Version</source>
+      <translation>复制版本</translation>
+    </message>
+    <message>
+      <source>Copy Size</source>
+      <translation>复制大小</translation>
+    </message>
+    <message>
+      <source>Copy All</source>
+      <translation>复制全部</translation>
+    </message>
+    <message>
+      <source>Delete...</source>
+      <translation>删除...</translation>
+    </message>
+    <message>
+      <source>Delete Game</source>
+      <translation>删除游戏</translation>
+    </message>
+    <message>
+      <source>Delete Update</source>
+      <translation>删除更新</translation>
+    </message>
+    <message>
+      <source>Delete DLC</source>
+      <translation>删除 DLC</translation>
+    </message>
+    <message>
+      <source>Delete Trophy</source>
+      <translation>删除奖杯</translation>
+    </message>
+    <message>
+      <source>Compatibility...</source>
+      <translation>兼容性...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Game</source>
+      <translation>游戏</translation>
+    </message>
+    <message>
+      <source>This game has no update to delete!</source>
+      <translation>这个游戏没有更新可以删除！</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>更新</translation>
+    </message>
+    <message>
+      <source>This game has no DLC to delete!</source>
+      <translation>这个游戏没有 DLC 可以删除！</translation>
+    </message>
+    <message>
+      <source>DLC</source>
+      <translation>DLC</translation>
+    </message>
+    <message>
+      <source>Delete %1</source>
+      <translation>删除 %1</translation>
+    </message>
+    <message>
+      <source>Are you sure you want to delete %1&apos;s %2 directory?</source>
+      <translation>您确定要删除 %1 的%2目录？</translation>
+    </message>
+    <message>
+      <source>Open Update Folder</source>
+      <translation>打开更新文件夹</translation>
+    </message>
+    <message>
+      <source>Delete Save Data</source>
+      <translation>删除存档数据</translation>
+    </message>
+    <message>
+      <source>This game has no update folder to open!</source>
+      <translation>这个游戏没有可打开的更新文件夹！</translation>
+    </message>
+    <message>
+      <source>No log file found for this game!</source>
+      <translation>没有找到这个游戏的日志文件！</translation>
+    </message>
+    <message>
+      <source>This game has no save data to delete!</source>
+      <translation>这个游戏没有更新可以删除！</translation>
+    </message>
+    <message>
+      <source>This game has no saved trophies to delete!</source>
+      <translation>这个游戏没有保存的奖杯可删除！</translation>
+    </message>
+    <message>
+      <source>Save Data</source>
+      <translation>存档数据</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation>奖杯</translation>
+    </message>
+    <message>
+      <source>SFO Viewer for </source>
+      <translation>SFO 查看器 - </translation>
+    </message>
+    <message>
+      <source>Remove from Favorites</source>
+      <translation>从收藏中移除</translation>
+    </message>
+    <message>
+      <source>Add to Favorites</source>
+      <translation>添加至收藏</translation>
+    </message>
+    <message>
+      <source>Game-specific Settings...</source>
+      <translation>游戏特定设置……</translation>
+    </message>
+    <message>
+      <source>Configure Game-specific Settings</source>
+      <translation>配置游戏特定设置</translation>
+    </message>
+    <message>
+      <source>Create Game-specific Settings from Global Settings</source>
+      <translation>从全局设置创建游戏特定设置</translation>
+    </message>
+    <message>
+      <source>Delete Game-specific Settings</source>
+      <translation>删除游戏特定设置</translation>
+    </message>
+    <message>
+      <source>Update Database</source>
+      <translation>更新数据库</translation>
+    </message>
+    <message>
+      <source>View Report</source>
+      <translation>查看报告</translation>
+    </message>
+    <message>
+      <source>Submit a Report</source>
+      <translation>提交报告</translation>
+    </message>
+    <message>
+      <source>Confirm deletion</source>
+      <translation>确认删除</translation>
+    </message>
+    <message>
+      <source>Delete game-specific settings?</source>
+      <translation>删除游戏特定设置？</translation>
+    </message>
+    <message>
+      <source>Launch...</source>
+      <translation>启动……</translation>
+    </message>
+    <message>
+      <source>Launch with game specific configs (default)</source>
+      <translation>以游戏特定配置启动(默认)</translation>
+    </message>
+    <message>
+      <source>Launch with global config only</source>
+      <translation>仅通过全局配置启动</translation>
+    </message>
+    <message>
+      <source>Launch with default settings</source>
+      <translation>以默认设置启动</translation>
+    </message>
+    <message>
+      <source>Couldn&apos;t submit report, because the latest log for the game failed on the following check, and therefore would be an invalid report:</source>
+      <translation>无法提交报告，因为该游戏的最新日志未通过以下检查，将构成无效报告：</translation>
+    </message>
+    <message>
+      <source>Ok</source>
+      <translation>确定</translation>
+    </message>
+    <message>
+      <source>Info</source>
+      <translation>详情</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Selected Emulator Version</source>
+      <translation>为所选模拟器版本创建快捷方式</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Specified Emulator Version</source>
+      <translation>为指定模拟器版本创建快捷方式</translation>
+    </message>
+    <message>
+      <source>Create Shortcut</source>
+      <translation>创建快捷方式</translation>
+    </message>
+    <message>
+      <source>Shortcut creation</source>
+      <translation>快捷方式创建</translation>
+    </message>
+    <message>
+      <source>Shortcut created successfully!</source>
+      <translation>创建快捷方式成功！</translation>
+    </message>
+    <message>
+      <source>Error creating shortcut!</source>
+      <translation>创建快捷方式出错！</translation>
+    </message>
+    <message>
+      <source>Failed to convert icon.</source>
+      <translation>转换图标失败。</translation>
+    </message>
+    <message>
+      <source>Delete Shader Cache</source>
+      <translation>删除着色器缓存</translation>
+    </message>
+    <message>
+      <source>This game does not have any saved Shader Cache to delete!</source>
+      <translation>该游戏没有任何可供删除的着色器缓存！</translation>
+    </message>
+    <message>
+      <source>Shader Cache</source>
+      <translation>着色器缓存</translation>
+    </message>
+    <message>
+      <source>This game has no save folder to open!</source>
+      <translation>此游戏没有可打开的存档文件夹！</translation>
+    </message>
+    <message>
+      <source>A trophy key is required to use the Trophy Viewer. This can be inputted by clicking Settings - Manage Cryptographic keys.</source>
+      <translation>使用奖杯查看器需要提供奖杯密钥。可通过点击“设置”->“管理加密密钥”来输入。</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation>用户</translation>
+    </message>
+    <message>
+      <source>Add with Selected Emulator Version</source>
+      <translation>添加到选定的模拟器版本</translation>
+    </message>
+    <message>
+      <source>Add with Specified Emulator Version</source>
+      <translation>使用指定的模拟器版本添加</translation>
+    </message>
+    <message>
+      <source>Add to Steam</source>
+      <translation>添加到Steam</translation>
+    </message>
+    <message>
+      <source>Zar Compression</source>
+      <translation type="unfinished">Zar Compression</translation>
+    </message>
+    <message>
+      <source>Compress game to zar</source>
+      <translation type="unfinished">Compress game to zar</translation>
+    </message>
+    <message>
+      <source>Compress update to zar</source>
+      <translation type="unfinished">Compress update to zar</translation>
+    </message>
+    <message>
+      <source>This is already packed as a ZArchive.</source>
+      <translation type="unfinished">This is already packed as a ZArchive.</translation>
+    </message>
+    <message>
+      <source>This folder could not be found on disk.</source>
+      <translation type="unfinished">This folder could not be found on disk.</translation>
+    </message>
+    <message>
+      <source>Convert %1 to ZArchive</source>
+      <translation type="unfinished">Convert %1 to ZArchive</translation>
+    </message>
+    <message>
+      <source>ZArchive Files (*.zar)</source>
+      <translation type="unfinished">ZArchive Files (*.zar)</translation>
+    </message>
+    <message>
+      <source>%1 already exists. Overwrite it?</source>
+      <translation type="unfinished">%1 already exists. Overwrite it?</translation>
+    </message>
+    <message>
+      <source>This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</source>
+      <translation type="unfinished">This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</translation>
+    </message>
+    <message>
+      <source>
+
+Continue?</source>
+      <translation type="unfinished">
+
+Continue?</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Failed to convert to ZArchive:
+%1</source>
+      <translation type="unfinished">Failed to convert to ZArchive:
+%1</translation>
+    </message>
+    <message>
+      <source>Conversion finished. Delete the original folder now to free up disk space?
+
+%1</source>
+      <translation type="unfinished">Conversion finished. Delete the original folder now to free up disk space?
+
+%1</translation>
+    </message>
+    <message>
+      <source>The archive was created, but the original folder could not be fully deleted. You can remove it manually.</source>
+      <translation type="unfinished">The archive was created, but the original folder could not be fully deleted. You can remove it manually.</translation>
+    </message>
+    <message>
+      <source>Packing: %1</source>
+      <translation type="unfinished">Packing: %1</translation>
+    </message>
+    <message>
+      <source>
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</source>
+      <translation type="unfinished">
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</translation>
+    </message>
+    <message>
+      <source>Convert to ZArchive</source>
+      <translation type="unfinished">Convert to ZArchive</translation>
+    </message>
+  </context>
+  <context>
+    <name>HelpDialog</name>
+    <message>
+      <source>Quickstart</source>
+      <translation>快速入门</translation>
+    </message>
+    <message>
+      <source>FAQ</source>
+      <translation>常见问题</translation>
+    </message>
+    <message>
+      <source>Syntax</source>
+      <translation>语法</translation>
+    </message>
+    <message>
+      <source>Special Bindings</source>
+      <translation>特殊绑定</translation>
+    </message>
+    <message>
+      <source>Keybindings</source>
+      <translation>按键绑定</translation>
+    </message>
+  </context>
+  <context>
+    <name>Hotkeys</name>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation>自定义快捷键</translation>
+    </message>
+    <message>
+      <source>Show FPS Counter</source>
+      <translation>显示FPS计数器</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>未映射</translation>
+    </message>
+    <message>
+      <source>Quit Emulation</source>
+      <translation>退出模拟器</translation>
+    </message>
+    <message>
+      <source>Reload Button Mappings</source>
+      <translation>重新加载按键映射</translation>
+    </message>
+    <message>
+      <source>Toggle Fullscreen</source>
+      <translation>全屏显示切换</translation>
+    </message>
+    <message>
+      <source>Toggle Pause</source>
+      <translation>切换暂停</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Joystick Emulation</source>
+      <translation>切换鼠标模拟摇杆功能</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Gyro Emulation</source>
+      <translation>切换鼠标模拟陀螺仪功能</translation>
+    </message>
+    <message>
+      <source>Tip: Up to three simultaneous inputs can be assigned for each hotkey</source>
+      <translation>提示：每个热键最多可以同时分配三个输入</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>应用</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>恢复默认设置</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>无法保存</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>不能多次绑定任何同一输入。请重新映射以下按键的输入：
+
+%1</translation>
+    </message>
+    <message>
+      <source>Waiting for inputs</source>
+      <translation>正在等待输入</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>提示：右键点击可解除输入映射</translation>
+    </message>
+    <message>
+      <source>Volume Up</source>
+      <translation>提高音量</translation>
+    </message>
+    <message>
+      <source>Volume Down</source>
+      <translation>降低音量</translation>
+    </message>
+    <message>
+      <source>Hotkeys</source>
+      <translation>热键</translation>
+    </message>
+    <message>
+      <source>Placeholder</source>
+      <translation>占位符</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot</source>
+      <translation>捕获屏幕截图</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot w/ Overlays</source>
+      <translation>捕获带叠加层的截图</translation>
+    </message>
+    <message>
+      <source>Open Emulator Settings</source>
+      <translation>打开模拟器设置</translation>
+    </message>
+  </context>
+  <context>
+    <name>IpcClient</name>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation>找不到模拟器可执行程序</translation>
+    </message>
+    <message>
+      <source>No game is running</source>
+      <translation>没有游戏正在运行</translation>
+    </message>
+  </context>
+  <context>
+    <name>KBMSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation>配置键鼠</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>未映射</translation>
+    </message>
+    <message>
+      <source>Left Analog Halfmode</source>
+      <translation>左摇杆半速模式</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation>配置选择</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation>通用配置</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation>每个游戏使用单独的配置</translation>
+    </message>
+    <message>
+      <source>Text Editor</source>
+      <translation>文本编辑器</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>帮助</translation>
+    </message>
+    <message>
+      <source>Mouse to Joystick</source>
+      <translation>鼠标控制摇杆</translation>
+    </message>
+    <message>
+      <source>*press F7 ingame to activate</source>
+      <translation>* 按 F7 键激活</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation>选项设置</translation>
+    </message>
+    <message>
+      <source>Mouse Movement Parameters</source>
+      <translation>鼠标移动参数</translation>
+    </message>
+    <message>
+      <source>note: click Help Button/Special Keybindings for more information</source>
+      <translation>注意：点击帮助按钮 -> 获取更多关于映射特殊键位的信息</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation>三角</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation>方框</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation>圈</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation>叉</translation>
+    </message>
+    <message>
+      <source>Right Analog Halfmode</source>
+      <translation>右摇杆半速模式</translation>
+    </message>
+    <message>
+      <source>Speed Offset (def 0.125):</source>
+      <translation>速度偏移量（默认 0.125）：</translation>
+    </message>
+    <message>
+      <source>Copy from Common Config</source>
+      <translation>从通用配置中复制</translation>
+    </message>
+    <message>
+      <source>Deadzone Offset (def 0.50):</source>
+      <translation>死区偏移量（默认 0.50）：</translation>
+    </message>
+    <message>
+      <source>Speed Multiplier (def 1.0):</source>
+      <translation>速度系数（默认 1.0）：</translation>
+    </message>
+    <message>
+      <source>Copy values from Common Config</source>
+      <translation>从通用配置中复制配置</translation>
+    </message>
+    <message>
+      <source>Do you want to overwrite existing mappings with the mappings from the Common Config?</source>
+      <translation>您想要用通用配置的映射覆盖现有映射吗？</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>无法保存</translation>
+    </message>
+    <message>
+      <source>Press a key</source>
+      <translation>按下按键</translation>
+    </message>
+    <message>
+      <source>Cannot set mapping</source>
+      <translation>无法设置映射</translation>
+    </message>
+    <message>
+      <source>Mousewheel cannot be mapped to stick outputs</source>
+      <translation>鼠标滚轮无法映射到摇杆</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>应用</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>恢复默认设置</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>不能多次绑定任何同一输入。请重新映射以下按键的输入：
+
+%1</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation>触摸板左侧</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation>触摸板中心</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation>触摸板右侧</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation>提示：右键点击可解除输入映射</translation>
+    </message>
+    <message>
+      <source>Output</source>
+      <translation>输出</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation>输入</translation>
+    </message>
+    <message>
+      <source>Alternate Input 1</source>
+      <translation>备用输入 1</translation>
+    </message>
+    <message>
+      <source>Alternate Input 2</source>
+      <translation>备用输入 2</translation>
+    </message>
+    <message>
+      <source>Dpad Up</source>
+      <translation>向上方向键</translation>
+    </message>
+    <message>
+      <source>Dpad Down</source>
+      <translation>向下方向键</translation>
+    </message>
+    <message>
+      <source>Dpad Left</source>
+      <translation>向左方向键</translation>
+    </message>
+    <message>
+      <source>Dpad Right</source>
+      <translation>向右方向键</translation>
+    </message>
+    <message>
+      <source>Left Stick Up</source>
+      <translation>左摇杆 上</translation>
+    </message>
+    <message>
+      <source>Left Stick Down</source>
+      <translation>左摇杆 下</translation>
+    </message>
+    <message>
+      <source>Left Stick Left</source>
+      <translation>左摇杆 左</translation>
+    </message>
+    <message>
+      <source>Left Stick Right</source>
+      <translation>左摇杆 右</translation>
+    </message>
+    <message>
+      <source>Right Stick Up</source>
+      <translation>右摇杆上</translation>
+    </message>
+    <message>
+      <source>Right Stick Down</source>
+      <translation>右摇杆下</translation>
+    </message>
+    <message>
+      <source>Right Stick Left</source>
+      <translation>右摇杆左</translation>
+    </message>
+    <message>
+      <source>Right Stick Right</source>
+      <translation>右摇杆右</translation>
+    </message>
+    <message>
+      <source>L1</source>
+      <translation>L1</translation>
+    </message>
+    <message>
+      <source>R1</source>
+      <translation>R1</translation>
+    </message>
+    <message>
+      <source>L2</source>
+      <translation>L2</translation>
+    </message>
+    <message>
+      <source>R2</source>
+      <translation>R2</translation>
+    </message>
+    <message>
+      <source>L3</source>
+      <translation>L3</translation>
+    </message>
+    <message>
+      <source>R3</source>
+      <translation>R3</translation>
+    </message>
+  </context>
+  <context>
+    <name>LogPresetsDialog</name>
+    <message>
+      <source>Log Filter Presets</source>
+      <translation>日志过滤器预设</translation>
+    </message>
+    <message>
+      <source>Comment</source>
+      <translation>备注</translation>
+    </message>
+    <message>
+      <source>Filter</source>
+      <translation>筛选</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>加载</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>关闭</translation>
+    </message>
+    <message>
+      <source>Add a new preset after the selected row</source>
+      <translation>在所选行后添加新预设</translation>
+    </message>
+    <message>
+      <source>Remove selected presets</source>
+      <translation>删除选中的预设</translation>
+    </message>
+    <message>
+      <source>Load the selected preset</source>
+      <translation>加载选中的预设</translation>
+    </message>
+  </context>
+  <context>
+    <name>MainWindow</name>
+    <message>
+      <source>Open/Add Elf Folder</source>
+      <translation>打开/添加 Elf 文件夹</translation>
+    </message>
+    <message>
+      <source>Boot Game</source>
+      <translation>启动游戏</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>检查更新</translation>
+    </message>
+    <message>
+      <source>About shadPS4</source>
+      <translation>关于 shadPS4</translation>
+    </message>
+    <message>
+      <source>Configure...</source>
+      <translation>设置...</translation>
+    </message>
+    <message>
+      <source>Recent Games</source>
+      <translation>最近启动的游戏</translation>
+    </message>
+    <message>
+      <source>Open shadPS4 Folder</source>
+      <translation>打开 shadPS4 文件夹</translation>
+    </message>
+    <message>
+      <source>Exit</source>
+      <translation>退出</translation>
+    </message>
+    <message>
+      <source>Exit shadPS4</source>
+      <translation>退出 shadPS4</translation>
+    </message>
+    <message>
+      <source>Exit the application.</source>
+      <translation>退出应用程序。</translation>
+    </message>
+    <message>
+      <source>Show Game List</source>
+      <translation>显示游戏列表</translation>
+    </message>
+    <message>
+      <source>Game List Refresh</source>
+      <translation>刷新游戏列表</translation>
+    </message>
+    <message>
+      <source>Tiny</source>
+      <translation>微小</translation>
+    </message>
+    <message>
+      <source>Small</source>
+      <translation>小</translation>
+    </message>
+    <message>
+      <source>Medium</source>
+      <translation>中</translation>
+    </message>
+    <message>
+      <source>Large</source>
+      <translation>大</translation>
+    </message>
+    <message>
+      <source>List View</source>
+      <translation>列表视图</translation>
+    </message>
+    <message>
+      <source>Grid View</source>
+      <translation>表格视图</translation>
+    </message>
+    <message>
+      <source>Elf Viewer</source>
+      <translation>Elf 查看器</translation>
+    </message>
+    <message>
+      <source>Game Install Directory</source>
+      <translation>游戏安装目录</translation>
+    </message>
+    <message>
+      <source>Download Cheats/Patches</source>
+      <translation>下载作弊码/补丁</translation>
+    </message>
+    <message>
+      <source>Dump Game List</source>
+      <translation>导出游戏列表</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>奖杯查看器</translation>
+    </message>
+    <message>
+      <source>No games found. Please add your games to your library first.</source>
+      <translation>未找到游戏。请先将您的游戏添加到您的资料库。</translation>
+    </message>
+    <message>
+      <source>Search...</source>
+      <translation>搜索...</translation>
+    </message>
+    <message>
+      <source>File</source>
+      <translation>文件</translation>
+    </message>
+    <message>
+      <source>View</source>
+      <translation>显示</translation>
+    </message>
+    <message>
+      <source>Game List Icons</source>
+      <translation>游戏列表图标</translation>
+    </message>
+    <message>
+      <source>Game List Mode</source>
+      <translation>游戏列表模式</translation>
+    </message>
+    <message>
+      <source>Settings</source>
+      <translation>设置</translation>
+    </message>
+    <message>
+      <source>Utils</source>
+      <translation>工具</translation>
+    </message>
+    <message>
+      <source>Themes</source>
+      <translation>主题</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>帮助</translation>
+    </message>
+    <message>
+      <source>Dark</source>
+      <translation>深色</translation>
+    </message>
+    <message>
+      <source>Light</source>
+      <translation>浅色</translation>
+    </message>
+    <message>
+      <source>Green</source>
+      <translation>绿色</translation>
+    </message>
+    <message>
+      <source>Blue</source>
+      <translation>蓝色</translation>
+    </message>
+    <message>
+      <source>Violet</source>
+      <translation>紫色</translation>
+    </message>
+    <message>
+      <source>toolBar</source>
+      <translation>工具栏</translation>
+    </message>
+    <message>
+      <source>Game List</source>
+      <translation>游戏列表</translation>
+    </message>
+    <message>
+      <source>Download Cheats For All Installed Games</source>
+      <translation>下载所有已安装游戏的作弊码</translation>
+    </message>
+    <message>
+      <source>Download Patches For All Games</source>
+      <translation>下载所有游戏的补丁</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>下载完成</translation>
+    </message>
+    <message>
+      <source>You have downloaded cheats for all the games you have installed.</source>
+      <translation>您已下载了所有已安装游戏的作弊码。</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully!</source>
+      <translation>补丁下载成功！</translation>
+    </message>
+    <message>
+      <source>All Patches available for all games have been downloaded.</source>
+      <translation>所有游戏的可用补丁都已下载。</translation>
+    </message>
+    <message>
+      <source>Games: </source>
+      <translation>游戏：</translation>
+    </message>
+    <message>
+      <source>Game Boot</source>
+      <translation>启动游戏</translation>
+    </message>
+    <message>
+      <source>Only one file can be selected!</source>
+      <translation>只能选择一个文件！</translation>
+    </message>
+    <message>
+      <source>Run Game</source>
+      <translation>运行游戏</translation>
+    </message>
+    <message>
+      <source>Eboot.bin file not found</source>
+      <translation>找不到 Eboot.bin 文件</translation>
+    </message>
+    <message>
+      <source>Game is already running!</source>
+      <translation>游戏已经在运行中！</translation>
+    </message>
+    <message>
+      <source>shadPS4</source>
+      <translation>shadPS4</translation>
+    </message>
+    <message>
+      <source>Play</source>
+      <translation>开始游戏</translation>
+    </message>
+    <message>
+      <source>Pause</source>
+      <translation>暂停</translation>
+    </message>
+    <message>
+      <source>Stop</source>
+      <translation>关闭</translation>
+    </message>
+    <message>
+      <source>Restart</source>
+      <translation>重新启动</translation>
+    </message>
+    <message>
+      <source>Full Screen</source>
+      <translation>全屏</translation>
+    </message>
+    <message>
+      <source>Controllers</source>
+      <translation>控制器</translation>
+    </message>
+    <message>
+      <source>Keyboard</source>
+      <translation>键盘</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation>刷新列表</translation>
+    </message>
+    <message>
+      <source>Resume</source>
+      <translation>继续游戏</translation>
+    </message>
+    <message>
+      <source>Show Labels Under Icons</source>
+      <translation>显示图标下的标签</translation>
+    </message>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation>自定义快捷键</translation>
+    </message>
+    <message>
+      <source>Version Manager</source>
+      <translation>版本管理器</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation>未选择版本</translation>
+    </message>
+    <message>
+      <source>No emulator version was selected.
+The Version Manager menu will then open.
+Select an emulator version from the right panel.</source>
+      <translation>未选择任何模拟器版本。
+版本管理器菜单即将打开。
+请从右侧面板中选择一个模拟器版本。</translation>
+    </message>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation>无法找到模拟器可执行文件</translation>
+    </message>
+    <message>
+      <source>Run Emulator</source>
+      <translation>运行模拟器</translation>
+    </message>
+    <message>
+      <source>Emulator is already running!</source>
+      <translation>模拟器已在运行！</translation>
+    </message>
+    <message>
+      <source>Invalid game argument provided</source>
+      <translation>提供了无效的游戏参数</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+    <message>
+      <source>Manage Skylanders</source>
+      <translation>管理Skylanders</translation>
+    </message>
+    <message>
+      <source>Manage Infinity Figures</source>
+      <translation>管理《迪士尼无限》角色手办</translation>
+    </message>
+    <message>
+      <source>Manage Dimensions Toypad</source>
+      <translation>管理《乐高次元》控制基座</translation>
+    </message>
+    <message>
+      <source>Game Log</source>
+      <translation>游戏日志</translation>
+    </message>
+    <message>
+      <source>Show Game Log</source>
+      <translation>显示游戏日志</translation>
+    </message>
+    <message>
+      <source>Manage Cryptographic Keys</source>
+      <translation>管理加密密钥</translation>
+    </message>
+    <message>
+      <source>Manage Users</source>
+      <translation>管理用户</translation>
+    </message>
+    <message>
+      <source>bootable files (*.bin *.elf *.oelf *.zar)</source>
+      <translation type="unfinished">bootable files (*.bin *.elf *.oelf *.zar)</translation>
+    </message>
+  </context>
+  <context>
+    <name>QObject</name>
+    <message>
+      <source>Drive Locked</source>
+      <translation>驱动器已锁定</translation>
+    </message>
+    <message>
+      <source>Drive %1: is locked. Please enter the BitLocker key to access it:</source>
+      <translation>驱动器 %1: 已锁定。请输入 BitLocker 密钥以访问它：</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Incorrect recovery key. Please try again.</source>
+      <translation>恢复密钥不正确。请重试。</translation>
+    </message>
+  </context>
+  <context>
+    <name>SettingsDialog</name>
+    <message>
+      <source>Settings</source>
+      <translation>设置</translation>
+    </message>
+    <message>
+      <source>General</source>
+      <translation>常规</translation>
+    </message>
+    <message>
+      <source>System</source>
+      <translation>系统</translation>
+    </message>
+    <message>
+      <source>Console Language</source>
+      <translation>主机语言</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings</source>
+      <translation>打开设置时的默认选项卡</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence</source>
+      <translation>启用 Discord Rich Presence</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation>奖杯</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder</source>
+      <translation>打开自定义奖杯图像/声音文件夹</translation>
+    </message>
+    <message>
+      <source>Logger</source>
+      <translation>日志</translation>
+    </message>
+    <message>
+      <source>Log Type</source>
+      <translation>日志类型</translation>
+    </message>
+    <message>
+      <source>Log Filter</source>
+      <translation>日志过滤</translation>
+    </message>
+    <message>
+      <source>Open Log Location</source>
+      <translation>打开日志位置</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation>输入</translation>
+    </message>
+    <message>
+      <source>Cursor</source>
+      <translation>光标</translation>
+    </message>
+    <message>
+      <source>Hide Cursor</source>
+      <translation>隐藏光标</translation>
+    </message>
+    <message>
+      <source>Hide Cursor Idle Timeout</source>
+      <translation>光标隐藏闲置时长</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+    <message>
+      <source>Default Device</source>
+      <translation>默认设备</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation>秒</translation>
+    </message>
+    <message>
+      <source>Controller</source>
+      <translation>手柄</translation>
+    </message>
+    <message>
+      <source>Graphics</source>
+      <translation>图像</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation>用户</translation>
+    </message>
+    <message>
+      <source>Graphics Device</source>
+      <translation>图形设备</translation>
+    </message>
+    <message>
+      <source>Advanced</source>
+      <translation>高级</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping</source>
+      <translation>启用着色器转储</translation>
+    </message>
+    <message>
+      <source>Enable NULL GPU</source>
+      <translation>启用 NULL GPU</translation>
+    </message>
+    <message>
+      <source>Enable HDR</source>
+      <translation>启用 HDR</translation>
+    </message>
+    <message>
+      <source>Paths</source>
+      <translation>路径</translation>
+    </message>
+    <message>
+      <source>Game Folders</source>
+      <translation>游戏文件夹</translation>
+    </message>
+    <message>
+      <source>Add...</source>
+      <translation>添加...</translation>
+    </message>
+    <message>
+      <source>Remove</source>
+      <translation>删除</translation>
+    </message>
+    <message>
+      <source>Debug</source>
+      <translation>调试</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping</source>
+      <translation>启用调试转储</translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers</source>
+      <translation>启用 Vulkan 验证层</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging</source>
+      <translation>启用 RenderDoc 调试</translation>
+    </message>
+    <message>
+      <source>Enable Crash Diagnostics</source>
+      <translation>启用崩溃诊断</translation>
+    </message>
+    <message>
+      <source>Collect Shaders</source>
+      <translation>收集着色器</translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers</source>
+      <translation>复制 GPU 缓冲区</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers</source>
+      <translation>Host 调试标记</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers</source>
+      <translation>Geust 调试标记</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images</source>
+      <translation>启用Readback线性图像</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>启动时检查更新</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation>始终显示变更日志</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>检查更新</translation>
+    </message>
+    <message>
+      <source>Title Music</source>
+      <translation>标题音乐</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Notification</source>
+      <translation>禁用奖杯通知</translation>
+    </message>
+    <message>
+      <source>Background Image</source>
+      <translation>背景图片</translation>
+    </message>
+    <message>
+      <source>Show Background Image</source>
+      <translation>显示背景图片</translation>
+    </message>
+    <message>
+      <source>Opacity</source>
+      <translation>可见度</translation>
+    </message>
+    <message>
+      <source>Play title music</source>
+      <translation>播放标题音乐</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database On Startup</source>
+      <translation>启动时更新兼容性数据库</translation>
+    </message>
+    <message>
+      <source>Game Compatibility</source>
+      <translation>游戏兼容性</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data</source>
+      <translation>显示兼容性数据</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database</source>
+      <translation>更新兼容性数据库</translation>
+    </message>
+    <message>
+      <source>Volume</source>
+      <translation>音量</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>保存</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>应用</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>恢复默认</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>关闭</translation>
+    </message>
+    <message>
+      <source>Point your mouse at an option to display its description.</source>
+      <translation>将鼠标指针指向选项以显示其描述。</translation>
+    </message>
+    <message>
+      <source>Console Language:\nSets the language that the PS4 game uses.\nIt&apos;s recommended to set this to a language the game supports, which will vary by region.</source>
+      <translation>主机语言：\n设置 PS4 游戏中使用的语言。\n建议设置为支持的语言，这将因地区而异。</translation>
+    </message>
+    <message>
+      <source>Emulator Language:\nSets the language of the emulator&apos;s user interface.</source>
+      <translation>模拟器语言：\n设置模拟器用户界面的语言。</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen:\nShows the game&apos;s splash screen (a special image) while the game is starting.</source>
+      <translation>显示启动画面：\n在游戏启动时显示游戏的启动画面（特殊图像）。</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence:\nDisplays the emulator icon and relevant information on your Discord profile.</source>
+      <translation>启用 Discord Rich Presence：\n在您的 Discord 个人资料上显示模拟器图标和相关信息。</translation>
+    </message>
+    <message>
+      <source>Background Image:\nControl the opacity of the game background image.</source>
+      <translation>背景图片：\n控制游戏背景图片的可见度。</translation>
+    </message>
+    <message>
+      <source>Play Title Music:\nIf a game supports it, enable playing special music when selecting the game in the GUI.</source>
+      <translation>播放标题音乐：\n如果游戏支持，在图形界面选择游戏时播放特殊音乐。</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Pop-ups:\nDisable in-game trophy notifications. Trophy progress can still be tracked using the Trophy Viewer (right-click the game in the main window).</source>
+      <translation>禁止弹出奖杯：\n禁用游戏内奖杯通知。可以在奖杯查看器中继续跟踪奖杯进度（在主窗口中右键点击游戏）。</translation>
+    </message>
+    <message>
+      <source>Hide Cursor:\nChoose when the cursor will disappear:\nNever: You will always see the mouse.\nidle: Set a time for it to disappear after being idle.\nAlways: you will never see the mouse.</source>
+      <translation>隐藏光标：\n选择光标何时消失：\n从不: 从不隐藏光标。\n闲置：光标在闲置若干秒后消失。\n始终：始终隐藏光标。</translation>
+    </message>
+    <message>
+      <source>Hide Idle Cursor Timeout:\nThe duration (seconds) after which the cursor that has been idle hides itself.</source>
+      <translation>光标隐藏闲置时长：\n光标自动隐藏之前的闲置时长。</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data:\nDisplays game compatibility information in table view. Enable &quot;Update Compatibility On Startup&quot; to get up-to-date information.</source>
+      <translation>显示兼容性数据：\n在列表视图中显示游戏兼容性信息。启用“启动时更新兼容性数据库”以获取最新信息。</translation>
+    </message>
+    <message>
+      <source>Update Compatibility On Startup:\nAutomatically update the compatibility database when shadPS4 starts.</source>
+      <translation>启动时更新兼容性数据库：\n当 shadPS4 启动时自动更新兼容性数据库。</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database:\nImmediately update the compatibility database.</source>
+      <translation>更新兼容性数据库：\n立即更新兼容性数据库。</translation>
+    </message>
+    <message>
+      <source>Never</source>
+      <translation>从不</translation>
+    </message>
+    <message>
+      <source>Idle</source>
+      <translation>闲置</translation>
+    </message>
+    <message>
+      <source>Always</source>
+      <translation>始终</translation>
+    </message>
+    <message>
+      <source>Graphics Device:\nOn multiple GPU systems, select the GPU the emulator will use from the drop down list,\nor select &quot;Auto Select&quot; to automatically determine it.</source>
+      <translation>图形设备：\n在具有多个 GPU 的系统中，从下拉列表中选择要使用的 GPU，\n或者选择“自动选择”由模拟器决定。</translation>
+    </message>
+    <message>
+      <source>Width/Height:\nSets the size of the emulator window at launch, which can be resized during gameplay.\nThis is different from the in-game resolution.</source>
+      <translation>宽度/高度：\n设置启动游戏时的窗口大小，游戏过程中可以调整。\n这与游戏内的分辨率不同。</translation>
+    </message>
+    <message>
+      <source>Enable HDR:\nEnables HDR in games that support it.\nYour monitor must have support for the BT2020 PQ color space and the RGB10A2 swapchain format.</source>
+      <translation>启用 HDR：\n在支持 HDR 的游戏中启用 HDR。\n您的显示器必须支持 BT2020 PQ 色彩空间和 RGB10A2 交换链格式。</translation>
+    </message>
+    <message>
+      <source>Game Folders:\nThe list of folders to check for installed games.</source>
+      <translation>游戏文件夹：\n检查已安装游戏的文件夹列表。</translation>
+    </message>
+    <message>
+      <source>Add:\nAdd a folder to the list.</source>
+      <translation>添加：\n将文件夹添加到列表。</translation>
+    </message>
+    <message>
+      <source>Remove:\nRemove a folder from the list.</source>
+      <translation>移除：\n从列表中移除文件夹。</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping:\nSaves the import and export symbols and file header information of the currently running PS4 program to a directory.</source>
+      <translation>启用调试转储：\n将当前正在运行的 PS4 程序的导入和导出符号及文件头信息保存到目录中。</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging:\nIf enabled, the emulator will provide compatibility with Renderdoc to allow capture and analysis of the currently rendered frame.</source>
+      <translation>启用 RenderDoc 调试:\n启用后模拟器将提供与 Renderdoc 的兼容性，允许在渲染过程中捕获和分析当前渲染的帧。</translation>
+    </message>
+    <message>
+      <source>Collect Shaders:\nYou need this enabled to edit shaders with the debug menu (Ctrl + F10).</source>
+      <translation>收集着色器：\n您需要启用此功能才能使用调试菜单（Ctrl + F10）编辑着色器。</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images:\nEnables async downloading of GPU modified linear images.\nMight fix issues in some games.</source>
+      <translation>启用Readback线性图像：\n启用异步下载GPU修改的线性图像。\n可能会修复一些游戏中的问题。</translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers:\nGets around race conditions involving GPU submits.\nMay or may not help with PM4 type 0 crashes.</source>
+      <translation>复制 GPU 缓冲区：\n绕过涉及 GPU 提交的竞态条件。\n对于 PM4 type 0 崩溃可能有帮助，也可能没有帮助。</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers:\nInserts emulator-side information like markers for specific AMDGPU commands around Vulkan commands, as well as giving resources debug names.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation>Host 调试标记：\n在 Vulkan 命令周围插入模拟器端信息，如特定 AMD GPU 命令的标记，以及为资源提供调试名称。\n如果您已启用此功能，应同时启用崩溃诊断。\n对 RenderDoc 等程序很有用。</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers:\nInserts any debug markers the game itself has added to the command buffer.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation>Guest 调试标记：\n在命令缓冲区中插入游戏本身添加的任何调试标记。\n如果您已启用此功能，应同时启用崩溃诊断。\n对 RenderDoc 等程序很有用。</translation>
+    </message>
+    <message>
+      <source>Set the volume of the background music.</source>
+      <translation>设置背景音乐的音量。</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls</source>
+      <translation>启用体感控制</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>浏览</translation>
+    </message>
+    <message>
+      <source>Auto Select</source>
+      <translation>自动选择</translation>
+    </message>
+    <message>
+      <source>Directory to install games</source>
+      <translation>要安装游戏的目录</translation>
+    </message>
+    <message>
+      <source>Video</source>
+      <translation>显示</translation>
+    </message>
+    <message>
+      <source>Display Mode</source>
+      <translation>显示模式</translation>
+    </message>
+    <message>
+      <source>Windowed</source>
+      <translation>窗口</translation>
+    </message>
+    <message>
+      <source>Fullscreen</source>
+      <translation>全屏</translation>
+    </message>
+    <message>
+      <source>Fullscreen (Borderless)</source>
+      <translation>无边框全屏</translation>
+    </message>
+    <message>
+      <source>Window Size</source>
+      <translation>窗口大小</translation>
+    </message>
+    <message>
+      <source>W:</source>
+      <translation>宽：</translation>
+    </message>
+    <message>
+      <source>H:</source>
+      <translation>高：</translation>
+    </message>
+    <message>
+      <source>Separate Log Files</source>
+      <translation>独立日志文件</translation>
+    </message>
+    <message>
+      <source>Separate Log Files:\nWrites a separate logfile for each game.</source>
+      <translation>独立日志文件：\n每个游戏使用单独的日志文件。</translation>
+    </message>
+    <message>
+      <source>Trophy Notification Position</source>
+      <translation>奖杯通知位置</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation>左边</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation>右边</translation>
+    </message>
+    <message>
+      <source>Top</source>
+      <translation>顶部</translation>
+    </message>
+    <message>
+      <source>Bottom</source>
+      <translation>底部</translation>
+    </message>
+    <message>
+      <source>Notification Duration</source>
+      <translation>通知显示持续时间</translation>
+    </message>
+    <message>
+      <source>Portable User Folder</source>
+      <translation>本地用户文件夹</translation>
+    </message>
+    <message>
+      <source>Create Portable User Folder from Common User Folder</source>
+      <translation>从公共用户文件夹创建本地用户文件夹</translation>
+    </message>
+    <message>
+      <source>Portable user folder:\nStores shadPS4 settings and data that will be applied only to the shadPS4 build located in the current folder. Restart the app after creating the portable user folder to begin using it.</source>
+      <translation>本地用户文件夹：\n存储 shadPS4 设置和数据，这些设置和数据仅应用于当前运行的 shadPS4。创建本地用户文件夹后，重启应用即可开始使用。</translation>
+    </message>
+    <message>
+      <source>%1 already exists</source>
+      <translation>%1 已存在</translation>
+    </message>
+    <message>
+      <source>%1 successfully created.</source>
+      <translation>%1 创建成功。</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder:\nYou can add custom images to the trophies and an audio.\nAdd the files to custom_trophy with the following names:\ntrophy.wav OR trophy.mp3, bronze.png, gold.png, platinum.png, silver.png\nNote: The sound will only work in QT versions.</source>
+      <translation>打开自定义奖杯图像/声音文件夹：\n您可以自定义奖杯图像和声音。\n将文件添加到 custom_trophy 文件夹中，文件名如下：\ntrophy.wav 或 trophy.mp3、bronze.png、gold.png、platinum.png、silver.png。\n注意：自定义声音只能在 QT 版本中生效。</translation>
+    </message>
+    <message>
+      <source>Experimental Features</source>
+      <translation>实验性功能</translation>
+    </message>
+    <message>
+      <source>WARNING: These features are experimental and should not be enabled unless you were told to, or a game requires it. Please ask in the shadPS4 Discord server if you have any questions.</source>
+      <translation>警告：这些功能是实验性的，除非您被告知或者游戏需要的话，否则不应启用。 如果您有任何疑问，请在 shadPS4 Discord 服务器上提问。</translation>
+    </message>
+    <message>
+      <source>Enable Background Controller Input</source>
+      <translation>启用后台控制器输入</translation>
+    </message>
+    <message>
+      <source>Enable Controller Background Input:\nAllow shadPS4 to detect controller inputs when the game window is not in focus.</source>
+      <translation>启用控制器后台输入:\n允许ShadPS4在游戏窗口未焦点时检测控制器输入。</translation>
+    </message>
+    <message>
+      <source>Crash Diagnostics:\nCreates a .yaml file with info about the Vulkan state at the time of crashing.\nUseful for debugging &apos;Device lost&apos; errors. If you have this enabled, you should enable Host AND Guest Debug Markers.\nYou need Vulkan Validation Layers enabled and the Vulkan SDK for this to work.</source>
+      <translation>崩溃诊断：\n创建一个包含崩溃时 Vulkan 状态的 .yaml 文件。\n对于调试“Device lost”错误很有用。如果您启用了此功能，您应该同时启用 Host 和 Guest 调试标记。\n此功能在 Intel 显卡上不可用。\n您需要启用 Vulkan 验证层和 Vulkan SDK 才能使用此功能。</translation>
+    </message>
+    <message>
+      <source>Enable Logging</source>
+      <translation>启用日志记录</translation>
+    </message>
+    <message>
+      <source>Enable Logging:\nEnables logging.\nDo not change this if you do not know what you&apos;re doing!\nWhen asking for help, make sure this setting is ENABLED.</source>
+      <translation>启用日志记录：\n开启日志记录功能。\n若不了解相关操作，请勿修改此设置！\n寻求帮助时，请确保此项设置处于启用状态。</translation>
+    </message>
+    <message>
+      <source>Present Mode</source>
+      <translation>呈现模式</translation>
+    </message>
+    <message>
+      <source>Mailbox (Vsync)</source>
+      <translation>邮箱（垂直同步）</translation>
+    </message>
+    <message>
+      <source>Fifo (Vsync)</source>
+      <translation>先进先出（垂直同步）</translation>
+    </message>
+    <message>
+      <source>Immediate (No Vsync)</source>
+      <translation>即时（关闭垂直同步）</translation>
+    </message>
+    <message>
+      <source>Select the DLC folder</source>
+      <translation>选择 DLC 文件夹</translation>
+    </message>
+    <message>
+      <source>Present Mode:\nConfigures how video output will be presented to your screen.\n\nMailbox: Frames synchronize with your screen&apos;s refresh rate. New frames will replace any pending frames. Reduces latency but may skip frames if running behind.\nFifo: Frames synchronize with your screen&apos;s refresh rate. New frames will be queued behind pending frames. Ensures all frames are presented but may increase latency.\nImmediate: Frames immediately present to your screen when ready. May result in tearing.</source>
+      <translation>呈现模式：\n配置视频输出到屏幕的显示方式。\n\n邮箱模式：帧画面与屏幕刷新率同步。新帧将替换所有待处理帧，可降低延迟但落后时可能跳帧。\n先进先出：帧画面与屏幕刷新率同步。新帧将排列在待处理帧之后，确保所有帧都被呈现但可能增加延迟。\n即时模式：帧画面准备就绪后立即显示于屏幕，可能导致画面撕裂。</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the DLC path.</source>
+      <translation>浏览：\n选择一个目录保存游戏存档数据。</translation>
+    </message>
+    <message>
+      <source>FSR Settings</source>
+      <translation>FSR设置</translation>
+    </message>
+    <message>
+      <source>Enable FSR</source>
+      <translation>启用 FSR</translation>
+    </message>
+    <message>
+      <source>Enable RCAS (sharpening)</source>
+      <translation>启用 RCAS(锐化)</translation>
+    </message>
+    <message>
+      <source>RCAS Attenuation:</source>
+      <translation>RCAS范围：</translation>
+    </message>
+    <message>
+      <source>Load Presets...</source>
+      <translation>加载预设……</translation>
+    </message>
+    <message>
+      <source>Log</source>
+      <translation>日志</translation>
+    </message>
+    <message>
+      <source>Open Log Location:\nOpen the folder where the log file is saved.</source>
+      <translation>打开日志位置：\n打开保存日志文件的文件夹。</translation>
+    </message>
+    <message>
+      <source>Microphone:\nNone: Does not use the microphone.\nDefault Device: Will use the default device defined in the system.\nOr manually choose the microphone to be used from the list.</source>
+      <translation>麦克风：\n无：不使用麦克风。\n默认设备：将使用系统中定义的默认设备。\n或者手动从列表中选择要使用的麦克风。</translation>
+    </message>
+    <message>
+      <source>Volume:\nAdjust volume for games on a global level, range goes from 0-500% with the default being 100%.</source>
+      <translation>音量：\n调整全局游戏音量，从0-500%不等，默认100%。</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings:\nChoose which tab will open, the default is General.</source>
+      <translation>打开设置时的默认标签页：\n选择设置界面打开时默认显示的标签页，默认选项为“常规”。</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls:\nWhen enabled it will use the controller&apos;s motion control if supported.</source>
+      <translation>启用体感控制：\n启用后，若控制器支持，将使用其体感功能。</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency</source>
+      <translation>垂直同步频率</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency:\nThe frame rate at which the emulator refreshes at (60hz is the baseline, whether the game runs at 30 or 60fps). Changing this may have adverse effects, such as increasing the game speed, or breaking critical game functionality that does not expect this to change!</source>
+      <translation>垂直同步频率：\n此为模拟器的帧率刷新频率（基准为60赫兹，无论游戏本身以30帧还是60帧运行）。修改此数值可能导致负面影响，例如游戏速度加快，或破坏游戏关键功能（因游戏本身未预设此数值可被修改）！</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access</source>
+      <translation>启用直接内存访问</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode</source>
+      <translation>启用 Devkit 开发机模式</translation>
+    </message>
+    <message>
+      <source>Set &quot;Network Connected&quot; to True</source>
+      <translation>将“网络连接状态”设为“已连接”</translation>
+    </message>
+    <message>
+      <source>Miscellaneous</source>
+      <translation>其他</translation>
+    </message>
+    <message>
+      <source>Frontend</source>
+      <translation>前端</translation>
+    </message>
+    <message>
+      <source>Experimental</source>
+      <translation>实验性功能</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen When Launching Game</source>
+      <translation>启动游戏时显示启动画面</translation>
+    </message>
+    <message>
+      <source>General Frontend Settings</source>
+      <translation>常规前端设置</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode</source>
+      <translation>启用 PS4 Pro 模式</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access:\nEnables arbitrary memory access from the GPU to CPU memory.</source>
+      <translation>启用直接内存访问 (DMA)：\n允许 GPU 直接访问 CPU 内存空间。（可实现高速数据传输，但可能带来稳定性风险）。</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode:\nAdds support for PS4 Pro emulation and memory size. Currently causes instability in a large number of tested games.</source>
+      <translation>启用 PS4 Pro 模式：\n增加对 PS4 Pro 模拟及内存容量的支持。（注意：当前版本下，大量经测试的游戏会出现运行不稳定的情况！）。</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode:\nAdds support for Devkit console memory size.</source>
+      <translation>启用Devkit开发机模式：\n增加对开发机内存容量的支持。</translation>
+    </message>
+    <message>
+      <source>Set Network Connected to True:\nForces games to detect an active network connection. Actual online capabilities are not yet supported.</source>
+      <translation>将“网络连接状态”设为“已连接”：\n强制让游戏检测到网络处于连接状态（注意：并不实际支持真实的在线联网功能）。</translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers:\nEnables a system that validates the state of the Vulkan renderer and logs information about its internal state.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>启用Vulkan验证层：\n此功能将启用一个用于验证Vulkan渲染器状态并记录其内部状态信息的系统。\n注意：这将严重降低性能，并极有可能改变模拟器行为！\n需要安装Vulkan SDK方可使用此功能。</translation>
+    </message>
+    <message>
+      <source>Audio Device (general)</source>
+      <translation>音频设备(常规)</translation>
+    </message>
+    <message>
+      <source>Audio Device (DS4 speaker)</source>
+      <translation>音频设备 (DS4 扬声器)</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping:\nFor the sake of technical debugging, saves the game&apos;s shaders to a folder as they render.</source>
+      <translation>启用着色器转储：\n出于技术调试目的，该功能将在着色器渲染时将其实时保存至指定文件夹。</translation>
+    </message>
+    <message>
+      <source>Enable Null GPU:\nFor the sake of technical debugging, disables game rendering as if there were no graphics card. The screen will be black.</source>
+      <translation>启用 NULL GPU：\n出于技术调试目的，该选项将禁用游戏渲染功能（模拟无显卡状态）。启用后屏幕将显示为黑屏。</translation>
+    </message>
+    <message>
+      <source>DLC Path:\nThe folder where game DLC is loaded from.</source>
+      <translation>DLC路径：\n用于加载游戏DLC内容的文件夹。</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation</source>
+      <translation>额外设备内存分配</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation:\nForces allocation of the specified amount of additional DMem. Crashes or causes issues in some games.</source>
+      <translation>额外设备内存分配：\n强制分配指定容量的额外设备内存。注意：在某些游戏中可能导致崩溃或其他问题！</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path:\nThe folder where PS4 sysmodules are loaded from.</source>
+      <translation>PS4系统模块路径：\n用于加载PS4系统模块的文件夹。</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the sysmodules path.</source>
+      <translation>浏览：\n请选择要设为系统模块路径的文件夹。</translation>
+    </message>
+    <message>
+      <source>Vulkan Validation (Requires Vulkan SDK)</source>
+      <translation>Vulkan 验证 (需要 Vulkan SDK)</translation>
+    </message>
+    <message>
+      <source>Validation Layers</source>
+      <translation>验证图层</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation</source>
+      <translation>启用核心验证</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation</source>
+      <translation>启用同步验证</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation</source>
+      <translation>启用 GPU 辅助验证</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation:\nEnables a system that validates the timing of Vulkan rendering tasks.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>启用同步验证：\n启用用于验证Vulkan渲染任务时序的系统。
+\n注意：这将显著降低性能，并极有可能改变模拟器行为！
+\n需要安装Vulkan SDK方可使用此功能。</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation:\nEnables the main API validation functions.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>启用核心验证：\n启用核心API验证功能。\n注意：这将显著降低性能，并极有可能改变模拟器行为！\n需要安装Vulkan SDK方可使用此功能。</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation:\nInstruments shaders with code that validates if they are behaving correctly.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation>启用GPU辅助验证：\n通过向着色器注入验证代码，检测其运行行为是否正确。\n注意：这将显著降低性能，并极有可能改变模拟器行为！\n需要安装Vulkan SDK方可使用此功能。</translation>
+    </message>
+    <message>
+      <source>GUI Language</source>
+      <translation>界面语言</translation>
+    </message>
+    <message>
+      <source>GUI Updates</source>
+      <translation>图形界面更新</translation>
+    </message>
+    <message>
+      <source>DLC Path</source>
+      <translation>DLC 路径</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path</source>
+      <translation>PS4系统模块路径</translation>
+    </message>
+    <message>
+      <source>GUI Updates:\nRelease: Official versions released every month that may be very outdated, but are more reliable and tested.\nNightly: Development versions that have all the latest features and fixes, but may contain bugs and are less stable.\n\n*This update applies only to the Qt user interface. To update the emulator core, please use the &apos;Version Manager&apos; menu.</source>
+      <translation>图形界面更新：\n正式版：每月发布的官方版本，版本内容可能较为陈旧，但经过充分测试，更为稳定可靠。\n夜间版：包含所有最新功能和修复的开发版本，但可能存在错误且稳定性较低。\n\n此更新仅适用于 Qt 图形界面。如需更新模拟器核心，请使用“版本管理器”菜单。</translation>
+    </message>
+    <message>
+      <source>Cannot create portable launcher folder</source>
+      <translation>无法创建便携版启动器文件夹</translation>
+    </message>
+    <message>
+      <source>Portable launcherDir folder created</source>
+      <translation>便携版启动器目录文件夹已创建</translation>
+    </message>
+    <message>
+      <source>USB Device</source>
+      <translation>USB 设备</translation>
+    </message>
+    <message>
+      <source>Real USB Device</source>
+      <translation>真实USB设备</translation>
+    </message>
+    <message>
+      <source>Skylander Portal</source>
+      <translation>Skylander 传送门</translation>
+    </message>
+    <message>
+      <source>Infinity Base</source>
+      <translation>《迪士尼无限》基础台</translation>
+    </message>
+    <message>
+      <source>Dimensions Toypad</source>
+      <translation>《乐高次元》控制基座</translation>
+    </message>
+    <message>
+      <source>USB Device:\nReal USB Device: Use a real USB Device attached to the system.\nSkylander Portal: Emulate a Skylander Portal of Power.\nInfinity Base: Emulate a Disney Infinity Base.\nDimensions Toypad: Emulate a Lego Dimensions Toypad.</source>
+      <translation>USB设备类型：\n真实USB设备：使用连接到系统的真实USB设备。\n《小龙斯派罗》传送门：模拟《小龙斯派罗》能量传送门设备。\n《迪士尼无限》基础台：模拟《迪士尼无限》基础台设备。\n《乐高次元》控制板：模拟《乐高次元》玩具控制板设备。</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache</source>
+      <translation>启用着色器缓存</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file</source>
+      <translation>将着色器缓存文件压缩为ZIP文件</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache:\nStoring compiled shaders to avoid recompilations, reduce stuttering.</source>
+      <translation>启用着色器缓存：\n存储已编译的着色器数据，避免重复编译以减少游戏卡顿。</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file:\nThe shader cache files are stored within a single zip file instead of multiple separate files.</source>
+      <translation>将着色器缓存文件压缩为ZIP文件：\n着色器缓存将以单个ZIP文件存储，而非多个独立文件。</translation>
+    </message>
+    <message>
+      <source>Readbacks Mode</source>
+      <translation>回读模式</translation>
+    </message>
+    <message>
+      <source>Disabled</source>
+      <translation>已禁用</translation>
+    </message>
+    <message>
+      <source>Readbacks:\nEnable GPU memory readbacks and writebacks.\nThis is required for proper behavior in some games.\nMight cause stability and/or performance issues.</source>
+      <translation>启用回读：\n启用 GPU 内存回读和回写功能。\n这是某些游戏中正常运行所必需的。\n但可能会导致稳定性以及性能问题。</translation>
+    </message>
+    <message>
+      <source>Relaxed</source>
+      <translation>宽松</translation>
+    </message>
+    <message>
+      <source>Precise</source>
+      <translation>精确</translation>
+    </message>
+    <message>
+      <source>Select shadPS4 Home Path</source>
+      <translation>选择shadPS4 主路径</translation>
+    </message>
+    <message>
+      <source>Select the system modules folder</source>
+      <translation>选择系统模块目录</translation>
+    </message>
+    <message>
+      <source>Home Folder Location (Saves, Inputs, Trophy Data)</source>
+      <translation>主文件夹位置 (Saves, Inputs, 奖杯数据)</translation>
+    </message>
+    <message>
+      <source>Home Folder Location:\nThe folder where save data, trophy files, and input configs are stored for all users.</source>
+      <translation>主文件夹位置：\n存储所有用户的存档数据、奖杯文件和按键输入配置的文件夹。</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the home folder.</source>
+      <translation>浏览：\n浏览并选择一个文件夹以设置为主文件夹。</translation>
+    </message>
+    <message>
+      <source>Audio</source>
+      <translation>音频</translation>
+    </message>
+    <message>
+      <source>Audio Backend</source>
+      <translation>音频后端</translation>
+    </message>
+    <message>
+      <source>Mic Device</source>
+      <translation>麦克风设备</translation>
+    </message>
+    <message>
+      <source>Devices</source>
+      <translation>设备</translation>
+    </message>
+    <message>
+      <source>Camera</source>
+      <translation>摄像头</translation>
+    </message>
+    <message>
+      <source>Log Sync</source>
+      <translation>同步日志</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate</source>
+      <translation>日志跳过重复</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration</source>
+      <translation>日志最大跳过时长</translation>
+    </message>
+    <message>
+      <source> ms</source>
+      <translation> 毫秒</translation>
+    </message>
+    <message>
+      <source>Log Size Limit</source>
+      <translation>日志大小限制</translation>
+    </message>
+    <message>
+      <source> B</source>
+      <translation> B</translation>
+    </message>
+    <message>
+      <source>Log Append</source>
+      <translation>追加日志</translation>
+    </message>
+    <message>
+      <source>wincolor</source>
+      <translation>wincolor</translation>
+    </message>
+    <message>
+      <source>msvc</source>
+      <translation>msvc</translation>
+    </message>
+    <message>
+      <source>Log Append:\nAppend to existing logs.</source>
+      <translation>日志追加：\n追加到现有日志。</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration:\nInterval without writing same lines (ms) - only if &apos;Log Skip Duplicate&apos; enabled.</source>
+      <translation>日志最大跳过时长：\n未写入相同行的间隔时间（毫秒）—— 仅在启用“日志跳过重复”时生效。</translation>
+    </message>
+    <message>
+      <source>Log Size Limit:\nMaximum size of log files (bytes).</source>
+      <translation>日志大小限制：\n日志文件的最大大小(字节)。</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate:\nSave storage by avoiding writing log that is identical.</source>
+      <translation>日志跳过重复：\n通过避免写入相同的日志来保存存储。</translation>
+    </message>
+    <message>
+      <source>Log Sync:\nSwitch between sync (order) or async (performance).</source>
+      <translation>日志同步：\n在同步（顺序）和异步（性能）之间切换。</translation>
+    </message>
+    <message>
+      <source>Log Type:\nChoose between wincolor or msvc log types.\nwincolor: Default logging for Windows\nmsvc: Logging for debugging</source>
+      <translation>日志类型：\n在 wincolor 和 msvc 日志类型之间选择。\nwincolor：Windows 默认日志记录\nmsvc：调试用日志记录</translation>
+    </message>
+    <message>
+      <source>Log Filter:\nFilters the log to only print specific information.\nExamples: &quot;Core:Debug&quot; &quot;Lib.Pad:Debug Common.Filesystem:Error&quot; &quot;*:Critical&quot;\nLevels: trace, debug, info, warning, error, critical, off - in this order, a specific level silences all levels preceding it in the list and logs every level after it.</source>
+      <translation>日志筛选：\n筛选日志，仅打印特定信息。\n示例："Core:Debug" "Lib.Pad:Debug Common.Filesystem:Error" "*:Critical"\n级别顺序：trace、debug、info、warning、error、critical、off - 按此顺序，指定某一级别将静默列表中位于它之前的所有级别，并记录它之后的所有级别。</translation>
+    </message>
+    <message>
+      <source>Enable shadNet</source>
+      <translation>启用shadNet</translation>
+    </message>
+    <message>
+      <source>ShadNet</source>
+      <translation>ShadNet</translation>
+    </message>
+    <message>
+      <source>Server</source>
+      <translation>服务器</translation>
+    </message>
+    <message>
+      <source>Signaling Info</source>
+      <translation>信令数据</translation>
+    </message>
+    <message>
+      <source>Enable UPNP</source>
+      <translation>启用 UPNP</translation>
+    </message>
+    <message>
+      <source>WebAPI Server</source>
+      <translation>WebAPI 服务器</translation>
+    </message>
+    <message>
+      <source>shadNet:\nCompatibility is very limited at the moment.\nYou can register at https://www.shadps4.net/shadnet/register/.</source>
+      <translation>shadNet:\n兼容性目前非常有限，\n您可以在 https://www.shadps4.net/sadNet/register/上注册。</translation>
+    </message>
+    <message>
+      <source>Red Zone Protection</source>
+      <translation>红色区域保护</translation>
+    </message>
+    <message>
+      <source>Static Patching</source>
+      <translation>静态修补中</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShortcutDialog</name>
+    <message>
+      <source>Select Version</source>
+      <translation>选择版本</translation>
+    </message>
+    <message>
+      <source>Select version for shortcut creation</source>
+      <translation>请选择要创建快捷方式的版本</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation>未选择任何版本</translation>
+    </message>
+    <message>
+      <source>Select a version first</source>
+      <translation>请先选择一个版本</translation>
+    </message>
+  </context>
+  <context>
+    <name>SteamShortcut</name>
+    <message>
+      <source>Steam</source>
+      <translation>Steam</translation>
+    </message>
+    <message>
+      <source>%1 is already in your Steam library.</source>
+      <translation>%1 已经在您的Steam库中。</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Steam installation not found.</source>
+      <translation>未找到Steam安装。</translation>
+    </message>
+    <message>
+      <source>No Steam user account found. Please log into Steam at least once.</source>
+      <translation>未找到Steam用户帐户。请至少登录到Steam一次。</translation>
+    </message>
+    <message>
+      <source>Steam is Running</source>
+      <translation>Steam正在运行</translation>
+    </message>
+    <message>
+      <source>Steam is currently running. It will be closed and restarted to apply the shortcut. Continue?</source>
+      <translation>Steam正在运行。它将被关闭并重启以应用快捷方式。是否继续？</translation>
+    </message>
+    <message>
+      <source>Steam did not close in time. Shortcut was not added.</source>
+      <translation>Steam没有在及时关闭。没有添加快捷键。</translation>
+    </message>
+    <message>
+      <source>Failed to add game to Steam.</source>
+      <translation>将游戏添加到 Steam 失败。</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Steam is restarting.</source>
+      <translation>已成功添加到Steam，Steam正在重启。</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Launch Steam to see the changes.</source>
+      <translation>添加到Steam成功。启动Steam查看更改。</translation>
+    </message>
+  </context>
+  <context>
+    <name>TrophyViewer</name>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>奖杯查看器</translation>
+    </message>
+    <message>
+      <source>Select Game:</source>
+      <translation>选择游戏：</translation>
+    </message>
+    <message>
+      <source>Progress</source>
+      <translation>进度</translation>
+    </message>
+    <message>
+      <source>Show Earned Trophies</source>
+      <translation>显示获得的奖杯</translation>
+    </message>
+    <message>
+      <source>Show Not Earned Trophies</source>
+      <translation>显示未获得的奖杯</translation>
+    </message>
+    <message>
+      <source>Show Hidden Trophies</source>
+      <translation>显示隐藏奖杯</translation>
+    </message>
+    <message>
+      <source>Select User:</source>
+      <translation>选择用户：</translation>
+    </message>
+  </context>
+  <context>
+    <name>UserManagerDialog</name>
+    <message>
+      <source>User Manager</source>
+      <translation>用户管理程序</translation>
+    </message>
+    <message>
+      <source>&amp;Create User</source>
+      <translation>&amp;创建用户</translation>
+    </message>
+    <message>
+      <source>&amp;Delete User</source>
+      <translation>&amp;删除用户</translation>
+    </message>
+    <message>
+      <source>&amp;Rename User</source>
+      <translation>&amp;重命名用户</translation>
+    </message>
+    <message>
+      <source>&amp;Set Default User</source>
+      <translation>&amp;设置默认用户</translation>
+    </message>
+    <message>
+      <source>&amp;Set Color</source>
+      <translation>&amp;设置颜色</translation>
+    </message>
+    <message>
+      <source>&amp;Set Controller Port</source>
+      <translation>&amp;设置控制器端口</translation>
+    </message>
+    <message>
+      <source>&amp;Close</source>
+      <translation>&amp;关闭</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Cannot add more users.</source>
+      <translation>无法添加更多用户。</translation>
+    </message>
+    <message>
+      <source>Create New User</source>
+      <translation>创建新用户</translation>
+    </message>
+    <message>
+      <source>New User ID: %1</source>
+      <translation>新用户ID： %1</translation>
+    </message>
+    <message>
+      <source>Username (3–16 chars, letters, numbers, _, -)</source>
+      <translation>用户名 (3-16 字符, 字母, 数字, _, -)</translation>
+    </message>
+    <message>
+      <source>Invalid Username</source>
+      <translation>无效的用户名</translation>
+    </message>
+    <message>
+      <source>Username must be 3–16 chars and valid.</source>
+      <translation>用户名必须是 3 - 16 个字符并且有效。</translation>
+    </message>
+    <message>
+      <source>Delete Confirmation</source>
+      <translation>确认删除</translation>
+    </message>
+    <message>
+      <source>Delete user ID %1?</source>
+      <translation>删除用户 ID %1 吗？</translation>
+    </message>
+    <message>
+      <source>Rename User</source>
+      <translation>重命名</translation>
+    </message>
+    <message>
+      <source>Old Username: %1</source>
+      <translation>旧用户名: %1</translation>
+    </message>
+    <message>
+      <source>Set User Color</source>
+      <translation>设置用户颜色</translation>
+    </message>
+    <message>
+      <source>Select color:</source>
+      <translation>选择颜色：</translation>
+    </message>
+    <message>
+      <source>Set Controller Port</source>
+      <translation>设置控制器端口</translation>
+    </message>
+    <message>
+      <source>Assign port (1-4) to this user:</source>
+      <translation>分配端口 (1-4) 给此用户：</translation>
+    </message>
+    <message>
+      <source>&amp;Open User Directory</source>
+      <translation>&amp;打开用户文件夹</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net...</source>
+      <translation>Shad&amp;Net……</translation>
+    </message>
+    <message>
+      <source>On</source>
+      <translation>打开</translation>
+    </message>
+    <message>
+      <source>On (%1)</source>
+      <translation>打开 (%1)</translation>
+    </message>
+    <message>
+      <source>Off</source>
+      <translation>关闭</translation>
+    </message>
+    <message>
+      <source>ShadNet Settings - %1</source>
+      <translation>ShadNet 设置 - %1</translation>
+    </message>
+    <message>
+      <source>Enable ShadNet for this user</source>
+      <translation>为此用户启用ShadNet功能</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID)</source>
+      <translation>帐户 ID (NPID)</translation>
+    </message>
+    <message>
+      <source>Password</source>
+      <translation>密码</translation>
+    </message>
+    <message>
+      <source>Show password</source>
+      <translation>显示密码</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID):</source>
+      <translation>帐户 ID (NPID)：</translation>
+    </message>
+    <message>
+      <source>Password:</source>
+      <translation>密码：</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net Settings...</source>
+      <translation>ShadNet 设置……</translation>
+    </message>
+  </context>
+  <context>
+    <name>VersionDialog</name>
+    <message>
+      <source>Version Manager</source>
+      <translation>版本管理器</translation>
+    </message>
+    <message>
+      <source>Path to save versions</source>
+      <translation>保存版本的路径</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>浏览</translation>
+    </message>
+    <message>
+      <source>Installed</source>
+      <translation>已安装</translation>
+    </message>
+    <message>
+      <source>Selected</source>
+      <translation>已选择</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation>版本</translation>
+    </message>
+    <message>
+      <source>Codename</source>
+      <translation>代号</translation>
+    </message>
+    <message>
+      <source>Date</source>
+      <translation>日期</translation>
+    </message>
+    <message>
+      <source>Add Custom</source>
+      <translation>添加自定义</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation>删除</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation>刷新列表</translation>
+    </message>
+    <message>
+      <source>Download</source>
+      <translation>下载</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release updates at startup</source>
+      <translation>启动时检查预发布更新</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release Updates</source>
+      <translation>检查预发布版更新</translation>
+    </message>
+    <message>
+      <source>Select the folder where the emulator versions will be installed</source>
+      <translation>选择安装模拟器版本的文件夹</translation>
+    </message>
+    <message>
+      <source>Select executable</source>
+      <translation>选择可执行文件</translation>
+    </message>
+    <message>
+      <source>Executable (*.exe)</source>
+      <translation>可执行文件 (*.exe)</translation>
+    </message>
+    <message>
+      <source>Version name</source>
+      <translation>版本名称</translation>
+    </message>
+    <message>
+      <source>Enter the name of this version as it appears in the list.</source>
+      <translation>输入列表中显示的版本名称。</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>错误</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>成功</translation>
+    </message>
+    <message>
+      <source>Version added successfully.</source>
+      <translation>已成功添加版本。</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder path.</source>
+      <translation>无法确定文件夹路径。</translation>
+    </message>
+    <message>
+      <source>Delete version</source>
+      <translation>删除版本</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the version</source>
+      <translation>确定要删除此版本吗</translation>
+    </message>
+    <message>
+      <source>Version list update</source>
+      <translation>版本列表更新</translation>
+    </message>
+    <message>
+      <source>No news, the version list is already updated.</source>
+      <translation>暂无新消息，版本列表已是最新状态。</translation>
+    </message>
+    <message>
+      <source>The latest versions have been added to the list for download.</source>
+      <translation>最新版本已添加到下载列表中。</translation>
+    </message>
+    <message>
+      <source>Error accessing GitHub API</source>
+      <translation>访问 GitHub API 时出错</translation>
+    </message>
+    <message>
+      <source>First you need to choose a location to save the versions in
+&apos;Path to save versions&apos;</source>
+      <translation>首先，您需要在“版本保存路径”中指定存储位置；</translation>
+    </message>
+    <message>
+      <source>Do you want to download the version</source>
+      <translation>确定要下载该版本吗</translation>
+    </message>
+    <message>
+      <source>No files available for this platform.</source>
+      <translation>此平台暂无可用文件。</translation>
+    </message>
+    <message>
+      <source>Downloading %1 , please wait...</source>
+      <translation>正在下载 %1 ，请稍候……</translation>
+    </message>
+    <message>
+      <source>Could not save file.</source>
+      <translation>无法保存文件。</translation>
+    </message>
+    <message>
+      <source>Version %1 has been downloaded and selected.</source>
+      <translation>版本 %1 已成功下载并启用。</translation>
+    </message>
+    <message>
+      <source>Failed to create zip extraction script</source>
+      <translation>创建 zip 解压脚本失败</translation>
+    </message>
+    <message>
+      <source>The GitHub API response is not a valid JSON array.</source>
+      <translation>GitHub API 返回的数据不是有效的 JSON 数组。</translation>
+    </message>
+    <message>
+      <source>Auto Updater - Emulator</source>
+      <translation>自动更新器 - 模拟器</translation>
+    </message>
+    <message>
+      <source>You already have the latest pre-release version.</source>
+      <translation>您已经是最新的预发布版本。</translation>
+    </message>
+    <message>
+      <source>Update Available (Emulator)</source>
+      <translation>可用更新(模拟器)</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation>当前版本</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation>最新版本</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation>您确定要更新吗？</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>更新</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation>显示更新日志</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation>隐藏更新日志</translation>
+    </message>
+    <message>
+      <source>Network error while fetching changelog</source>
+      <translation>获取更新日志时网络错误</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation>更新日志</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation>未找到指定资源的下载地址。</translation>
+    </message>
+    <message>
+      <source>Network error while downloading</source>
+      <translation>下载时发生网络错误</translation>
+    </message>
+    <message>
+      <source>Failed to save download file</source>
+      <translation>无法保存下载文件</translation>
+    </message>
+    <message>
+      <source>Complete installation</source>
+      <translation>完成安装</translation>
+    </message>
+    <message>
+      <source>Pre-release updated successfully</source>
+      <translation>预发布版本已成功更新</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation>无法创建更新脚本文件</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation>始终显示变更日志</translation>
+    </message>
+    <message>
+      <source>No version selected. Please choose one from the list to delete.</source>
+      <translation>没有选择任何版本。请从列表中选择要删除的版本。</translation>
+    </message>
+    <message>
+      <source>Confirm Download</source>
+      <translation>确认下载</translation>
+    </message>
+    <message>
+      <source>Extraction failure.</source>
+      <translation>解压失败。</translation>
+    </message>
+    <message>
+      <source>A version with that name already exists.</source>
+      <translation>已存在同名版本。</translation>
+    </message>
+    <message>
+      <source>Local</source>
+      <translation>本地</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder to remove.</source>
+      <translation>无法确定要删除的文件夹。</translation>
+    </message>
+    <message>
+      <source>Failed to delete folder.</source>
+      <translation>删除文件夹失败。</translation>
+    </message>
+    <message>
+      <source>Unable to get hash of latest pre-release.</source>
+      <translation>无法获取最新预发布版本的哈希值。</translation>
+    </message>
+    <message>
+      <source>Downloading Pre-release (Nightly), please wait...</source>
+      <translation>正在下载预发布版本（夜间版），请稍候……</translation>
+    </message>
+  </context>
+  <context>
+    <name>dimensions_dialog</name>
+    <message>
+      <source>Dimensions Manager</source>
+      <translation>《乐高次元》管理器</translation>
+    </message>
+    <message>
+      <source>Active Dimensions Figures:</source>
+      <translation>当前激活的《乐高次元》角色：</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>清除</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>加载</translation>
+    </message>
+    <message>
+      <source>Move</source>
+      <translation>移动</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation>未知角色</translation>
+    </message>
+    <message>
+      <source>Select Dimensions File</source>
+      <translation>选择《乐高次元》文件</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation>《乐高次元》角色文件 (*.bin)；；</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation>打开角色文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation>打开角色文件(%1)失败！
+文件可能已被基座设备占用。</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation>读取角色文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation>读取角色文件(%1)失败！
+文件体积过小。</translation>
+    </message>
+  </context>
+  <context>
+    <name>figure_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation>角色创造器</translation>
+    </message>
+    <message>
+      <source>Filter by Series:</source>
+      <translation>按系列筛选：</translation>
+    </message>
+    <message>
+      <source>All</source>
+      <translation>全部</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--未知--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation>角色编号：</translation>
+    </message>
+    <message>
+      <source>Series:</source>
+      <translation>系列：</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>值转换失败</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation>输入的角色编号无效！</translation>
+    </message>
+    <message>
+      <source>Series number entered is invalid!</source>
+      <translation>输入的系列编号无效！</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation>创建角色文件</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation>《迪士尼无限》角色文件 (*.bin)；；</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file!</source>
+      <translation>创建角色文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file:
+%1</source>
+      <translation>创建角色文件失败：%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>infinity_dialog</name>
+    <message>
+      <source>Infinity Manager</source>
+      <translation>《迪士尼无限》管理器</translation>
+    </message>
+    <message>
+      <source>Active Infinity Figures:</source>
+      <translation>当前激活的《迪士尼无限》角色：</translation>
+    </message>
+    <message>
+      <source>Play Set/Power Disc</source>
+      <translation>《迪士尼无限》冒险套装/能量碟</translation>
+    </message>
+    <message>
+      <source>Power Disc Two</source>
+      <translation>能量碟二号</translation>
+    </message>
+    <message>
+      <source>Power Disc Three</source>
+      <translation>能量碟三号</translation>
+    </message>
+    <message>
+      <source>Player One</source>
+      <translation>玩家一号</translation>
+    </message>
+    <message>
+      <source>Player One Ability One</source>
+      <translation>玩家一号技能一</translation>
+    </message>
+    <message>
+      <source>Player One Ability Two</source>
+      <translation>玩家一号技能二</translation>
+    </message>
+    <message>
+      <source>Player Two</source>
+      <translation>玩家二号</translation>
+    </message>
+    <message>
+      <source>Player Two Ability One</source>
+      <translation>玩家二号技能一</translation>
+    </message>
+    <message>
+      <source>Player Two Ability Two</source>
+      <translation>玩家二号技能二</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>清除</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>加载</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation>未知角色</translation>
+    </message>
+    <message>
+      <source>Select Infinity File</source>
+      <translation>选择《迪士尼无限》文件</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation>《迪士尼无限》角色文件 (*.bin)；；</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation>打开角色文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation>打开角色文件(%1)失败！
+文件可能已被基座设备占用。</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation>读取角色文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation>读取角色文件(%1)失败！
+文件体积过小。</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation>角色创造器</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--未知--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation>角色编号：</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>值转换失败</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation>输入的角色编号无效！</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation>创建角色文件</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation>《乐高次元》角色文件 (*.bin)；；</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file!</source>
+      <translation>创建乐高人仔文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file:
+%1</source>
+      <translation>创建乐高人仔文件失败%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_move_dialog</name>
+    <message>
+      <source>Figure Mover</source>
+      <translation>角色迁移器</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+    <message>
+      <source>Move Here</source>
+      <translation>移至此处</translation>
+    </message>
+    <message>
+      <source>Pick up and Place</source>
+      <translation>拿起并放置</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_creator_dialog</name>
+    <message>
+      <source>Skylander Creator</source>
+      <translation>Skylander 角色创造器</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation>--未知--</translation>
+    </message>
+    <message>
+      <source>ID:</source>
+      <translation>ID：</translation>
+    </message>
+    <message>
+      <source>Variant:</source>
+      <translation>变体：</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>取消</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation>值转换失败</translation>
+    </message>
+    <message>
+      <source>ID entered is invalid!</source>
+      <translation>输入的ID无效！</translation>
+    </message>
+    <message>
+      <source>Variant entered is invalid!</source>
+      <translation>输入的变体无效！</translation>
+    </message>
+    <message>
+      <source>Create Skylander File</source>
+      <translation>创建 Skylander 文件</translation>
+    </message>
+    <message>
+      <source>Skylander Object (*.sky);;All Files (*)</source>
+      <translation>Skylander 角色文件 (*.sky);;所有文件 (*)</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file!</source>
+      <translation>创建 Skylander 文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file:
+%1</source>
+      <translation>创建 Skylander 文件失败：
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_dialog</name>
+    <message>
+      <source>Skylanders Manager</source>
+      <translation>Skylanders 管理器</translation>
+    </message>
+    <message>
+      <source>Active Portal Skylanders:</source>
+      <translation>活跃的 Skylands 传送门：</translation>
+    </message>
+    <message>
+      <source>Skylander %1</source>
+      <translation>Skylander %1</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation>清除</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation>创建</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation>加载</translation>
+    </message>
+    <message>
+      <source>Select Skylander File</source>
+      <translation>选择 Skylander 文件</translation>
+    </message>
+    <message>
+      <source>Skylander (*.sky *.bin *.dmp *.dump);;All Files (*)</source>
+      <translation>Skylander (*.sky *.bin *.dmp *.dump);;所有文件(*)</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file!</source>
+      <translation>无法打开 skylander 文件！</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file(%1)!
+File may already be in use on the portal.</source>
+      <translation>无法打开 skylander 文件(%1)！
+文件可能已经在传送门上使用。</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file!</source>
+      <translation>读取 skylander 文件失败！</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file(%1)!
+File was too small.</source>
+      <translation>读取 skylander 文件(%1)失败！
+文件体积过小。</translation>
+    </message>
+    <message>
+      <source>Unknown (Id:%1 Var:%2)</source>
+      <translation>未知 (Id:%1 Var:%2)</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>无</translation>
+    </message>
+  </context>
+</TS>

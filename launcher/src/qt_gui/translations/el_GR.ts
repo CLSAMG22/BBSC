@@ -1,0 +1,4013 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
+     SPDX-License-Identifier: GPL-2.0-or-later -->
+<!DOCTYPE TS>
+<TS version="2.1" language="el_GR" sourcelanguage="en">
+  <context>
+    <name>AboutDialog</name>
+    <message>
+      <source>About shadPS4</source>
+      <translation>Σχετικά με το shadPS4</translation>
+    </message>
+    <message>
+      <source>shadPS4 is an experimental open-source emulator for the PlayStation 4.</source>
+      <translation>Το shadPS4 είναι ένας πειραματικός προσομοιωτής ανοιχτού κώδικα για το PlayStation 4.</translation>
+    </message>
+    <message>
+      <source>This software should not be used to play games you have not legally obtained.</source>
+      <translation>Αυτό το λογισμικό δεν πρέπει να χρησιμοποιείται για να παίξετε παιχνίδια που δεν έχετε αποκτήσει νόμιμα.</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheatsPatches</name>
+    <message>
+      <source>Cheats / Patches for </source>
+      <translation>Cheats / Patches for </translation>
+    </message>
+    <message>
+      <source>Cheats/Patches are experimental.\nUse with caution.\n\nDownload cheats individually by selecting the repository and clicking the download button.\nIn the Patches tab, you can download all patches at once, choose which ones you want to use, and save your selection.\n\nSince we do not develop the Cheats/Patches,\nplease report issues to the cheat author.\n\nCreated a new cheat? Visit:\n</source>
+      <translation>Οι cheats/patches είναι πειραματικά.\nΧρησιμοποιήστε τα με προσοχή.\n\nΚατεβάστε τους cheats μεμονωμένα επιλέγοντας το αποθετήριο και κάνοντας κλικ στο κουμπί λήψης.\nΣτην καρτέλα Patches, μπορείτε να κατεβάσετε όλα τα patches ταυτόχρονα, να επιλέξετε ποια θέλετε να χρησιμοποιήσετε και να αποθηκεύσετε την επιλογή.\n\nΔεδομένου ότι δεν αναπτύσσουμε τους cheats/patches,\nπαρακαλώ αναφέρετε προβλήματα στον δημιουργό του cheat.\n\nΔημιουργήσατε ένα νέο cheat; Επισκεφθείτε:\n</translation>
+    </message>
+    <message>
+      <source>No Image Available</source>
+      <translation>Δεν διατίθεται εικόνα</translation>
+    </message>
+    <message>
+      <source>Serial: </source>
+      <translation>Σειριακός αριθμός: </translation>
+    </message>
+    <message>
+      <source>Version: </source>
+      <translation>Έκδοση: </translation>
+    </message>
+    <message>
+      <source>Size: </source>
+      <translation>Μέγεθος: </translation>
+    </message>
+    <message>
+      <source>Select Cheat File:</source>
+      <translation>Επιλέξτε αρχείο Cheat:</translation>
+    </message>
+    <message>
+      <source>Repository:</source>
+      <translation>Αποθετήριο:</translation>
+    </message>
+    <message>
+      <source>Download Cheats</source>
+      <translation>Λήψη Cheats</translation>
+    </message>
+    <message>
+      <source>Delete File</source>
+      <translation>Διαγραφή αρχείου</translation>
+    </message>
+    <message>
+      <source>No files selected.</source>
+      <translation>Δεν έχουν επιλεγεί αρχεία.</translation>
+    </message>
+    <message>
+      <source>You can delete the cheats you don&apos;t want after downloading them.</source>
+      <translation>Μπορείτε να διαγράψετε τα cheats που δεν θέλετε μετά τη λήψη τους.</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the selected file?\n%1</source>
+      <translation>Θέλετε να διαγράψετε το επιλεγμένο αρχείο;\n%1</translation>
+    </message>
+    <message>
+      <source>Select Patch File:</source>
+      <translation>Επιλέξτε αρχείο Patch:</translation>
+    </message>
+    <message>
+      <source>Download Patches</source>
+      <translation>Λήψη Patches</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Αποθήκευση</translation>
+    </message>
+    <message>
+      <source>Cheats</source>
+      <translation>Cheats</translation>
+    </message>
+    <message>
+      <source>Patches</source>
+      <translation>Τροποποιήσεις</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>No patch selected.</source>
+      <translation>Δεν έχει επιλεγεί κανένα patch.</translation>
+    </message>
+    <message>
+      <source>Unable to open files.json for reading.</source>
+      <translation>Αδυναμία ανοίγματος του files.json για ανάγνωση.</translation>
+    </message>
+    <message>
+      <source>No patch file found for the current serial.</source>
+      <translation>Δεν βρέθηκε αρχείο patch για τον τρέχοντα σειριακό αριθμό.</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for reading.</source>
+      <translation>Αδυναμία ανοίγματος του αρχείου για ανάγνωση.</translation>
+    </message>
+    <message>
+      <source>Unable to open the file for writing.</source>
+      <translation>Αδυναμία ανοίγματος του αρχείου για εγγραφή.</translation>
+    </message>
+    <message>
+      <source>Failed to parse XML: </source>
+      <translation>Αποτυχία ανάλυσης XML: </translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation>Επιτυχία</translation>
+    </message>
+    <message>
+      <source>Options saved successfully.</source>
+      <translation>Οι ρυθμίσεις αποθηκεύτηκαν επιτυχώς.</translation>
+    </message>
+    <message>
+      <source>Invalid Source</source>
+      <translation>Μη έγκυρη Πηγή</translation>
+    </message>
+    <message>
+      <source>The selected source is invalid.</source>
+      <translation>Η επιλεγμένη πηγή είναι μη έγκυρη.</translation>
+    </message>
+    <message>
+      <source>File Exists</source>
+      <translation>Η αρχείο υπάρχει</translation>
+    </message>
+    <message>
+      <source>File already exists. Do you want to replace it?</source>
+      <translation>Η αρχείο υπάρχει ήδη. Θέλετε να την αντικαταστήσετε;</translation>
+    </message>
+    <message>
+      <source>Failed to save file:</source>
+      <translation>Αποτυχία αποθήκευσης αρχείου:</translation>
+    </message>
+    <message>
+      <source>Failed to download file:</source>
+      <translation>Αποτυχία λήψης αρχείου:</translation>
+    </message>
+    <message>
+      <source>Cheats Not Found</source>
+      <translation>Δεν βρέθηκαν Cheats</translation>
+    </message>
+    <message>
+      <source>No Cheats found for this game in this version of the selected repository,try another repository or a different version of the game.</source>
+      <translation>Δεν βρέθηκαν cheats για αυτό το παιχνίδι στην τρέχουσα έκδοση του επιλεγμένου αποθετηρίου. Δοκιμάστε να κατεβάσετε από άλλο αποθετήριο ή άλλη έκδοση του παιχνιδιού.</translation>
+    </message>
+    <message>
+      <source>Cheats Downloaded Successfully</source>
+      <translation>Τα Cheats κατεβάστηκαν επιτυχώς</translation>
+    </message>
+    <message>
+      <source>You have successfully downloaded the cheats for this version of the game from the selected repository. You can try downloading from another repository, if it is available it will also be possible to use it by selecting the file from the list.</source>
+      <translation>Κατεβάσατε επιτυχώς cheats για αυτή την έκδοση του παιχνιδιού από το επιλεγμένο αποθετήριο. Μπορείτε να δοκιμάσετε να κατεβάσετε από άλλο αποθετήριο. Αν είναι διαθέσιμο, μπορείτε να το επιλέξετε επιλέγοντας το αρχείο από τη λίστα.</translation>
+    </message>
+    <message>
+      <source>Failed to save:</source>
+      <translation>Αποτυχία αποθήκευσης:</translation>
+    </message>
+    <message>
+      <source>Failed to download:</source>
+      <translation>Αποτυχία λήψης:</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>Η λήψη ολοκληρώθηκε</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully! All Patches available for all games have been downloaded, there is no need to download them individually for each game as happens in Cheats. If the patch does not appear, it may be that it does not exist for the specific serial and version of the game.</source>
+      <translation>Τα patches κατεβάστηκαν επιτυχώς! Όλα τα patches για όλα τα παιχνίδια έχουν κατέβει, δεν είναι απαραίτητο να τα κατεβάσετε ένα-ένα για κάθε παιχνίδι, όπως με τα cheats. Εάν η ενημέρωση δεν εμφανίζεται, μπορεί να μην υπάρχει για τον συγκεκριμένο σειριακό αριθμό και έκδοση του παιχνιδιού.</translation>
+    </message>
+    <message>
+      <source>Failed to parse JSON data from HTML.</source>
+      <translation>Αποτυχία ανάλυσης δεδομένων JSON από HTML.</translation>
+    </message>
+    <message>
+      <source>Failed to retrieve HTML page.</source>
+      <translation>Αποτυχία ανάκτησης σελίδας HTML.</translation>
+    </message>
+    <message>
+      <source>The game is in version: %1</source>
+      <translation>Το παιχνίδι είναι στην έκδοση: %1</translation>
+    </message>
+    <message>
+      <source>The downloaded patch only works on version: %1</source>
+      <translation>Η ληφθείσα ενημέρωση λειτουργεί μόνο στην έκδοση: %1</translation>
+    </message>
+    <message>
+      <source>You may need to update your game.</source>
+      <translation>Μπορεί να χρειαστεί να ενημερώσετε το παιχνίδι σας.</translation>
+    </message>
+    <message>
+      <source>Incompatibility Notice</source>
+      <translation>Ειδοποίηση ασυμβατότητας</translation>
+    </message>
+    <message>
+      <source>Failed to open file:</source>
+      <translation>Αποτυχία ανοίγματος αρχείου:</translation>
+    </message>
+    <message>
+      <source>XML ERROR:</source>
+      <translation>ΣΦΑΛΜΑ XML:</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for writing</source>
+      <translation>Αποτυχία ανοίγματος του files.json για εγγραφή</translation>
+    </message>
+    <message>
+      <source>Author: </source>
+      <translation>Συγγραφέας: </translation>
+    </message>
+    <message>
+      <source>Directory does not exist:</source>
+      <translation>Ο φάκελος δεν υπάρχει:</translation>
+    </message>
+    <message>
+      <source>Failed to open files.json for reading.</source>
+      <translation>Αποτυχία ανοίγματος του files.json για ανάγνωση.</translation>
+    </message>
+    <message>
+      <source>Name:</source>
+      <translation>Όνομα:</translation>
+    </message>
+    <message>
+      <source>Can&apos;t apply cheats before the game is started</source>
+      <translation>Δεν μπορείτε να εφαρμόσετε cheats πριν εκκινηθεί το παιχνίδι.</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>Κλείσιμο</translation>
+    </message>
+  </context>
+  <context>
+    <name>CheckUpdate</name>
+    <message>
+      <source>Auto Updater</source>
+      <translation>Αυτόματος Ενημερωτής</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>Network error:</source>
+      <translation>Σφάλμα δικτύου:</translation>
+    </message>
+    <message>
+      <source>The Auto Updater allows up to 60 update checks per hour.\nYou have reached this limit. Please try again later.</source>
+      <translation>Ο Αυτόματος Ενημερωτής επιτρέπει έως και 60 ελέγχους ενημερώσεων ανά ώρα.\nΈχετε φτάσει αυτό το όριο. Παρακαλώ δοκιμάστε ξανά αργότερα.</translation>
+    </message>
+    <message>
+      <source>Failed to parse update information.</source>
+      <translation>Αποτυχία ανάλυσης πληροφοριών ενημέρωσης.</translation>
+    </message>
+    <message>
+      <source>No pre-releases found.</source>
+      <translation>Δεν βρέθηκαν προ-κυκλοφορίες.</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation>Δεν βρέθηκε URL λήψης για το συγκεκριμένο στοιχείο.</translation>
+    </message>
+    <message>
+      <source>Your version is already up to date!</source>
+      <translation>Η έκδοσή σας είναι ήδη ενημερωμένη!</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation>Τρέχουσα Έκδοση</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation>Τελευταία Έκδοση</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation>Θέλετε να ενημερώσετε;</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation>Εμφάνιση Ιστορικού Αλλαγών</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>Έλεγχος για ενημερώσεις κατά την εκκίνηση</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>Ενημέρωση</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation>Όχι</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation>Απόκρυψη Ιστορικού Αλλαγών</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation>Αλλαγές</translation>
+    </message>
+    <message>
+      <source>Network error occurred while trying to access the URL</source>
+      <translation>Σφάλμα δικτύου κατά την προσπάθεια πρόσβασης στη διεύθυνση URL</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>Λήψη ολοκληρώθηκε</translation>
+    </message>
+    <message>
+      <source>The update has been downloaded, press OK to install.</source>
+      <translation>Η ενημέρωση έχει ληφθεί, πατήστε OK για να εγκαταστήσετε.</translation>
+    </message>
+    <message>
+      <source>Failed to save the update file at</source>
+      <translation>Αποτυχία αποθήκευσης του αρχείου ενημέρωσης στο</translation>
+    </message>
+    <message>
+      <source>Starting Update...</source>
+      <translation>Εκκίνηση Ενημέρωσης...</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation>Αποτυχία δημιουργίας του αρχείου σεναρίου ενημέρωσης</translation>
+    </message>
+    <message>
+      <source>Auto Updater - GUI</source>
+      <translation>Αυτόματη Ενημέρωση - GUI</translation>
+    </message>
+    <message>
+      <source>Update Available - GUI</source>
+      <translation>Διαθέσιμη Ενημέρωση - GUI</translation>
+    </message>
+  </context>
+  <context>
+    <name>CompatibilityInfoClass</name>
+    <message>
+      <source>Fetching compatibility data, please wait</source>
+      <translation>Φόρτωση δεδομένων συμβατότητας, παρακαλώ περιμένετε</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Ακύρωση</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>Φόρτωση...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>Unable to update compatibility data! Try again later.</source>
+      <translation>Δεν ήταν δυνατή η ενημέρωση των δεδομένων συμβατότητας! Προσπαθήστε αργότερα.</translation>
+    </message>
+    <message>
+      <source>Unable to open compatibility_data.json for writing.</source>
+      <translation>Αδύνατο να ανοίξετε το compatibility_data.json για εγγραφή.</translation>
+    </message>
+    <message>
+      <source>Unknown</source>
+      <translation>Άγνωστο</translation>
+    </message>
+    <message>
+      <source>Nothing</source>
+      <translation>Τίποτα</translation>
+    </message>
+    <message>
+      <source>Boots</source>
+      <translation>Μπότες</translation>
+    </message>
+    <message>
+      <source>Menus</source>
+      <translation>Μενού</translation>
+    </message>
+    <message>
+      <source>Ingame</source>
+      <translation>Εντός παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Playable</source>
+      <translation>Παιχνιδεύσιμο</translation>
+    </message>
+  </context>
+  <context>
+    <name>ControlSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation>Ρύθμιση Χειρισμού</translation>
+    </message>
+    <message>
+      <source>D-Pad</source>
+      <translation>D-Pad</translation>
+    </message>
+    <message>
+      <source>Up</source>
+      <translation>Πάνω</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation>Αριστερά</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation>Δεξιά</translation>
+    </message>
+    <message>
+      <source>Down</source>
+      <translation>κάτω</translation>
+    </message>
+    <message>
+      <source>Left Stick</source>
+      <translation>Αριστερός Μοχλός</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation>Επιλογή Ρυθμίσεων</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation>Κοινή Διαμόρφωση</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation>Χρήση διαμορφώσεων ανά παιχνίδι</translation>
+    </message>
+    <message>
+      <source>Face Buttons</source>
+      <translation>Μπροστινά Κουμπιά</translation>
+    </message>
+    <message>
+      <source>Right Stick</source>
+      <translation>Δεξιός Μοχλός</translation>
+    </message>
+    <message>
+      <source>Color Adjustment</source>
+      <translation>Ρύθμιση Χρώματος</translation>
+    </message>
+    <message>
+      <source>Override Lightbar Color</source>
+      <translation>Παράκαμψη Χρώματος Lightbar</translation>
+    </message>
+    <message>
+      <source>Override Color</source>
+      <translation>Παράκαμψη Χρώματος</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation>Αποτυχία αποθήκευσης</translation>
+    </message>
+    <message>
+      <source>Cannot bind axis values more than once</source>
+      <translation>Δεν είναι δυνατή η δέσμευση τιμών αξόνων περισσότερο από μία φορά</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Αποθήκευση</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>Εφαρμογή</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>Επαναφορά Προεπιλογών</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Ακύρωση</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation>Μη αντιστοιχισμένο</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation>Επιλογές</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation>Touchpad Αριστερά</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation>Touchpad Κέντρο</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation>Touchpad Δεξιά</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation>Τρίγωνο</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation>Τετράγωνο</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation>Κύκλος</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation>Σταυρός</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation>Δεν είναι δυνατή η σύνδεση οποιασδήποτε μοναδικής εισόδου περισσότερες από μία φορές. Διπλότυπες είσοδοι που αντιστοιχίζονται με τα ακόλουθα κουμπιά:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Press a button</source>
+      <translation>Πατήστε ένα κουμπί</translation>
+    </message>
+    <message>
+      <source>Move analog stick</source>
+      <translation>Μετακίνησε έναν αναλογικό μοχλό</translation>
+    </message>
+    <message>
+      <source>L1 and L2</source>
+      <translation>L1 και L2</translation>
+    </message>
+    <message>
+      <source>Active Gamepad</source>
+      <translation>Ενεργό Gamepad</translation>
+    </message>
+    <message>
+      <source>Gamepad ID</source>
+      <translation>Gamepad ID</translation>
+    </message>
+    <message>
+      <source>Default Gamepad</source>
+      <translation>Προεπιλεγμένο Gamepad</translation>
+    </message>
+    <message>
+      <source>No default selected</source>
+      <translation>Δεν έχει επιλεχθεί προεπιλεγμένο</translation>
+    </message>
+    <message>
+      <source>n/a</source>
+      <translation>Μ/Δ</translation>
+    </message>
+    <message>
+      <source>Set Active Gamepad as Default</source>
+      <translation>Ορισμός ενεργού Gamepad ως προεπιλεγμένο</translation>
+    </message>
+    <message>
+      <source>Remove Default Gamepad</source>
+      <translation>Αφαίρεση Προεπιλεγμένου Gamepad</translation>
+    </message>
+    <message>
+      <source>R1 and R2</source>
+      <translation>R1 και R2</translation>
+    </message>
+    <message>
+      <source>ID: </source>
+      <translation>ID: </translation>
+    </message>
+    <message>
+      <source>Default Controller Selected</source>
+      <translation>Επιλέχθηκε Προεπιλεγμένο Controller</translation>
+    </message>
+    <message>
+      <source>Active controller set as default</source>
+      <translation type="unfinished">Active controller set as default</translation>
+    </message>
+    <message>
+      <source>Default Controller Removed</source>
+      <translation type="unfinished">Default Controller Removed</translation>
+    </message>
+    <message>
+      <source>Default controller setting removed</source>
+      <translation type="unfinished">Default controller setting removed</translation>
+    </message>
+    <message>
+      <source>RED</source>
+      <translation>KOKKINO</translation>
+    </message>
+    <message>
+      <source>GREEN</source>
+      <translation>ΠΡΑΣΙΝΟ</translation>
+    </message>
+    <message>
+      <source>BLUE</source>
+      <translation>ΜΠΛΕ</translation>
+    </message>
+    <message>
+      <source>Left Stick Deadzone</source>
+      <translation type="unfinished">Left Stick Deadzone</translation>
+    </message>
+    <message>
+      <source>Min Deadzone (def:2 max:127)</source>
+      <translation type="unfinished">Min Deadzone (def:2 max:127)</translation>
+    </message>
+    <message>
+      <source>Max Deadzone (def:127 max:127)</source>
+      <translation type="unfinished">Max Deadzone (def:127 max:127)</translation>
+    </message>
+    <message>
+      <source>Right Stick Deadzone</source>
+      <translation type="unfinished">Right Stick Deadzone</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation type="unfinished">Tip: Unmap inputs with right-click</translation>
+    </message>
+  </context>
+  <context>
+    <name>CryptoManagerDialog</name>
+    <message>
+      <source>Crypto Key Manager</source>
+      <translation type="unfinished">Crypto Key Manager</translation>
+    </message>
+    <message>
+      <source>Trophy Key: Used for trophy decryption.
+Must be a valid hex string with even length.</source>
+      <translation type="unfinished">Trophy Key: Used for trophy decryption.
+Must be a valid hex string with even length.</translation>
+    </message>
+    <message>
+      <source>Enter Trophy Key</source>
+      <translation type="unfinished">Enter Trophy Key</translation>
+    </message>
+    <message>
+      <source>Trophy Key:</source>
+      <translation type="unfinished">Trophy Key:</translation>
+    </message>
+    <message>
+      <source>Status: Not loaded</source>
+      <translation type="unfinished">Status: Not loaded</translation>
+    </message>
+    <message>
+      <source>Trophy Key</source>
+      <translation type="unfinished">Trophy Key</translation>
+    </message>
+    <message>
+      <source>Enter %1</source>
+      <translation type="unfinished">Enter %1</translation>
+    </message>
+    <message>
+      <source>Exponent1</source>
+      <translation type="unfinished">Exponent1</translation>
+    </message>
+    <message>
+      <source>Exponent2</source>
+      <translation type="unfinished">Exponent2</translation>
+    </message>
+    <message>
+      <source>Public Exponent</source>
+      <translation type="unfinished">Public Exponent</translation>
+    </message>
+    <message>
+      <source>Coefficient</source>
+      <translation type="unfinished">Coefficient</translation>
+    </message>
+    <message>
+      <source>Modulus</source>
+      <translation type="unfinished">Modulus</translation>
+    </message>
+    <message>
+      <source>Prime 1</source>
+      <translation type="unfinished">Prime 1</translation>
+    </message>
+    <message>
+      <source>Prime 2</source>
+      <translation type="unfinished">Prime 2</translation>
+    </message>
+    <message>
+      <source>Private Exponent</source>
+      <translation type="unfinished">Private Exponent</translation>
+    </message>
+    <message>
+      <source>Fake Keyset</source>
+      <translation type="unfinished">Fake Keyset</translation>
+    </message>
+    <message>
+      <source>RSA key components for fake signing.
+All fields must be valid hex strings with even length.</source>
+      <translation type="unfinished">RSA key components for fake signing.
+All fields must be valid hex strings with even length.</translation>
+    </message>
+    <message>
+      <source>Debug Rif Keyset</source>
+      <translation type="unfinished">Debug Rif Keyset</translation>
+    </message>
+    <message>
+      <source>RSA key components for debug RIF files.
+All fields must be valid hex strings with even length.</source>
+      <translation type="unfinished">RSA key components for debug RIF files.
+All fields must be valid hex strings with even length.</translation>
+    </message>
+    <message>
+      <source>Pkg Derived Key3</source>
+      <translation type="unfinished">Pkg Derived Key3</translation>
+    </message>
+    <message>
+      <source>RSA key components for package decryption.
+All fields must be valid hex strings with even length.</source>
+      <translation type="unfinished">RSA key components for package decryption.
+All fields must be valid hex strings with even length.</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation type="unfinished">Close</translation>
+    </message>
+    <message>
+      <source>Warning</source>
+      <translation type="unfinished">Warning</translation>
+    </message>
+    <message>
+      <source>No key file found or failed to load.
+Please enter your keys and save them.</source>
+      <translation type="unfinished">No key file found or failed to load.
+Please enter your keys and save them.</translation>
+    </message>
+    <message>
+      <source>Validation Error</source>
+      <translation type="unfinished">Validation Error</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation type="unfinished">Success</translation>
+    </message>
+    <message>
+      <source>Keys saved successfully!</source>
+      <translation type="unfinished">Keys saved successfully!</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Failed to save keys!</source>
+      <translation type="unfinished">Failed to save keys!</translation>
+    </message>
+    <message>
+      <source>Status: All fields empty</source>
+      <translation type="unfinished">Status: All fields empty</translation>
+    </message>
+    <message>
+      <source>Status: Invalid hex values</source>
+      <translation type="unfinished">Status: Invalid hex values</translation>
+    </message>
+    <message>
+      <source>Status: Incomplete</source>
+      <translation type="unfinished">Status: Incomplete</translation>
+    </message>
+    <message>
+      <source>Status: Valid</source>
+      <translation type="unfinished">Status: Valid</translation>
+    </message>
+    <message>
+      <source>Invalid File</source>
+      <translation type="unfinished">Invalid File</translation>
+    </message>
+    <message>
+      <source>Only JSON files are supported.</source>
+      <translation type="unfinished">Only JSON files are supported.</translation>
+    </message>
+    <message>
+      <source>Unable to open file.</source>
+      <translation type="unfinished">Unable to open file.</translation>
+    </message>
+    <message>
+      <source>JSON Error</source>
+      <translation type="unfinished">JSON Error</translation>
+    </message>
+    <message>
+      <source>Invalid JSON format.</source>
+      <translation type="unfinished">Invalid JSON format.</translation>
+    </message>
+    <message>
+      <source>Keys successfully loaded from JSON!</source>
+      <translation type="unfinished">Keys successfully loaded from JSON!</translation>
+    </message>
+    <message>
+      <source>Trophy Key contains invalid hex or has odd length.</source>
+      <translation type="unfinished">Trophy Key contains invalid hex or has odd length.</translation>
+    </message>
+    <message>
+      <source>%1 contains invalid hex or has odd length.</source>
+      <translation type="unfinished">%1 contains invalid hex or has odd length.</translation>
+    </message>
+    <message>
+      <source>Load Key</source>
+      <translation type="unfinished">Load Key</translation>
+    </message>
+    <message>
+      <source>Save Key</source>
+      <translation type="unfinished">Save Key</translation>
+    </message>
+  </context>
+  <context>
+    <name>EditorDialog</name>
+    <message>
+      <source>Edit Keyboard + Mouse and Controller input bindings</source>
+      <translation type="unfinished">Edit Keyboard + Mouse and Controller input bindings</translation>
+    </message>
+    <message>
+      <source>Use Per-Game configs</source>
+      <translation type="unfinished">Use Per-Game configs</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>Could not open the file for reading</source>
+      <translation type="unfinished">Could not open the file for reading</translation>
+    </message>
+    <message>
+      <source>Could not open the file for writing</source>
+      <translation type="unfinished">Could not open the file for writing</translation>
+    </message>
+    <message>
+      <source>Save Changes</source>
+      <translation>Αποθήκευση αλλαγών</translation>
+    </message>
+    <message>
+      <source>Do you want to save changes?</source>
+      <translation type="unfinished">Do you want to save changes?</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>Βοήθεια</translation>
+    </message>
+    <message>
+      <source>Do you want to reset your custom default config to the original default config?</source>
+      <translation type="unfinished">Do you want to reset your custom default config to the original default config?</translation>
+    </message>
+    <message>
+      <source>Do you want to reset this config to your custom default config?</source>
+      <translation type="unfinished">Do you want to reset this config to your custom default config?</translation>
+    </message>
+    <message>
+      <source>Reset to Default</source>
+      <translation>Επαναφορά στις Προεπιλογές</translation>
+    </message>
+  </context>
+  <context>
+    <name>ElfViewer</name>
+    <message>
+      <source>Open Folder</source>
+      <translation>Άνοιγμα Φακέλου</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInfoClass</name>
+    <message>
+      <source>Loading game list, please wait :3</source>
+      <translation type="unfinished">Loading game list, please wait :3</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Ακύρωση</translation>
+    </message>
+    <message>
+      <source>Loading...</source>
+      <translation>Φόρτωση...</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameInstallDialog</name>
+    <message>
+      <source>shadPS4 - Choose directory</source>
+      <translation>shadPS4 - Επιλογή φακέλου</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation>Περιήγηση</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>Directory to install emulator versions</source>
+      <translation type="unfinished">Directory to install emulator versions</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped games</source>
+      <translation type="unfinished">Directory with your dumped games</translation>
+    </message>
+    <message>
+      <source>Directory with your dumped DLC&apos;s</source>
+      <translation type="unfinished">Directory with your dumped DLC&apos;s</translation>
+    </message>
+    <message>
+      <source>Directory with games</source>
+      <translation type="unfinished">Directory with games</translation>
+    </message>
+    <message>
+      <source>Directory with DLC&apos;s</source>
+      <translation type="unfinished">Directory with DLC&apos;s</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListFrame</name>
+    <message>
+      <source>Icon</source>
+      <translation>Εικονίδιο</translation>
+    </message>
+    <message>
+      <source>Name</source>
+      <translation>Όνομα</translation>
+    </message>
+    <message>
+      <source>Serial</source>
+      <translation>Σειριακός αριθμός</translation>
+    </message>
+    <message>
+      <source>Compatibility</source>
+      <translation>Συμβατότητα</translation>
+    </message>
+    <message>
+      <source>Region</source>
+      <translation>Περιοχή</translation>
+    </message>
+    <message>
+      <source>Firmware</source>
+      <translation>Λογισμικό</translation>
+    </message>
+    <message>
+      <source>Size</source>
+      <translation>Μέγεθος</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation>Έκδοση</translation>
+    </message>
+    <message>
+      <source>Path</source>
+      <translation>Διαδρομή</translation>
+    </message>
+    <message>
+      <source>Play Time</source>
+      <translation>Χρόνος παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Never Played</source>
+      <translation>Δεν Παίχτηκε Ποτέ</translation>
+    </message>
+    <message>
+      <source>h</source>
+      <translation type="unfinished">h</translation>
+    </message>
+    <message>
+      <source>m</source>
+      <translation type="unfinished">m</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation type="unfinished">s</translation>
+    </message>
+    <message>
+      <source>Compatibility is untested</source>
+      <translation>Η συμβατότητα δεν έχει ελεγχθεί</translation>
+    </message>
+    <message>
+      <source>Game does not initialize properly / crashes the emulator</source>
+      <translation>Το παιχνίδι δεν εκκινείται σωστά / προκαλεί σφάλμα στον προσομοιωτή</translation>
+    </message>
+    <message>
+      <source>Game boots, but only displays a blank screen</source>
+      <translation>Το παιχνίδι εκκινείται , αλλά εμφανίζει μόνο μια μαύρη οθόνη</translation>
+    </message>
+    <message>
+      <source>Game displays an image but does not go past the menu</source>
+      <translation>Το παιχνίδι εμφανίζει εικόνα, αλλά δεν πάει πέρα από τα μενού</translation>
+    </message>
+    <message>
+      <source>Game has game-breaking glitches or unplayable performance</source>
+      <translation>Το παιχνίδι έχει δυσλειτουργίες που χαλάνε το παιχνίδι ή έχει χαμηλή επίδοση </translation>
+    </message>
+    <message>
+      <source>Game can be completed with playable performance and no major glitches</source>
+      <translation type="unfinished">Game can be completed with playable performance and no major glitches</translation>
+    </message>
+    <message>
+      <source>Click to see details on github</source>
+      <translation>Κάντε κλικ για να δείτε λεπτομέρειες στο GitHub</translation>
+    </message>
+    <message>
+      <source>Last updated</source>
+      <translation>Τελευταία ενημέρωση</translation>
+    </message>
+    <message>
+      <source>Favorite</source>
+      <translation type="unfinished">Favorite</translation>
+    </message>
+  </context>
+  <context>
+    <name>GameListUtils</name>
+    <message>
+      <source>B</source>
+      <translation type="unfinished">B</translation>
+    </message>
+    <message>
+      <source>KB</source>
+      <translation type="unfinished">KB</translation>
+    </message>
+    <message>
+      <source>MB</source>
+      <translation type="unfinished">MB</translation>
+    </message>
+    <message>
+      <source>GB</source>
+      <translation type="unfinished">GB</translation>
+    </message>
+    <message>
+      <source>TB</source>
+      <translation>TB</translation>
+    </message>
+  </context>
+  <context>
+    <name>GuiContextMenus</name>
+    <message>
+      <source>Cheats / Patches</source>
+      <translation>Cheats / Patches</translation>
+    </message>
+    <message>
+      <source>SFO Viewer</source>
+      <translation>Προβολέας SFO</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation>Προβολέας Τροπαίων</translation>
+    </message>
+    <message>
+      <source>Open Folder...</source>
+      <translation>Άνοιγμα Φακέλου...</translation>
+    </message>
+    <message>
+      <source>Open Game Folder</source>
+      <translation>Άνοιγμα Φακέλου Παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Open Save Data Folder</source>
+      <translation>Άνοιγμα Φακέλου Αποθηκευμένων Δεδομένων</translation>
+    </message>
+    <message>
+      <source>Open Log Folder</source>
+      <translation>Άνοιγμα Φακέλου Καταγραφής</translation>
+    </message>
+    <message>
+      <source>Copy info...</source>
+      <translation>Αντιγραφή πληροφορίας...</translation>
+    </message>
+    <message>
+      <source>Copy Name</source>
+      <translation>Αντιγραφή Ονόματος</translation>
+    </message>
+    <message>
+      <source>Copy Serial</source>
+      <translation>Αντιγραφή Σειριακού</translation>
+    </message>
+    <message>
+      <source>Copy Version</source>
+      <translation>Αντιγραφή Έκδοσης</translation>
+    </message>
+    <message>
+      <source>Copy Size</source>
+      <translation>Αντιγραφή Μεγέθους</translation>
+    </message>
+    <message>
+      <source>Copy All</source>
+      <translation>Αντιγραφή Όλων</translation>
+    </message>
+    <message>
+      <source>Delete...</source>
+      <translation>Διαγραφή...</translation>
+    </message>
+    <message>
+      <source>Delete Game</source>
+      <translation>Διαγραφή παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Delete Update</source>
+      <translation>Διαγραφή Ενημέρωσης</translation>
+    </message>
+    <message>
+      <source>Delete DLC</source>
+      <translation>Διαγραφή DLC</translation>
+    </message>
+    <message>
+      <source>Delete Trophy</source>
+      <translation>Διαγραφή Τροπαίου</translation>
+    </message>
+    <message>
+      <source>Compatibility...</source>
+      <translation>Συμβατότητα...</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Σφάλμα</translation>
+    </message>
+    <message>
+      <source>Game</source>
+      <translation type="unfinished">Game</translation>
+    </message>
+    <message>
+      <source>This game has no update to delete!</source>
+      <translation>Αυτό το παιχνίδι δεν έχει καμία ενημέρωση για διαγραφή!</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation>Ενημέρωση</translation>
+    </message>
+    <message>
+      <source>This game has no DLC to delete!</source>
+      <translation>Αυτό το παιχνίδι δεν έχει κανένα DLC για διαγραφή!</translation>
+    </message>
+    <message>
+      <source>DLC</source>
+      <translation>DLC</translation>
+    </message>
+    <message>
+      <source>Delete %1</source>
+      <translation>Διαγραφή %1</translation>
+    </message>
+    <message>
+      <source>Are you sure you want to delete %1&apos;s %2 directory?</source>
+      <translation>Είστε σίγουροι ότι θέλετε να διαγράψετε τον κατάλογο %1&apos;s %2 ;</translation>
+    </message>
+    <message>
+      <source>Open Update Folder</source>
+      <translation>Άνοιγμα Φακέλου Παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Delete Save Data</source>
+      <translation>Διαγραφή Αποθηκευμένων Δεδομένων</translation>
+    </message>
+    <message>
+      <source>This game has no update folder to open!</source>
+      <translation>Αυτό το παιχνίδι δεν έχει φάκελο ενημέρωσης για άνοιγμα!</translation>
+    </message>
+    <message>
+      <source>No log file found for this game!</source>
+      <translation>Δεν βρέθηκε αρχείο καταγραφής για αυτό το παιχνίδι!</translation>
+    </message>
+    <message>
+      <source>This game has no save data to delete!</source>
+      <translation>Αυτό το παιχνίδι δεν έχει αποθηκευμένα δεδομένα για διαγραφή!</translation>
+    </message>
+    <message>
+      <source>This game has no saved trophies to delete!</source>
+      <translation>Αυτό το παιχνίδι δεν έχει αποθηκευμένα τρόπαια για διαγραφή!</translation>
+    </message>
+    <message>
+      <source>Save Data</source>
+      <translation>Αποθήκευση Δεδομένων</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation>Τρόπαιο</translation>
+    </message>
+    <message>
+      <source>SFO Viewer for </source>
+      <translation>Προβολέας SFO για</translation>
+    </message>
+    <message>
+      <source>Remove from Favorites</source>
+      <translation>Αφαίρεση από τα Αγαπημένα</translation>
+    </message>
+    <message>
+      <source>Add to Favorites</source>
+      <translation>Προσθήκη στα αγαπημένα</translation>
+    </message>
+    <message>
+      <source>Game-specific Settings...</source>
+      <translation>Ρυθμίσεις για το συγκεκριμένο παιχνίδι...</translation>
+    </message>
+    <message>
+      <source>Configure Game-specific Settings</source>
+      <translation>Ρύθμιση ρυθμίσεων για το συγκεκριμένο παιχνίδι</translation>
+    </message>
+    <message>
+      <source>Create Game-specific Settings from Global Settings</source>
+      <translation>Δημιουργία ρυθμίσεων για το συγκεκριμένο παιχνίδι από τις Γενικές Ρυθμίσεις</translation>
+    </message>
+    <message>
+      <source>Delete Game-specific Settings</source>
+      <translation>Διαγραφή Ρυθμίσεων Συγκεκριμένου Παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Update Database</source>
+      <translation>Ενημέρωση Βάσης Δεδομένων</translation>
+    </message>
+    <message>
+      <source>View Report</source>
+      <translation>Προβολή Αναφοράς</translation>
+    </message>
+    <message>
+      <source>Submit a Report</source>
+      <translation>Υποβολή αναφοράς</translation>
+    </message>
+    <message>
+      <source>Confirm deletion</source>
+      <translation>Επιβεβαίωση διαγραφής</translation>
+    </message>
+    <message>
+      <source>Delete game-specific settings?</source>
+      <translation>Διαγραφή ρυθμίσεων συγκεκριμένου παιχνιδιού ;</translation>
+    </message>
+    <message>
+      <source>Launch...</source>
+      <translation>Εκκίνηση...</translation>
+    </message>
+    <message>
+      <source>Launch with game specific configs (default)</source>
+      <translation>Εκκίνηση με ρυθμίσεις του συγκεκριμένου παιχνιδιού (προεπιλογή)</translation>
+    </message>
+    <message>
+      <source>Launch with global config only</source>
+      <translation>Εκκίνηση με γενικές ρυθμίσεις μόνο</translation>
+    </message>
+    <message>
+      <source>Launch with default settings</source>
+      <translation>Εκκίνηση με προεπιλεγμένες ρυθμίσεις</translation>
+    </message>
+    <message>
+      <source>Couldn&apos;t submit report, because the latest log for the game failed on the following check, and therefore would be an invalid report:</source>
+      <translation>Δεν γινόταν να υποβληθεί αναφορά, γιατί το τελευταίο αρχείο καταγραφής για το παιχνίδι απέτυχε στον ακόλουθο έλεγχο, και ως εκ τούτου θα ήταν μια εσφαλμένη αναφορά :</translation>
+    </message>
+    <message>
+      <source>Ok</source>
+      <translation>Οκ</translation>
+    </message>
+    <message>
+      <source>Info</source>
+      <translation>Πληροφ.</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Selected Emulator Version</source>
+      <translation>Δημιουργία συντόμευσης για την επιλεγμένη έκδοση εξομοιωτή  :</translation>
+    </message>
+    <message>
+      <source>Create Shortcut for Specified Emulator Version</source>
+      <translation type="unfinished">Create Shortcut for Specified Emulator Version</translation>
+    </message>
+    <message>
+      <source>Create Shortcut</source>
+      <translation type="unfinished">Create Shortcut</translation>
+    </message>
+    <message>
+      <source>Shortcut creation</source>
+      <translation type="unfinished">Shortcut creation</translation>
+    </message>
+    <message>
+      <source>Shortcut created successfully!</source>
+      <translation type="unfinished">Shortcut created successfully!</translation>
+    </message>
+    <message>
+      <source>Error creating shortcut!</source>
+      <translation type="unfinished">Error creating shortcut!</translation>
+    </message>
+    <message>
+      <source>Failed to convert icon.</source>
+      <translation type="unfinished">Failed to convert icon.</translation>
+    </message>
+    <message>
+      <source>Delete Shader Cache</source>
+      <translation type="unfinished">Delete Shader Cache</translation>
+    </message>
+    <message>
+      <source>This game does not have any saved Shader Cache to delete!</source>
+      <translation type="unfinished">This game does not have any saved Shader Cache to delete!</translation>
+    </message>
+    <message>
+      <source>Shader Cache</source>
+      <translation type="unfinished">Shader Cache</translation>
+    </message>
+    <message>
+      <source>This game has no save folder to open!</source>
+      <translation type="unfinished">This game has no save folder to open!</translation>
+    </message>
+    <message>
+      <source>A trophy key is required to use the Trophy Viewer. This can be inputted by clicking Settings - Manage Cryptographic keys.</source>
+      <translation type="unfinished">A trophy key is required to use the Trophy Viewer. This can be inputted by clicking Settings - Manage Cryptographic keys.</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation type="unfinished">User</translation>
+    </message>
+    <message>
+      <source>Add with Selected Emulator Version</source>
+      <translation type="unfinished">Add with Selected Emulator Version</translation>
+    </message>
+    <message>
+      <source>Add with Specified Emulator Version</source>
+      <translation type="unfinished">Add with Specified Emulator Version</translation>
+    </message>
+    <message>
+      <source>Add to Steam</source>
+      <translation type="unfinished">Add to Steam</translation>
+    </message>
+    <message>
+      <source>Zar Compression</source>
+      <translation type="unfinished">Zar Compression</translation>
+    </message>
+    <message>
+      <source>Compress game to zar</source>
+      <translation type="unfinished">Compress game to zar</translation>
+    </message>
+    <message>
+      <source>Compress update to zar</source>
+      <translation type="unfinished">Compress update to zar</translation>
+    </message>
+    <message>
+      <source>This is already packed as a ZArchive.</source>
+      <translation type="unfinished">This is already packed as a ZArchive.</translation>
+    </message>
+    <message>
+      <source>This folder could not be found on disk.</source>
+      <translation type="unfinished">This folder could not be found on disk.</translation>
+    </message>
+    <message>
+      <source>Convert %1 to ZArchive</source>
+      <translation type="unfinished">Convert %1 to ZArchive</translation>
+    </message>
+    <message>
+      <source>ZArchive Files (*.zar)</source>
+      <translation type="unfinished">ZArchive Files (*.zar)</translation>
+    </message>
+    <message>
+      <source>%1 already exists. Overwrite it?</source>
+      <translation type="unfinished">%1 already exists. Overwrite it?</translation>
+    </message>
+    <message>
+      <source>This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</source>
+      <translation type="unfinished">This will pack &quot;%1&quot; into a single read-only .zar archive. Depending on the size this can take a while, and the archive will temporarily need as much free disk space as the original.
+
+The original folder is left untouched until conversion succeeds, you&apos;ll be asked afterward whether to delete it.</translation>
+    </message>
+    <message>
+      <source>
+
+Continue?</source>
+      <translation type="unfinished">
+
+Continue?</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Failed to convert to ZArchive:
+%1</source>
+      <translation type="unfinished">Failed to convert to ZArchive:
+%1</translation>
+    </message>
+    <message>
+      <source>Conversion finished. Delete the original folder now to free up disk space?
+
+%1</source>
+      <translation type="unfinished">Conversion finished. Delete the original folder now to free up disk space?
+
+%1</translation>
+    </message>
+    <message>
+      <source>The archive was created, but the original folder could not be fully deleted. You can remove it manually.</source>
+      <translation type="unfinished">The archive was created, but the original folder could not be fully deleted. You can remove it manually.</translation>
+    </message>
+    <message>
+      <source>Packing: %1</source>
+      <translation type="unfinished">Packing: %1</translation>
+    </message>
+    <message>
+      <source>
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</source>
+      <translation type="unfinished">
+
+This game has a separate update/patch folder. Only the base game will be archived; the update/patch folder will not be included and will be left as-is. Use &quot;Convert Update to ZArchive&quot; separately if you&apos;d like to archive it too.</translation>
+    </message>
+    <message>
+      <source>Convert to ZArchive</source>
+      <translation type="unfinished">Convert to ZArchive</translation>
+    </message>
+  </context>
+  <context>
+    <name>HelpDialog</name>
+    <message>
+      <source>Quickstart</source>
+      <translation type="unfinished">Quickstart</translation>
+    </message>
+    <message>
+      <source>FAQ</source>
+      <translation type="unfinished">FAQ</translation>
+    </message>
+    <message>
+      <source>Syntax</source>
+      <translation type="unfinished">Syntax</translation>
+    </message>
+    <message>
+      <source>Special Bindings</source>
+      <translation type="unfinished">Special Bindings</translation>
+    </message>
+    <message>
+      <source>Keybindings</source>
+      <translation type="unfinished">Keybindings</translation>
+    </message>
+  </context>
+  <context>
+    <name>Hotkeys</name>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation type="unfinished">Customize Hotkeys</translation>
+    </message>
+    <message>
+      <source>Show FPS Counter</source>
+      <translation type="unfinished">Show FPS Counter</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation type="unfinished">unmapped</translation>
+    </message>
+    <message>
+      <source>Quit Emulation</source>
+      <translation type="unfinished">Quit Emulation</translation>
+    </message>
+    <message>
+      <source>Reload Button Mappings</source>
+      <translation type="unfinished">Reload Button Mappings</translation>
+    </message>
+    <message>
+      <source>Toggle Fullscreen</source>
+      <translation type="unfinished">Toggle Fullscreen</translation>
+    </message>
+    <message>
+      <source>Toggle Pause</source>
+      <translation type="unfinished">Toggle Pause</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Joystick Emulation</source>
+      <translation type="unfinished">Toggle Mouse to Joystick Emulation</translation>
+    </message>
+    <message>
+      <source>Toggle Mouse to Gyro Emulation</source>
+      <translation type="unfinished">Toggle Mouse to Gyro Emulation</translation>
+    </message>
+    <message>
+      <source>Tip: Up to three simultaneous inputs can be assigned for each hotkey</source>
+      <translation type="unfinished">Tip: Up to three simultaneous inputs can be assigned for each hotkey</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation type="unfinished">Save</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation type="unfinished">Apply</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation type="unfinished">Restore Defaults</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation type="unfinished">Unable to Save</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation type="unfinished">Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Waiting for inputs</source>
+      <translation type="unfinished">Waiting for inputs</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation type="unfinished">Tip: Unmap inputs with right-click</translation>
+    </message>
+    <message>
+      <source>Volume Up</source>
+      <translation type="unfinished">Volume Up</translation>
+    </message>
+    <message>
+      <source>Volume Down</source>
+      <translation type="unfinished">Volume Down</translation>
+    </message>
+    <message>
+      <source>Hotkeys</source>
+      <translation type="unfinished">Hotkeys</translation>
+    </message>
+    <message>
+      <source>Placeholder</source>
+      <translation type="unfinished">Placeholder</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot</source>
+      <translation type="unfinished">Capture Screenshot</translation>
+    </message>
+    <message>
+      <source>Capture Screenshot w/ Overlays</source>
+      <translation type="unfinished">Capture Screenshot w/ Overlays</translation>
+    </message>
+    <message>
+      <source>Open Emulator Settings</source>
+      <translation type="unfinished">Open Emulator Settings</translation>
+    </message>
+  </context>
+  <context>
+    <name>IpcClient</name>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation type="unfinished">Could not find the emulator executable</translation>
+    </message>
+    <message>
+      <source>No game is running</source>
+      <translation type="unfinished">No game is running</translation>
+    </message>
+  </context>
+  <context>
+    <name>KBMSettings</name>
+    <message>
+      <source>Configure Controls</source>
+      <translation type="unfinished">Configure Controls</translation>
+    </message>
+    <message>
+      <source>unmapped</source>
+      <translation type="unfinished">unmapped</translation>
+    </message>
+    <message>
+      <source>Left Analog Halfmode</source>
+      <translation type="unfinished">Left Analog Halfmode</translation>
+    </message>
+    <message>
+      <source>Config Selection</source>
+      <translation type="unfinished">Config Selection</translation>
+    </message>
+    <message>
+      <source>Common Config</source>
+      <translation type="unfinished">Common Config</translation>
+    </message>
+    <message>
+      <source>Use per-game configs</source>
+      <translation type="unfinished">Use per-game configs</translation>
+    </message>
+    <message>
+      <source>Text Editor</source>
+      <translation type="unfinished">Text Editor</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation type="unfinished">Help</translation>
+    </message>
+    <message>
+      <source>Mouse to Joystick</source>
+      <translation type="unfinished">Mouse to Joystick</translation>
+    </message>
+    <message>
+      <source>*press F7 ingame to activate</source>
+      <translation type="unfinished">*press F7 ingame to activate</translation>
+    </message>
+    <message>
+      <source>Options</source>
+      <translation type="unfinished">Options</translation>
+    </message>
+    <message>
+      <source>Mouse Movement Parameters</source>
+      <translation type="unfinished">Mouse Movement Parameters</translation>
+    </message>
+    <message>
+      <source>note: click Help Button/Special Keybindings for more information</source>
+      <translation type="unfinished">note: click Help Button/Special Keybindings for more information</translation>
+    </message>
+    <message>
+      <source>Triangle</source>
+      <translation type="unfinished">Triangle</translation>
+    </message>
+    <message>
+      <source>Square</source>
+      <translation type="unfinished">Square</translation>
+    </message>
+    <message>
+      <source>Circle</source>
+      <translation type="unfinished">Circle</translation>
+    </message>
+    <message>
+      <source>Cross</source>
+      <translation type="unfinished">Cross</translation>
+    </message>
+    <message>
+      <source>Right Analog Halfmode</source>
+      <translation type="unfinished">Right Analog Halfmode</translation>
+    </message>
+    <message>
+      <source>Speed Offset (def 0.125):</source>
+      <translation type="unfinished">Speed Offset (def 0.125):</translation>
+    </message>
+    <message>
+      <source>Copy from Common Config</source>
+      <translation type="unfinished">Copy from Common Config</translation>
+    </message>
+    <message>
+      <source>Deadzone Offset (def 0.50):</source>
+      <translation type="unfinished">Deadzone Offset (def 0.50):</translation>
+    </message>
+    <message>
+      <source>Speed Multiplier (def 1.0):</source>
+      <translation type="unfinished">Speed Multiplier (def 1.0):</translation>
+    </message>
+    <message>
+      <source>Copy values from Common Config</source>
+      <translation type="unfinished">Copy values from Common Config</translation>
+    </message>
+    <message>
+      <source>Do you want to overwrite existing mappings with the mappings from the Common Config?</source>
+      <translation type="unfinished">Do you want to overwrite existing mappings with the mappings from the Common Config?</translation>
+    </message>
+    <message>
+      <source>Unable to Save</source>
+      <translation type="unfinished">Unable to Save</translation>
+    </message>
+    <message>
+      <source>Press a key</source>
+      <translation type="unfinished">Press a key</translation>
+    </message>
+    <message>
+      <source>Cannot set mapping</source>
+      <translation type="unfinished">Cannot set mapping</translation>
+    </message>
+    <message>
+      <source>Mousewheel cannot be mapped to stick outputs</source>
+      <translation type="unfinished">Mousewheel cannot be mapped to stick outputs</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation type="unfinished">Save</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation type="unfinished">Apply</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation type="unfinished">Restore Defaults</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</source>
+      <translation type="unfinished">Cannot bind any unique input more than once. Duplicate inputs mapped to the following buttons:
+
+%1</translation>
+    </message>
+    <message>
+      <source>Touchpad Left</source>
+      <translation type="unfinished">Touchpad Left</translation>
+    </message>
+    <message>
+      <source>Touchpad Center</source>
+      <translation type="unfinished">Touchpad Center</translation>
+    </message>
+    <message>
+      <source>Touchpad Right</source>
+      <translation type="unfinished">Touchpad Right</translation>
+    </message>
+    <message>
+      <source>Tip: Unmap inputs with right-click</source>
+      <translation type="unfinished">Tip: Unmap inputs with right-click</translation>
+    </message>
+    <message>
+      <source>Output</source>
+      <translation type="unfinished">Output</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation type="unfinished">Input</translation>
+    </message>
+    <message>
+      <source>Alternate Input 1</source>
+      <translation type="unfinished">Alternate Input 1</translation>
+    </message>
+    <message>
+      <source>Alternate Input 2</source>
+      <translation type="unfinished">Alternate Input 2</translation>
+    </message>
+    <message>
+      <source>Dpad Up</source>
+      <translation type="unfinished">Dpad Up</translation>
+    </message>
+    <message>
+      <source>Dpad Down</source>
+      <translation type="unfinished">Dpad Down</translation>
+    </message>
+    <message>
+      <source>Dpad Left</source>
+      <translation type="unfinished">Dpad Left</translation>
+    </message>
+    <message>
+      <source>Dpad Right</source>
+      <translation type="unfinished">Dpad Right</translation>
+    </message>
+    <message>
+      <source>Left Stick Up</source>
+      <translation type="unfinished">Left Stick Up</translation>
+    </message>
+    <message>
+      <source>Left Stick Down</source>
+      <translation type="unfinished">Left Stick Down</translation>
+    </message>
+    <message>
+      <source>Left Stick Left</source>
+      <translation type="unfinished">Left Stick Left</translation>
+    </message>
+    <message>
+      <source>Left Stick Right</source>
+      <translation type="unfinished">Left Stick Right</translation>
+    </message>
+    <message>
+      <source>Right Stick Up</source>
+      <translation type="unfinished">Right Stick Up</translation>
+    </message>
+    <message>
+      <source>Right Stick Down</source>
+      <translation type="unfinished">Right Stick Down</translation>
+    </message>
+    <message>
+      <source>Right Stick Left</source>
+      <translation type="unfinished">Right Stick Left</translation>
+    </message>
+    <message>
+      <source>Right Stick Right</source>
+      <translation type="unfinished">Right Stick Right</translation>
+    </message>
+    <message>
+      <source>L1</source>
+      <translation type="unfinished">L1</translation>
+    </message>
+    <message>
+      <source>R1</source>
+      <translation type="unfinished">R1</translation>
+    </message>
+    <message>
+      <source>L2</source>
+      <translation type="unfinished">L2</translation>
+    </message>
+    <message>
+      <source>R2</source>
+      <translation type="unfinished">R2</translation>
+    </message>
+    <message>
+      <source>L3</source>
+      <translation type="unfinished">L3</translation>
+    </message>
+    <message>
+      <source>R3</source>
+      <translation type="unfinished">R3</translation>
+    </message>
+  </context>
+  <context>
+    <name>LogPresetsDialog</name>
+    <message>
+      <source>Log Filter Presets</source>
+      <translation type="unfinished">Log Filter Presets</translation>
+    </message>
+    <message>
+      <source>Comment</source>
+      <translation type="unfinished">Comment</translation>
+    </message>
+    <message>
+      <source>Filter</source>
+      <translation type="unfinished">Filter</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation type="unfinished">Load</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation type="unfinished">Close</translation>
+    </message>
+    <message>
+      <source>Add a new preset after the selected row</source>
+      <translation type="unfinished">Add a new preset after the selected row</translation>
+    </message>
+    <message>
+      <source>Remove selected presets</source>
+      <translation type="unfinished">Remove selected presets</translation>
+    </message>
+    <message>
+      <source>Load the selected preset</source>
+      <translation type="unfinished">Load the selected preset</translation>
+    </message>
+  </context>
+  <context>
+    <name>MainWindow</name>
+    <message>
+      <source>Open/Add Elf Folder</source>
+      <translation type="unfinished">Open/Add Elf Folder</translation>
+    </message>
+    <message>
+      <source>Boot Game</source>
+      <translation type="unfinished">Boot Game</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>Έλεγχος για ενημερώσεις</translation>
+    </message>
+    <message>
+      <source>About shadPS4</source>
+      <translation type="unfinished">About shadPS4</translation>
+    </message>
+    <message>
+      <source>Configure...</source>
+      <translation type="unfinished">Configure...</translation>
+    </message>
+    <message>
+      <source>Recent Games</source>
+      <translation type="unfinished">Recent Games</translation>
+    </message>
+    <message>
+      <source>Open shadPS4 Folder</source>
+      <translation type="unfinished">Open shadPS4 Folder</translation>
+    </message>
+    <message>
+      <source>Exit</source>
+      <translation type="unfinished">Exit</translation>
+    </message>
+    <message>
+      <source>Exit shadPS4</source>
+      <translation type="unfinished">Exit shadPS4</translation>
+    </message>
+    <message>
+      <source>Exit the application.</source>
+      <translation type="unfinished">Exit the application.</translation>
+    </message>
+    <message>
+      <source>Show Game List</source>
+      <translation type="unfinished">Show Game List</translation>
+    </message>
+    <message>
+      <source>Game List Refresh</source>
+      <translation type="unfinished">Game List Refresh</translation>
+    </message>
+    <message>
+      <source>Tiny</source>
+      <translation type="unfinished">Tiny</translation>
+    </message>
+    <message>
+      <source>Small</source>
+      <translation type="unfinished">Small</translation>
+    </message>
+    <message>
+      <source>Medium</source>
+      <translation type="unfinished">Medium</translation>
+    </message>
+    <message>
+      <source>Large</source>
+      <translation type="unfinished">Large</translation>
+    </message>
+    <message>
+      <source>List View</source>
+      <translation type="unfinished">List View</translation>
+    </message>
+    <message>
+      <source>Grid View</source>
+      <translation type="unfinished">Grid View</translation>
+    </message>
+    <message>
+      <source>Elf Viewer</source>
+      <translation type="unfinished">Elf Viewer</translation>
+    </message>
+    <message>
+      <source>Game Install Directory</source>
+      <translation type="unfinished">Game Install Directory</translation>
+    </message>
+    <message>
+      <source>Download Cheats/Patches</source>
+      <translation>Κατεβάστε Κωδικούς / Ενημερώσεις</translation>
+    </message>
+    <message>
+      <source>Dump Game List</source>
+      <translation type="unfinished">Dump Game List</translation>
+    </message>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation type="unfinished">Trophy Viewer</translation>
+    </message>
+    <message>
+      <source>No games found. Please add your games to your library first.</source>
+      <translation type="unfinished">No games found. Please add your games to your library first.</translation>
+    </message>
+    <message>
+      <source>Search...</source>
+      <translation type="unfinished">Search...</translation>
+    </message>
+    <message>
+      <source>File</source>
+      <translation type="unfinished">File</translation>
+    </message>
+    <message>
+      <source>View</source>
+      <translation type="unfinished">View</translation>
+    </message>
+    <message>
+      <source>Game List Icons</source>
+      <translation type="unfinished">Game List Icons</translation>
+    </message>
+    <message>
+      <source>Game List Mode</source>
+      <translation type="unfinished">Game List Mode</translation>
+    </message>
+    <message>
+      <source>Settings</source>
+      <translation type="unfinished">Settings</translation>
+    </message>
+    <message>
+      <source>Utils</source>
+      <translation type="unfinished">Utils</translation>
+    </message>
+    <message>
+      <source>Themes</source>
+      <translation type="unfinished">Themes</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>Βοήθεια</translation>
+    </message>
+    <message>
+      <source>Dark</source>
+      <translation type="unfinished">Dark</translation>
+    </message>
+    <message>
+      <source>Light</source>
+      <translation type="unfinished">Light</translation>
+    </message>
+    <message>
+      <source>Green</source>
+      <translation type="unfinished">Green</translation>
+    </message>
+    <message>
+      <source>Blue</source>
+      <translation type="unfinished">Blue</translation>
+    </message>
+    <message>
+      <source>Violet</source>
+      <translation type="unfinished">Violet</translation>
+    </message>
+    <message>
+      <source>toolBar</source>
+      <translation type="unfinished">toolBar</translation>
+    </message>
+    <message>
+      <source>Game List</source>
+      <translation>Λίστα παιχνιδιών</translation>
+    </message>
+    <message>
+      <source>Download Cheats For All Installed Games</source>
+      <translation>Λήψη Cheats για όλα τα εγκατεστημένα παιχνίδια</translation>
+    </message>
+    <message>
+      <source>Download Patches For All Games</source>
+      <translation>Λήψη Patches για όλα τα παιχνίδια</translation>
+    </message>
+    <message>
+      <source>Download Complete</source>
+      <translation>Η λήψη ολοκληρώθηκε</translation>
+    </message>
+    <message>
+      <source>You have downloaded cheats for all the games you have installed.</source>
+      <translation>Έχετε κατεβάσει cheats για όλα τα εγκατεστημένα παιχνίδια.</translation>
+    </message>
+    <message>
+      <source>Patches Downloaded Successfully!</source>
+      <translation>Τα Patches κατέβηκαν επιτυχώς!</translation>
+    </message>
+    <message>
+      <source>All Patches available for all games have been downloaded.</source>
+      <translation>Όλα τα διαθέσιμα Patches για όλα τα παιχνίδια έχουν κατέβει.</translation>
+    </message>
+    <message>
+      <source>Games: </source>
+      <translation>Παιχνίδια: </translation>
+    </message>
+    <message>
+      <source>Game Boot</source>
+      <translation>Εκκίνηση παιχνιδιού</translation>
+    </message>
+    <message>
+      <source>Only one file can be selected!</source>
+      <translation>Μπορεί να επιλεγεί μόνο ένα αρχείο!</translation>
+    </message>
+    <message>
+      <source>Run Game</source>
+      <translation type="unfinished">Run Game</translation>
+    </message>
+    <message>
+      <source>Eboot.bin file not found</source>
+      <translation type="unfinished">Eboot.bin file not found</translation>
+    </message>
+    <message>
+      <source>Game is already running!</source>
+      <translation type="unfinished">Game is already running!</translation>
+    </message>
+    <message>
+      <source>shadPS4</source>
+      <translation type="unfinished">shadPS4</translation>
+    </message>
+    <message>
+      <source>Play</source>
+      <translation type="unfinished">Play</translation>
+    </message>
+    <message>
+      <source>Pause</source>
+      <translation type="unfinished">Pause</translation>
+    </message>
+    <message>
+      <source>Stop</source>
+      <translation type="unfinished">Stop</translation>
+    </message>
+    <message>
+      <source>Restart</source>
+      <translation type="unfinished">Restart</translation>
+    </message>
+    <message>
+      <source>Full Screen</source>
+      <translation type="unfinished">Full Screen</translation>
+    </message>
+    <message>
+      <source>Controllers</source>
+      <translation type="unfinished">Controllers</translation>
+    </message>
+    <message>
+      <source>Keyboard</source>
+      <translation type="unfinished">Keyboard</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation type="unfinished">Refresh List</translation>
+    </message>
+    <message>
+      <source>Resume</source>
+      <translation type="unfinished">Resume</translation>
+    </message>
+    <message>
+      <source>Show Labels Under Icons</source>
+      <translation type="unfinished">Show Labels Under Icons</translation>
+    </message>
+    <message>
+      <source>Customize Hotkeys</source>
+      <translation type="unfinished">Customize Hotkeys</translation>
+    </message>
+    <message>
+      <source>Version Manager</source>
+      <translation type="unfinished">Version Manager</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation type="unfinished">No Version Selected</translation>
+    </message>
+    <message>
+      <source>No emulator version was selected.
+The Version Manager menu will then open.
+Select an emulator version from the right panel.</source>
+      <translation type="unfinished">No emulator version was selected.
+The Version Manager menu will then open.
+Select an emulator version from the right panel.</translation>
+    </message>
+    <message>
+      <source>Could not find the emulator executable</source>
+      <translation type="unfinished">Could not find the emulator executable</translation>
+    </message>
+    <message>
+      <source>Run Emulator</source>
+      <translation type="unfinished">Run Emulator</translation>
+    </message>
+    <message>
+      <source>Emulator is already running!</source>
+      <translation type="unfinished">Emulator is already running!</translation>
+    </message>
+    <message>
+      <source>Invalid game argument provided</source>
+      <translation type="unfinished">Invalid game argument provided</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+    <message>
+      <source>Manage Skylanders</source>
+      <translation type="unfinished">Manage Skylanders</translation>
+    </message>
+    <message>
+      <source>Manage Infinity Figures</source>
+      <translation type="unfinished">Manage Infinity Figures</translation>
+    </message>
+    <message>
+      <source>Manage Dimensions Toypad</source>
+      <translation type="unfinished">Manage Dimensions Toypad</translation>
+    </message>
+    <message>
+      <source>Game Log</source>
+      <translation type="unfinished">Game Log</translation>
+    </message>
+    <message>
+      <source>Show Game Log</source>
+      <translation type="unfinished">Show Game Log</translation>
+    </message>
+    <message>
+      <source>Manage Cryptographic Keys</source>
+      <translation type="unfinished">Manage Cryptographic Keys</translation>
+    </message>
+    <message>
+      <source>Manage Users</source>
+      <translation type="unfinished">Manage Users</translation>
+    </message>
+    <message>
+      <source>bootable files (*.bin *.elf *.oelf *.zar)</source>
+      <translation type="unfinished">bootable files (*.bin *.elf *.oelf *.zar)</translation>
+    </message>
+  </context>
+  <context>
+    <name>QObject</name>
+    <message>
+      <source>Drive Locked</source>
+      <translation type="unfinished">Drive Locked</translation>
+    </message>
+    <message>
+      <source>Drive %1: is locked. Please enter the BitLocker key to access it:</source>
+      <translation type="unfinished">Drive %1: is locked. Please enter the BitLocker key to access it:</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Incorrect recovery key. Please try again.</source>
+      <translation type="unfinished">Incorrect recovery key. Please try again.</translation>
+    </message>
+  </context>
+  <context>
+    <name>SettingsDialog</name>
+    <message>
+      <source>Settings</source>
+      <translation type="unfinished">Settings</translation>
+    </message>
+    <message>
+      <source>General</source>
+      <translation type="unfinished">General</translation>
+    </message>
+    <message>
+      <source>System</source>
+      <translation type="unfinished">System</translation>
+    </message>
+    <message>
+      <source>Console Language</source>
+      <translation type="unfinished">Console Language</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings</source>
+      <translation>Προεπιλεγμένη καρτέλα κατά την ανοίγμα των ρυθμίσεων</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence</source>
+      <translation>Ενεργοποίηση Discord Rich Presence</translation>
+    </message>
+    <message>
+      <source>Trophy</source>
+      <translation type="unfinished">Trophy</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder</source>
+      <translation type="unfinished">Open the custom trophy images/sounds folder</translation>
+    </message>
+    <message>
+      <source>Logger</source>
+      <translation type="unfinished">Logger</translation>
+    </message>
+    <message>
+      <source>Log Type</source>
+      <translation type="unfinished">Log Type</translation>
+    </message>
+    <message>
+      <source>Log Filter</source>
+      <translation type="unfinished">Log Filter</translation>
+    </message>
+    <message>
+      <source>Open Log Location</source>
+      <translation>Άνοιγμα τοποθεσίας αρχείου καταγραφής</translation>
+    </message>
+    <message>
+      <source>Input</source>
+      <translation>Είσοδος</translation>
+    </message>
+    <message>
+      <source>Cursor</source>
+      <translation>Δείκτης</translation>
+    </message>
+    <message>
+      <source>Hide Cursor</source>
+      <translation>Απόκρυψη δείκτη</translation>
+    </message>
+    <message>
+      <source>Hide Cursor Idle Timeout</source>
+      <translation>Χρόνος αδράνειας απόκρυψης δείκτη</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+    <message>
+      <source>Default Device</source>
+      <translation type="unfinished">Default Device</translation>
+    </message>
+    <message>
+      <source>s</source>
+      <translation type="unfinished">s</translation>
+    </message>
+    <message>
+      <source>Controller</source>
+      <translation type="unfinished">Controller</translation>
+    </message>
+    <message>
+      <source>Graphics</source>
+      <translation type="unfinished">Graphics</translation>
+    </message>
+    <message>
+      <source>User</source>
+      <translation>Χρήστης</translation>
+    </message>
+    <message>
+      <source>Graphics Device</source>
+      <translation type="unfinished">Graphics Device</translation>
+    </message>
+    <message>
+      <source>Advanced</source>
+      <translation type="unfinished">Advanced</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping</source>
+      <translation type="unfinished">Enable Shaders Dumping</translation>
+    </message>
+    <message>
+      <source>Enable NULL GPU</source>
+      <translation type="unfinished">Enable NULL GPU</translation>
+    </message>
+    <message>
+      <source>Enable HDR</source>
+      <translation type="unfinished">Enable HDR</translation>
+    </message>
+    <message>
+      <source>Paths</source>
+      <translation>Διαδρομές</translation>
+    </message>
+    <message>
+      <source>Game Folders</source>
+      <translation>Φάκελοι παιχνιδιών</translation>
+    </message>
+    <message>
+      <source>Add...</source>
+      <translation>Προσθήκη...</translation>
+    </message>
+    <message>
+      <source>Remove</source>
+      <translation>Αφαίρεση</translation>
+    </message>
+    <message>
+      <source>Debug</source>
+      <translation type="unfinished">Debug</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping</source>
+      <translation type="unfinished">Enable Debug Dumping</translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers</source>
+      <translation type="unfinished">Enable Vulkan Validation Layers</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging</source>
+      <translation type="unfinished">Enable RenderDoc Debugging</translation>
+    </message>
+    <message>
+      <source>Enable Crash Diagnostics</source>
+      <translation type="unfinished">Enable Crash Diagnostics</translation>
+    </message>
+    <message>
+      <source>Collect Shaders</source>
+      <translation type="unfinished">Collect Shaders</translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers</source>
+      <translation type="unfinished">Copy GPU Buffers</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers</source>
+      <translation type="unfinished">Host Debug Markers</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers</source>
+      <translation type="unfinished">Guest Debug Markers</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images</source>
+      <translation type="unfinished">Enable Readback Linear Images</translation>
+    </message>
+    <message>
+      <source>Check for Updates at Startup</source>
+      <translation>Έλεγχος για ενημερώσεις κατά την εκκίνηση</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation>Πάντα εμφάνιση ιστορικού αλλαγών</translation>
+    </message>
+    <message>
+      <source>Check for Updates</source>
+      <translation>Έλεγχος για ενημερώσεις</translation>
+    </message>
+    <message>
+      <source>Title Music</source>
+      <translation type="unfinished">Title Music</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Notification</source>
+      <translation type="unfinished">Disable Trophy Notification</translation>
+    </message>
+    <message>
+      <source>Background Image</source>
+      <translation type="unfinished">Background Image</translation>
+    </message>
+    <message>
+      <source>Show Background Image</source>
+      <translation type="unfinished">Show Background Image</translation>
+    </message>
+    <message>
+      <source>Opacity</source>
+      <translation type="unfinished">Opacity</translation>
+    </message>
+    <message>
+      <source>Play title music</source>
+      <translation>Αναπαραγωγή μουσικής τίτλου</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database On Startup</source>
+      <translation type="unfinished">Update Compatibility Database On Startup</translation>
+    </message>
+    <message>
+      <source>Game Compatibility</source>
+      <translation type="unfinished">Game Compatibility</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data</source>
+      <translation type="unfinished">Display Compatibility Data</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database</source>
+      <translation type="unfinished">Update Compatibility Database</translation>
+    </message>
+    <message>
+      <source>Volume</source>
+      <translation>ένταση</translation>
+    </message>
+    <message>
+      <source>Save</source>
+      <translation>Αποθήκευση</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>Εφαρμογή</translation>
+    </message>
+    <message>
+      <source>Restore Defaults</source>
+      <translation>Επαναφορά Προεπιλογών</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>Κλείσιμο</translation>
+    </message>
+    <message>
+      <source>Point your mouse at an option to display its description.</source>
+      <translation>Τοποθετήστε το ποντίκι σας πάνω σε μια επιλογή για να εμφανίσετε την περιγραφή της.</translation>
+    </message>
+    <message>
+      <source>Console Language:\nSets the language that the PS4 game uses.\nIt&apos;s recommended to set this to a language the game supports, which will vary by region.</source>
+      <translation>Γλώσσα Κονσόλας:\nΡυθμίζει τη γλώσσα που θα χρησιμοποιήσει το παιχνίδι PS4.\nΣυνιστάται να επιλέξετε μία από τις γλώσσες που υποστηρίζονται από το παιχνίδι, η οποία ενδέχεται να διαφέρει ανάλογα με την περιοχή.</translation>
+    </message>
+    <message>
+      <source>Emulator Language:\nSets the language of the emulator&apos;s user interface.</source>
+      <translation>Γλώσσα Εξομοιωτή:\nΡυθμίζει τη γλώσσα του γραφικού περιβάλλοντος του εξομοιωτή.</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen:\nShows the game&apos;s splash screen (a special image) while the game is starting.</source>
+      <translation>Εμφάνιση Splash Screen:\nΕμφανίζει ειδική γραφική οθόνη κατά την εκκίνηση.</translation>
+    </message>
+    <message>
+      <source>Enable Discord Rich Presence:\nDisplays the emulator icon and relevant information on your Discord profile.</source>
+      <translation>Ενεργοποίηση Discord Rich Presence:\nΕμφανίζει το εικονίδιο του emulator και σχετικές πληροφορίες στο προφίλ σας στο Discord.</translation>
+    </message>
+    <message>
+      <source>Background Image:\nControl the opacity of the game background image.</source>
+      <translation type="unfinished">Background Image:\nControl the opacity of the game background image.</translation>
+    </message>
+    <message>
+      <source>Play Title Music:\nIf a game supports it, enable playing special music when selecting the game in the GUI.</source>
+      <translation>Αναπαραγωγή Μουσικής Τίτλων:\nΕάν το παιχνίδι το υποστηρίζει, ενεργοποιεί ειδική μουσική κατά την επιλογή του παιχνιδιού από τη διεπαφή χρήστη.</translation>
+    </message>
+    <message>
+      <source>Disable Trophy Pop-ups:\nDisable in-game trophy notifications. Trophy progress can still be tracked using the Trophy Viewer (right-click the game in the main window).</source>
+      <translation type="unfinished">Disable Trophy Pop-ups:\nDisable in-game trophy notifications. Trophy progress can still be tracked using the Trophy Viewer (right-click the game in the main window).</translation>
+    </message>
+    <message>
+      <source>Hide Cursor:\nChoose when the cursor will disappear:\nNever: You will always see the mouse.\nidle: Set a time for it to disappear after being idle.\nAlways: you will never see the mouse.</source>
+      <translation>Απόκρυψη Κέρσορα:\nΕπιλέξτε πότε θα εξαφανιστεί ο κέρσορας:\nΠοτέ: θα βλέπετε πάντα το ποντίκι.\nΑδρανές: ορίστε έναν χρόνο για να εξαφανιστεί μετά από αδράνεια.\nΠάντα: δεν θα δείτε ποτέ το ποντίκι.</translation>
+    </message>
+    <message>
+      <source>Hide Idle Cursor Timeout:\nThe duration (seconds) after which the cursor that has been idle hides itself.</source>
+      <translation>Ορίστε έναν χρόνο για να εξαφανιστεί το ποντίκι μετά από αδράνεια.</translation>
+    </message>
+    <message>
+      <source>Display Compatibility Data:\nDisplays game compatibility information in table view. Enable &quot;Update Compatibility On Startup&quot; to get up-to-date information.</source>
+      <translation type="unfinished">Display Compatibility Data:\nDisplays game compatibility information in table view. Enable &quot;Update Compatibility On Startup&quot; to get up-to-date information.</translation>
+    </message>
+    <message>
+      <source>Update Compatibility On Startup:\nAutomatically update the compatibility database when shadPS4 starts.</source>
+      <translation type="unfinished">Update Compatibility On Startup:\nAutomatically update the compatibility database when shadPS4 starts.</translation>
+    </message>
+    <message>
+      <source>Update Compatibility Database:\nImmediately update the compatibility database.</source>
+      <translation type="unfinished">Update Compatibility Database:\nImmediately update the compatibility database.</translation>
+    </message>
+    <message>
+      <source>Never</source>
+      <translation>Ποτέ</translation>
+    </message>
+    <message>
+      <source>Idle</source>
+      <translation>Αδρανής</translation>
+    </message>
+    <message>
+      <source>Always</source>
+      <translation>Πάντα</translation>
+    </message>
+    <message>
+      <source>Graphics Device:\nOn multiple GPU systems, select the GPU the emulator will use from the drop down list,\nor select &quot;Auto Select&quot; to automatically determine it.</source>
+      <translation>Προσαρμογέας Γραφικών:\nΣε συστήματα με πολλές GPU, επιλέξτε από το μενού την GPU που θα χρησιμοποιήσει ο εξομοιωτής,\nή επιλέξτε &quot;Auto Select&quot; για αυτόματη επιλογή.</translation>
+    </message>
+    <message>
+      <source>Width/Height:\nSets the size of the emulator window at launch, which can be resized during gameplay.\nThis is different from the in-game resolution.</source>
+      <translation>Ανάλυση Οθόνης:\nΚαθορίζει το μέγεθος του παραθύρου του εξομοιωτή κατά την αναπαραγωγή, το οποίο μπορεί να αλλάξει κατά τη διάρκεια του παιχνιδιού.\nΑυτό είναι διαφορετικό από την ανάλυση του ίδιου του παιχνιδιού.</translation>
+    </message>
+    <message>
+      <source>Enable HDR:\nEnables HDR in games that support it.\nYour monitor must have support for the BT2020 PQ color space and the RGB10A2 swapchain format.</source>
+      <translation type="unfinished">Enable HDR:\nEnables HDR in games that support it.\nYour monitor must have support for the BT2020 PQ color space and the RGB10A2 swapchain format.</translation>
+    </message>
+    <message>
+      <source>Game Folders:\nThe list of folders to check for installed games.</source>
+      <translation>Φάκελοι Παιχνιδιών:\nΗ λίστα των φακέλων για έλεγχο των εγκατεστημένων παιχνιδιών.</translation>
+    </message>
+    <message>
+      <source>Add:\nAdd a folder to the list.</source>
+      <translation>Προσθήκη:\nΠροσθέστε έναν φάκελο στη λίστα.</translation>
+    </message>
+    <message>
+      <source>Remove:\nRemove a folder from the list.</source>
+      <translation>Αφαίρεση:\nΑφαιρέστε έναν φάκελο από τη λίστα.</translation>
+    </message>
+    <message>
+      <source>Enable Debug Dumping:\nSaves the import and export symbols and file header information of the currently running PS4 program to a directory.</source>
+      <translation>Ενεργοποίηση Καταγραφής Αποσφαλμάτωσης:\nΑποθηκεύει τα σύμβολα εισαγωγής/εξαγωγής και τις κεφαλίδες πληροφοριών του τρέχοντος προγράμματος PS4 σε έναν φάκελο.</translation>
+    </message>
+    <message>
+      <source>Enable RenderDoc Debugging:\nIf enabled, the emulator will provide compatibility with Renderdoc to allow capture and analysis of the currently rendered frame.</source>
+      <translation>Ενεργοποίηση Καταγραφής RenderDoc:\nΌταν είναι ενεργοποιημένο, ο εξομοιωτής είναι συμβατός με το RenderDoc για τη λήψη και ανάλυση του τρέχοντος καρέ.</translation>
+    </message>
+    <message>
+      <source>Collect Shaders:\nYou need this enabled to edit shaders with the debug menu (Ctrl + F10).</source>
+      <translation type="unfinished">Collect Shaders:\nYou need this enabled to edit shaders with the debug menu (Ctrl + F10).</translation>
+    </message>
+    <message>
+      <source>Enable Readback Linear Images:\nEnables async downloading of GPU modified linear images.\nMight fix issues in some games.</source>
+      <translation type="unfinished">Enable Readback Linear Images:\nEnables async downloading of GPU modified linear images.\nMight fix issues in some games.</translation>
+    </message>
+    <message>
+      <source>Copy GPU Buffers:\nGets around race conditions involving GPU submits.\nMay or may not help with PM4 type 0 crashes.</source>
+      <translation type="unfinished">Copy GPU Buffers:\nGets around race conditions involving GPU submits.\nMay or may not help with PM4 type 0 crashes.</translation>
+    </message>
+    <message>
+      <source>Host Debug Markers:\nInserts emulator-side information like markers for specific AMDGPU commands around Vulkan commands, as well as giving resources debug names.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation type="unfinished">Host Debug Markers:\nInserts emulator-side information like markers for specific AMDGPU commands around Vulkan commands, as well as giving resources debug names.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</translation>
+    </message>
+    <message>
+      <source>Guest Debug Markers:\nInserts any debug markers the game itself has added to the command buffer.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</source>
+      <translation type="unfinished">Guest Debug Markers:\nInserts any debug markers the game itself has added to the command buffer.\nIf you have this enabled, you should enable Crash Diagnostics.\nUseful for programs like RenderDoc.</translation>
+    </message>
+    <message>
+      <source>Set the volume of the background music.</source>
+      <translation type="unfinished">Set the volume of the background music.</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls</source>
+      <translation type="unfinished">Enable Motion Controls</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation type="unfinished">Browse</translation>
+    </message>
+    <message>
+      <source>Auto Select</source>
+      <translation type="unfinished">Auto Select</translation>
+    </message>
+    <message>
+      <source>Directory to install games</source>
+      <translation type="unfinished">Directory to install games</translation>
+    </message>
+    <message>
+      <source>Video</source>
+      <translation type="unfinished">Video</translation>
+    </message>
+    <message>
+      <source>Display Mode</source>
+      <translation type="unfinished">Display Mode</translation>
+    </message>
+    <message>
+      <source>Windowed</source>
+      <translation type="unfinished">Windowed</translation>
+    </message>
+    <message>
+      <source>Fullscreen</source>
+      <translation type="unfinished">Fullscreen</translation>
+    </message>
+    <message>
+      <source>Fullscreen (Borderless)</source>
+      <translation type="unfinished">Fullscreen (Borderless)</translation>
+    </message>
+    <message>
+      <source>Window Size</source>
+      <translation type="unfinished">Window Size</translation>
+    </message>
+    <message>
+      <source>W:</source>
+      <translation type="unfinished">W:</translation>
+    </message>
+    <message>
+      <source>H:</source>
+      <translation type="unfinished">H:</translation>
+    </message>
+    <message>
+      <source>Separate Log Files</source>
+      <translation type="unfinished">Separate Log Files</translation>
+    </message>
+    <message>
+      <source>Separate Log Files:\nWrites a separate logfile for each game.</source>
+      <translation type="unfinished">Separate Log Files:\nWrites a separate logfile for each game.</translation>
+    </message>
+    <message>
+      <source>Trophy Notification Position</source>
+      <translation type="unfinished">Trophy Notification Position</translation>
+    </message>
+    <message>
+      <source>Left</source>
+      <translation type="unfinished">Left</translation>
+    </message>
+    <message>
+      <source>Right</source>
+      <translation type="unfinished">Right</translation>
+    </message>
+    <message>
+      <source>Top</source>
+      <translation type="unfinished">Top</translation>
+    </message>
+    <message>
+      <source>Bottom</source>
+      <translation type="unfinished">Bottom</translation>
+    </message>
+    <message>
+      <source>Notification Duration</source>
+      <translation type="unfinished">Notification Duration</translation>
+    </message>
+    <message>
+      <source>Portable User Folder</source>
+      <translation type="unfinished">Portable User Folder</translation>
+    </message>
+    <message>
+      <source>Create Portable User Folder from Common User Folder</source>
+      <translation type="unfinished">Create Portable User Folder from Common User Folder</translation>
+    </message>
+    <message>
+      <source>Portable user folder:\nStores shadPS4 settings and data that will be applied only to the shadPS4 build located in the current folder. Restart the app after creating the portable user folder to begin using it.</source>
+      <translation type="unfinished">Portable user folder:\nStores shadPS4 settings and data that will be applied only to the shadPS4 build located in the current folder. Restart the app after creating the portable user folder to begin using it.</translation>
+    </message>
+    <message>
+      <source>%1 already exists</source>
+      <translation type="unfinished">%1 already exists</translation>
+    </message>
+    <message>
+      <source>%1 successfully created.</source>
+      <translation type="unfinished">%1 successfully created.</translation>
+    </message>
+    <message>
+      <source>Open the custom trophy images/sounds folder:\nYou can add custom images to the trophies and an audio.\nAdd the files to custom_trophy with the following names:\ntrophy.wav OR trophy.mp3, bronze.png, gold.png, platinum.png, silver.png\nNote: The sound will only work in QT versions.</source>
+      <translation type="unfinished">Open the custom trophy images/sounds folder:\nYou can add custom images to the trophies and an audio.\nAdd the files to custom_trophy with the following names:\ntrophy.wav OR trophy.mp3, bronze.png, gold.png, platinum.png, silver.png\nNote: The sound will only work in QT versions.</translation>
+    </message>
+    <message>
+      <source>Experimental Features</source>
+      <translation type="unfinished">Experimental Features</translation>
+    </message>
+    <message>
+      <source>WARNING: These features are experimental and should not be enabled unless you were told to, or a game requires it. Please ask in the shadPS4 Discord server if you have any questions.</source>
+      <translation type="unfinished">WARNING: These features are experimental and should not be enabled unless you were told to, or a game requires it. Please ask in the shadPS4 Discord server if you have any questions.</translation>
+    </message>
+    <message>
+      <source>Enable Background Controller Input</source>
+      <translation type="unfinished">Enable Background Controller Input</translation>
+    </message>
+    <message>
+      <source>Enable Controller Background Input:\nAllow shadPS4 to detect controller inputs when the game window is not in focus.</source>
+      <translation type="unfinished">Enable Controller Background Input:\nAllow shadPS4 to detect controller inputs when the game window is not in focus.</translation>
+    </message>
+    <message>
+      <source>Crash Diagnostics:\nCreates a .yaml file with info about the Vulkan state at the time of crashing.\nUseful for debugging &apos;Device lost&apos; errors. If you have this enabled, you should enable Host AND Guest Debug Markers.\nYou need Vulkan Validation Layers enabled and the Vulkan SDK for this to work.</source>
+      <translation type="unfinished">Crash Diagnostics:\nCreates a .yaml file with info about the Vulkan state at the time of crashing.\nUseful for debugging &apos;Device lost&apos; errors. If you have this enabled, you should enable Host AND Guest Debug Markers.\nYou need Vulkan Validation Layers enabled and the Vulkan SDK for this to work.</translation>
+    </message>
+    <message>
+      <source>Enable Logging</source>
+      <translation type="unfinished">Enable Logging</translation>
+    </message>
+    <message>
+      <source>Enable Logging:\nEnables logging.\nDo not change this if you do not know what you&apos;re doing!\nWhen asking for help, make sure this setting is ENABLED.</source>
+      <translation type="unfinished">Enable Logging:\nEnables logging.\nDo not change this if you do not know what you&apos;re doing!\nWhen asking for help, make sure this setting is ENABLED.</translation>
+    </message>
+    <message>
+      <source>Present Mode</source>
+      <translation type="unfinished">Present Mode</translation>
+    </message>
+    <message>
+      <source>Mailbox (Vsync)</source>
+      <translation type="unfinished">Mailbox (Vsync)</translation>
+    </message>
+    <message>
+      <source>Fifo (Vsync)</source>
+      <translation type="unfinished">Fifo (Vsync)</translation>
+    </message>
+    <message>
+      <source>Immediate (No Vsync)</source>
+      <translation type="unfinished">Immediate (No Vsync)</translation>
+    </message>
+    <message>
+      <source>Select the DLC folder</source>
+      <translation type="unfinished">Select the DLC folder</translation>
+    </message>
+    <message>
+      <source>Present Mode:\nConfigures how video output will be presented to your screen.\n\nMailbox: Frames synchronize with your screen&apos;s refresh rate. New frames will replace any pending frames. Reduces latency but may skip frames if running behind.\nFifo: Frames synchronize with your screen&apos;s refresh rate. New frames will be queued behind pending frames. Ensures all frames are presented but may increase latency.\nImmediate: Frames immediately present to your screen when ready. May result in tearing.</source>
+      <translation type="unfinished">Present Mode:\nConfigures how video output will be presented to your screen.\n\nMailbox: Frames synchronize with your screen&apos;s refresh rate. New frames will replace any pending frames. Reduces latency but may skip frames if running behind.\nFifo: Frames synchronize with your screen&apos;s refresh rate. New frames will be queued behind pending frames. Ensures all frames are presented but may increase latency.\nImmediate: Frames immediately present to your screen when ready. May result in tearing.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the DLC path.</source>
+      <translation type="unfinished">Browse:\nBrowse for a folder to set as the DLC path.</translation>
+    </message>
+    <message>
+      <source>FSR Settings</source>
+      <translation type="unfinished">FSR Settings</translation>
+    </message>
+    <message>
+      <source>Enable FSR</source>
+      <translation type="unfinished">Enable FSR</translation>
+    </message>
+    <message>
+      <source>Enable RCAS (sharpening)</source>
+      <translation type="unfinished">Enable RCAS (sharpening)</translation>
+    </message>
+    <message>
+      <source>RCAS Attenuation:</source>
+      <translation type="unfinished">RCAS Attenuation:</translation>
+    </message>
+    <message>
+      <source>Load Presets...</source>
+      <translation type="unfinished">Load Presets...</translation>
+    </message>
+    <message>
+      <source>Log</source>
+      <translation type="unfinished">Log</translation>
+    </message>
+    <message>
+      <source>Open Log Location:\nOpen the folder where the log file is saved.</source>
+      <translation type="unfinished">Open Log Location:\nOpen the folder where the log file is saved.</translation>
+    </message>
+    <message>
+      <source>Microphone:\nNone: Does not use the microphone.\nDefault Device: Will use the default device defined in the system.\nOr manually choose the microphone to be used from the list.</source>
+      <translation type="unfinished">Microphone:\nNone: Does not use the microphone.\nDefault Device: Will use the default device defined in the system.\nOr manually choose the microphone to be used from the list.</translation>
+    </message>
+    <message>
+      <source>Volume:\nAdjust volume for games on a global level, range goes from 0-500% with the default being 100%.</source>
+      <translation type="unfinished">Volume:\nAdjust volume for games on a global level, range goes from 0-500% with the default being 100%.</translation>
+    </message>
+    <message>
+      <source>Default tab when opening settings:\nChoose which tab will open, the default is General.</source>
+      <translation type="unfinished">Default tab when opening settings:\nChoose which tab will open, the default is General.</translation>
+    </message>
+    <message>
+      <source>Enable Motion Controls:\nWhen enabled it will use the controller&apos;s motion control if supported.</source>
+      <translation type="unfinished">Enable Motion Controls:\nWhen enabled it will use the controller&apos;s motion control if supported.</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency</source>
+      <translation type="unfinished">Vblank Frequency</translation>
+    </message>
+    <message>
+      <source>Vblank Frequency:\nThe frame rate at which the emulator refreshes at (60hz is the baseline, whether the game runs at 30 or 60fps). Changing this may have adverse effects, such as increasing the game speed, or breaking critical game functionality that does not expect this to change!</source>
+      <translation type="unfinished">Vblank Frequency:\nThe frame rate at which the emulator refreshes at (60hz is the baseline, whether the game runs at 30 or 60fps). Changing this may have adverse effects, such as increasing the game speed, or breaking critical game functionality that does not expect this to change!</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access</source>
+      <translation type="unfinished">Enable Direct Memory Access</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode</source>
+      <translation type="unfinished">Enable Devkit Console Mode</translation>
+    </message>
+    <message>
+      <source>Set &quot;Network Connected&quot; to True</source>
+      <translation type="unfinished">Set &quot;Network Connected&quot; to True</translation>
+    </message>
+    <message>
+      <source>Miscellaneous</source>
+      <translation type="unfinished">Miscellaneous</translation>
+    </message>
+    <message>
+      <source>Frontend</source>
+      <translation type="unfinished">Frontend</translation>
+    </message>
+    <message>
+      <source>Experimental</source>
+      <translation type="unfinished">Experimental</translation>
+    </message>
+    <message>
+      <source>Show Splash Screen When Launching Game</source>
+      <translation type="unfinished">Show Splash Screen When Launching Game</translation>
+    </message>
+    <message>
+      <source>General Frontend Settings</source>
+      <translation type="unfinished">General Frontend Settings</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode</source>
+      <translation type="unfinished">Enable PS4 Neo Mode</translation>
+    </message>
+    <message>
+      <source>Enable Direct Memory Access:\nEnables arbitrary memory access from the GPU to CPU memory.</source>
+      <translation type="unfinished">Enable Direct Memory Access:\nEnables arbitrary memory access from the GPU to CPU memory.</translation>
+    </message>
+    <message>
+      <source>Enable PS4 Neo Mode:\nAdds support for PS4 Pro emulation and memory size. Currently causes instability in a large number of tested games.</source>
+      <translation type="unfinished">Enable PS4 Neo Mode:\nAdds support for PS4 Pro emulation and memory size. Currently causes instability in a large number of tested games.</translation>
+    </message>
+    <message>
+      <source>Enable Devkit Console Mode:\nAdds support for Devkit console memory size.</source>
+      <translation type="unfinished">Enable Devkit Console Mode:\nAdds support for Devkit console memory size.</translation>
+    </message>
+    <message>
+      <source>Set Network Connected to True:\nForces games to detect an active network connection. Actual online capabilities are not yet supported.</source>
+      <translation type="unfinished">Set Network Connected to True:\nForces games to detect an active network connection. Actual online capabilities are not yet supported.</translation>
+    </message>
+    <message>
+      <source>Enable Vulkan Validation Layers:\nEnables a system that validates the state of the Vulkan renderer and logs information about its internal state.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation type="unfinished">Enable Vulkan Validation Layers:\nEnables a system that validates the state of the Vulkan renderer and logs information about its internal state.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</translation>
+    </message>
+    <message>
+      <source>Audio Device (general)</source>
+      <translation type="unfinished">Audio Device (general)</translation>
+    </message>
+    <message>
+      <source>Audio Device (DS4 speaker)</source>
+      <translation type="unfinished">Audio Device (DS4 speaker)</translation>
+    </message>
+    <message>
+      <source>Enable Shaders Dumping:\nFor the sake of technical debugging, saves the game&apos;s shaders to a folder as they render.</source>
+      <translation type="unfinished">Enable Shaders Dumping:\nFor the sake of technical debugging, saves the game&apos;s shaders to a folder as they render.</translation>
+    </message>
+    <message>
+      <source>Enable Null GPU:\nFor the sake of technical debugging, disables game rendering as if there were no graphics card. The screen will be black.</source>
+      <translation type="unfinished">Enable Null GPU:\nFor the sake of technical debugging, disables game rendering as if there were no graphics card. The screen will be black.</translation>
+    </message>
+    <message>
+      <source>DLC Path:\nThe folder where game DLC is loaded from.</source>
+      <translation type="unfinished">DLC Path:\nThe folder where game DLC is loaded from.</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation</source>
+      <translation type="unfinished">Additional DMem Allocation</translation>
+    </message>
+    <message>
+      <source>Additional DMem Allocation:\nForces allocation of the specified amount of additional DMem. Crashes or causes issues in some games.</source>
+      <translation type="unfinished">Additional DMem Allocation:\nForces allocation of the specified amount of additional DMem. Crashes or causes issues in some games.</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path:\nThe folder where PS4 sysmodules are loaded from.</source>
+      <translation type="unfinished">PS4 Sysmodules Path:\nThe folder where PS4 sysmodules are loaded from.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the sysmodules path.</source>
+      <translation type="unfinished">Browse:\nBrowse for a folder to set as the sysmodules path.</translation>
+    </message>
+    <message>
+      <source>Vulkan Validation (Requires Vulkan SDK)</source>
+      <translation type="unfinished">Vulkan Validation (Requires Vulkan SDK)</translation>
+    </message>
+    <message>
+      <source>Validation Layers</source>
+      <translation type="unfinished">Validation Layers</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation</source>
+      <translation type="unfinished">Enable Core Validation</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation</source>
+      <translation type="unfinished">Enable Sync Validation</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation</source>
+      <translation type="unfinished">Enable GPU-Assisted Validation</translation>
+    </message>
+    <message>
+      <source>Enable Sync Validation:\nEnables a system that validates the timing of Vulkan rendering tasks.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation type="unfinished">Enable Sync Validation:\nEnables a system that validates the timing of Vulkan rendering tasks.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</translation>
+    </message>
+    <message>
+      <source>Enable Core Validation:\nEnables the main API validation functions.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation type="unfinished">Enable Core Validation:\nEnables the main API validation functions.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</translation>
+    </message>
+    <message>
+      <source>Enable GPU-Assisted Validation:\nInstruments shaders with code that validates if they are behaving correctly.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</source>
+      <translation type="unfinished">Enable GPU-Assisted Validation:\nInstruments shaders with code that validates if they are behaving correctly.\nThis will reduce performance and likely change the behavior of emulation.\nYou need the Vulkan SDK for this to work.</translation>
+    </message>
+    <message>
+      <source>GUI Language</source>
+      <translation type="unfinished">GUI Language</translation>
+    </message>
+    <message>
+      <source>GUI Updates</source>
+      <translation type="unfinished">GUI Updates</translation>
+    </message>
+    <message>
+      <source>DLC Path</source>
+      <translation type="unfinished">DLC Path</translation>
+    </message>
+    <message>
+      <source>PS4 Sysmodules Path</source>
+      <translation type="unfinished">PS4 Sysmodules Path</translation>
+    </message>
+    <message>
+      <source>GUI Updates:\nRelease: Official versions released every month that may be very outdated, but are more reliable and tested.\nNightly: Development versions that have all the latest features and fixes, but may contain bugs and are less stable.\n\n*This update applies only to the Qt user interface. To update the emulator core, please use the &apos;Version Manager&apos; menu.</source>
+      <translation type="unfinished">GUI Updates:\nRelease: Official versions released every month that may be very outdated, but are more reliable and tested.\nNightly: Development versions that have all the latest features and fixes, but may contain bugs and are less stable.\n\n*This update applies only to the Qt user interface. To update the emulator core, please use the &apos;Version Manager&apos; menu.</translation>
+    </message>
+    <message>
+      <source>Cannot create portable launcher folder</source>
+      <translation type="unfinished">Cannot create portable launcher folder</translation>
+    </message>
+    <message>
+      <source>Portable launcherDir folder created</source>
+      <translation type="unfinished">Portable launcherDir folder created</translation>
+    </message>
+    <message>
+      <source>USB Device</source>
+      <translation type="unfinished">USB Device</translation>
+    </message>
+    <message>
+      <source>Real USB Device</source>
+      <translation type="unfinished">Real USB Device</translation>
+    </message>
+    <message>
+      <source>Skylander Portal</source>
+      <translation type="unfinished">Skylander Portal</translation>
+    </message>
+    <message>
+      <source>Infinity Base</source>
+      <translation type="unfinished">Infinity Base</translation>
+    </message>
+    <message>
+      <source>Dimensions Toypad</source>
+      <translation type="unfinished">Dimensions Toypad</translation>
+    </message>
+    <message>
+      <source>USB Device:\nReal USB Device: Use a real USB Device attached to the system.\nSkylander Portal: Emulate a Skylander Portal of Power.\nInfinity Base: Emulate a Disney Infinity Base.\nDimensions Toypad: Emulate a Lego Dimensions Toypad.</source>
+      <translation type="unfinished">USB Device:\nReal USB Device: Use a real USB Device attached to the system.\nSkylander Portal: Emulate a Skylander Portal of Power.\nInfinity Base: Emulate a Disney Infinity Base.\nDimensions Toypad: Emulate a Lego Dimensions Toypad.</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache</source>
+      <translation type="unfinished">Enable Shader Cache</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file</source>
+      <translation type="unfinished">Compress the Shader Cache files into a zip file</translation>
+    </message>
+    <message>
+      <source>Enable Shader Cache:\nStoring compiled shaders to avoid recompilations, reduce stuttering.</source>
+      <translation type="unfinished">Enable Shader Cache:\nStoring compiled shaders to avoid recompilations, reduce stuttering.</translation>
+    </message>
+    <message>
+      <source>Compress the Shader Cache files into a zip file:\nThe shader cache files are stored within a single zip file instead of multiple separate files.</source>
+      <translation type="unfinished">Compress the Shader Cache files into a zip file:\nThe shader cache files are stored within a single zip file instead of multiple separate files.</translation>
+    </message>
+    <message>
+      <source>Readbacks Mode</source>
+      <translation type="unfinished">Readbacks Mode</translation>
+    </message>
+    <message>
+      <source>Disabled</source>
+      <translation type="unfinished">Disabled</translation>
+    </message>
+    <message>
+      <source>Readbacks:\nEnable GPU memory readbacks and writebacks.\nThis is required for proper behavior in some games.\nMight cause stability and/or performance issues.</source>
+      <translation type="unfinished">Readbacks:\nEnable GPU memory readbacks and writebacks.\nThis is required for proper behavior in some games.\nMight cause stability and/or performance issues.</translation>
+    </message>
+    <message>
+      <source>Relaxed</source>
+      <translation type="unfinished">Relaxed</translation>
+    </message>
+    <message>
+      <source>Precise</source>
+      <translation type="unfinished">Precise</translation>
+    </message>
+    <message>
+      <source>Select shadPS4 Home Path</source>
+      <translation type="unfinished">Select shadPS4 Home Path</translation>
+    </message>
+    <message>
+      <source>Select the system modules folder</source>
+      <translation type="unfinished">Select the system modules folder</translation>
+    </message>
+    <message>
+      <source>Home Folder Location (Saves, Inputs, Trophy Data)</source>
+      <translation type="unfinished">Home Folder Location (Saves, Inputs, Trophy Data)</translation>
+    </message>
+    <message>
+      <source>Home Folder Location:\nThe folder where save data, trophy files, and input configs are stored for all users.</source>
+      <translation type="unfinished">Home Folder Location:\nThe folder where save data, trophy files, and input configs are stored for all users.</translation>
+    </message>
+    <message>
+      <source>Browse:\nBrowse for a folder to set as the home folder.</source>
+      <translation type="unfinished">Browse:\nBrowse for a folder to set as the home folder.</translation>
+    </message>
+    <message>
+      <source>Audio</source>
+      <translation type="unfinished">Audio</translation>
+    </message>
+    <message>
+      <source>Audio Backend</source>
+      <translation type="unfinished">Audio Backend</translation>
+    </message>
+    <message>
+      <source>Mic Device</source>
+      <translation type="unfinished">Mic Device</translation>
+    </message>
+    <message>
+      <source>Devices</source>
+      <translation type="unfinished">Devices</translation>
+    </message>
+    <message>
+      <source>Camera</source>
+      <translation type="unfinished">Camera</translation>
+    </message>
+    <message>
+      <source>Log Sync</source>
+      <translation type="unfinished">Log Sync</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate</source>
+      <translation type="unfinished">Log Skip Duplicate</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration</source>
+      <translation type="unfinished">Log Max Skip Duration</translation>
+    </message>
+    <message>
+      <source> ms</source>
+      <translation type="unfinished"> ms</translation>
+    </message>
+    <message>
+      <source>Log Size Limit</source>
+      <translation type="unfinished">Log Size Limit</translation>
+    </message>
+    <message>
+      <source> B</source>
+      <translation type="unfinished"> B</translation>
+    </message>
+    <message>
+      <source>Log Append</source>
+      <translation type="unfinished">Log Append</translation>
+    </message>
+    <message>
+      <source>wincolor</source>
+      <translation type="unfinished">wincolor</translation>
+    </message>
+    <message>
+      <source>msvc</source>
+      <translation type="unfinished">msvc</translation>
+    </message>
+    <message>
+      <source>Log Append:\nAppend to existing logs.</source>
+      <translation type="unfinished">Log Append:\nAppend to existing logs.</translation>
+    </message>
+    <message>
+      <source>Log Max Skip Duration:\nInterval without writing same lines (ms) - only if &apos;Log Skip Duplicate&apos; enabled.</source>
+      <translation type="unfinished">Log Max Skip Duration:\nInterval without writing same lines (ms) - only if &apos;Log Skip Duplicate&apos; enabled.</translation>
+    </message>
+    <message>
+      <source>Log Size Limit:\nMaximum size of log files (bytes).</source>
+      <translation type="unfinished">Log Size Limit:\nMaximum size of log files (bytes).</translation>
+    </message>
+    <message>
+      <source>Log Skip Duplicate:\nSave storage by avoiding writing log that is identical.</source>
+      <translation type="unfinished">Log Skip Duplicate:\nSave storage by avoiding writing log that is identical.</translation>
+    </message>
+    <message>
+      <source>Log Sync:\nSwitch between sync (order) or async (performance).</source>
+      <translation type="unfinished">Log Sync:\nSwitch between sync (order) or async (performance).</translation>
+    </message>
+    <message>
+      <source>Log Type:\nChoose between wincolor or msvc log types.\nwincolor: Default logging for Windows\nmsvc: Logging for debugging</source>
+      <translation type="unfinished">Log Type:\nChoose between wincolor or msvc log types.\nwincolor: Default logging for Windows\nmsvc: Logging for debugging</translation>
+    </message>
+    <message>
+      <source>Log Filter:\nFilters the log to only print specific information.\nExamples: &quot;Core:Debug&quot; &quot;Lib.Pad:Debug Common.Filesystem:Error&quot; &quot;*:Critical&quot;\nLevels: trace, debug, info, warning, error, critical, off - in this order, a specific level silences all levels preceding it in the list and logs every level after it.</source>
+      <translation type="unfinished">Log Filter:\nFilters the log to only print specific information.\nExamples: &quot;Core:Debug&quot; &quot;Lib.Pad:Debug Common.Filesystem:Error&quot; &quot;*:Critical&quot;\nLevels: trace, debug, info, warning, error, critical, off - in this order, a specific level silences all levels preceding it in the list and logs every level after it.</translation>
+    </message>
+    <message>
+      <source>Enable shadNet</source>
+      <translation type="unfinished">Enable shadNet</translation>
+    </message>
+    <message>
+      <source>ShadNet</source>
+      <translation type="unfinished">ShadNet</translation>
+    </message>
+    <message>
+      <source>Server</source>
+      <translation type="unfinished">Server</translation>
+    </message>
+    <message>
+      <source>Signaling Info</source>
+      <translation type="unfinished">Signaling Info</translation>
+    </message>
+    <message>
+      <source>Enable UPNP</source>
+      <translation type="unfinished">Enable UPNP</translation>
+    </message>
+    <message>
+      <source>WebAPI Server</source>
+      <translation type="unfinished">WebAPI Server</translation>
+    </message>
+    <message>
+      <source>shadNet:\nCompatibility is very limited at the moment.\nYou can register at https://www.shadps4.net/shadnet/register/.</source>
+      <translation type="unfinished">shadNet:\nCompatibility is very limited at the moment.\nYou can register at https://www.shadps4.net/shadnet/register/.</translation>
+    </message>
+    <message>
+      <source>Red Zone Protection</source>
+      <translation type="unfinished">Red Zone Protection</translation>
+    </message>
+    <message>
+      <source>Static Patching</source>
+      <translation type="unfinished">Static Patching</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShortcutDialog</name>
+    <message>
+      <source>Select Version</source>
+      <translation type="unfinished">Select Version</translation>
+    </message>
+    <message>
+      <source>Select version for shortcut creation</source>
+      <translation type="unfinished">Select version for shortcut creation</translation>
+    </message>
+    <message>
+      <source>No Version Selected</source>
+      <translation type="unfinished">No Version Selected</translation>
+    </message>
+    <message>
+      <source>Select a version first</source>
+      <translation type="unfinished">Select a version first</translation>
+    </message>
+  </context>
+  <context>
+    <name>SteamShortcut</name>
+    <message>
+      <source>Steam</source>
+      <translation type="unfinished">Steam</translation>
+    </message>
+    <message>
+      <source>%1 is already in your Steam library.</source>
+      <translation type="unfinished">%1 is already in your Steam library.</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Steam installation not found.</source>
+      <translation type="unfinished">Steam installation not found.</translation>
+    </message>
+    <message>
+      <source>No Steam user account found. Please log into Steam at least once.</source>
+      <translation type="unfinished">No Steam user account found. Please log into Steam at least once.</translation>
+    </message>
+    <message>
+      <source>Steam is Running</source>
+      <translation type="unfinished">Steam is Running</translation>
+    </message>
+    <message>
+      <source>Steam is currently running. It will be closed and restarted to apply the shortcut. Continue?</source>
+      <translation type="unfinished">Steam is currently running. It will be closed and restarted to apply the shortcut. Continue?</translation>
+    </message>
+    <message>
+      <source>Steam did not close in time. Shortcut was not added.</source>
+      <translation type="unfinished">Steam did not close in time. Shortcut was not added.</translation>
+    </message>
+    <message>
+      <source>Failed to add game to Steam.</source>
+      <translation type="unfinished">Failed to add game to Steam.</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Steam is restarting.</source>
+      <translation type="unfinished">Added to Steam successfully. Steam is restarting.</translation>
+    </message>
+    <message>
+      <source>Added to Steam successfully. Launch Steam to see the changes.</source>
+      <translation type="unfinished">Added to Steam successfully. Launch Steam to see the changes.</translation>
+    </message>
+  </context>
+  <context>
+    <name>TrophyViewer</name>
+    <message>
+      <source>Trophy Viewer</source>
+      <translation type="unfinished">Trophy Viewer</translation>
+    </message>
+    <message>
+      <source>Select Game:</source>
+      <translation type="unfinished">Select Game:</translation>
+    </message>
+    <message>
+      <source>Progress</source>
+      <translation type="unfinished">Progress</translation>
+    </message>
+    <message>
+      <source>Show Earned Trophies</source>
+      <translation type="unfinished">Show Earned Trophies</translation>
+    </message>
+    <message>
+      <source>Show Not Earned Trophies</source>
+      <translation type="unfinished">Show Not Earned Trophies</translation>
+    </message>
+    <message>
+      <source>Show Hidden Trophies</source>
+      <translation type="unfinished">Show Hidden Trophies</translation>
+    </message>
+    <message>
+      <source>Select User:</source>
+      <translation type="unfinished">Select User:</translation>
+    </message>
+  </context>
+  <context>
+    <name>UserManagerDialog</name>
+    <message>
+      <source>User Manager</source>
+      <translation type="unfinished">User Manager</translation>
+    </message>
+    <message>
+      <source>&amp;Create User</source>
+      <translation type="unfinished">&amp;Create User</translation>
+    </message>
+    <message>
+      <source>&amp;Delete User</source>
+      <translation type="unfinished">&amp;Delete User</translation>
+    </message>
+    <message>
+      <source>&amp;Rename User</source>
+      <translation type="unfinished">&amp;Rename User</translation>
+    </message>
+    <message>
+      <source>&amp;Set Default User</source>
+      <translation type="unfinished">&amp;Set Default User</translation>
+    </message>
+    <message>
+      <source>&amp;Set Color</source>
+      <translation type="unfinished">&amp;Set Color</translation>
+    </message>
+    <message>
+      <source>&amp;Set Controller Port</source>
+      <translation type="unfinished">&amp;Set Controller Port</translation>
+    </message>
+    <message>
+      <source>&amp;Close</source>
+      <translation type="unfinished">&amp;Close</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Cannot add more users.</source>
+      <translation type="unfinished">Cannot add more users.</translation>
+    </message>
+    <message>
+      <source>Create New User</source>
+      <translation type="unfinished">Create New User</translation>
+    </message>
+    <message>
+      <source>New User ID: %1</source>
+      <translation type="unfinished">New User ID: %1</translation>
+    </message>
+    <message>
+      <source>Username (3–16 chars, letters, numbers, _, -)</source>
+      <translation type="unfinished">Username (3–16 chars, letters, numbers, _, -)</translation>
+    </message>
+    <message>
+      <source>Invalid Username</source>
+      <translation type="unfinished">Invalid Username</translation>
+    </message>
+    <message>
+      <source>Username must be 3–16 chars and valid.</source>
+      <translation type="unfinished">Username must be 3–16 chars and valid.</translation>
+    </message>
+    <message>
+      <source>Delete Confirmation</source>
+      <translation type="unfinished">Delete Confirmation</translation>
+    </message>
+    <message>
+      <source>Delete user ID %1?</source>
+      <translation type="unfinished">Delete user ID %1?</translation>
+    </message>
+    <message>
+      <source>Rename User</source>
+      <translation type="unfinished">Rename User</translation>
+    </message>
+    <message>
+      <source>Old Username: %1</source>
+      <translation type="unfinished">Old Username: %1</translation>
+    </message>
+    <message>
+      <source>Set User Color</source>
+      <translation type="unfinished">Set User Color</translation>
+    </message>
+    <message>
+      <source>Select color:</source>
+      <translation type="unfinished">Select color:</translation>
+    </message>
+    <message>
+      <source>Set Controller Port</source>
+      <translation type="unfinished">Set Controller Port</translation>
+    </message>
+    <message>
+      <source>Assign port (1-4) to this user:</source>
+      <translation type="unfinished">Assign port (1-4) to this user:</translation>
+    </message>
+    <message>
+      <source>&amp;Open User Directory</source>
+      <translation type="unfinished">&amp;Open User Directory</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net...</source>
+      <translation type="unfinished">Shad&amp;Net...</translation>
+    </message>
+    <message>
+      <source>On</source>
+      <translation type="unfinished">On</translation>
+    </message>
+    <message>
+      <source>On (%1)</source>
+      <translation type="unfinished">On (%1)</translation>
+    </message>
+    <message>
+      <source>Off</source>
+      <translation type="unfinished">Off</translation>
+    </message>
+    <message>
+      <source>ShadNet Settings - %1</source>
+      <translation type="unfinished">ShadNet Settings - %1</translation>
+    </message>
+    <message>
+      <source>Enable ShadNet for this user</source>
+      <translation type="unfinished">Enable ShadNet for this user</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID)</source>
+      <translation type="unfinished">Account ID (NPID)</translation>
+    </message>
+    <message>
+      <source>Password</source>
+      <translation type="unfinished">Password</translation>
+    </message>
+    <message>
+      <source>Show password</source>
+      <translation type="unfinished">Show password</translation>
+    </message>
+    <message>
+      <source>Account ID (NPID):</source>
+      <translation type="unfinished">Account ID (NPID):</translation>
+    </message>
+    <message>
+      <source>Password:</source>
+      <translation type="unfinished">Password:</translation>
+    </message>
+    <message>
+      <source>Shad&amp;Net Settings...</source>
+      <translation type="unfinished">Shad&amp;Net Settings...</translation>
+    </message>
+  </context>
+  <context>
+    <name>VersionDialog</name>
+    <message>
+      <source>Version Manager</source>
+      <translation type="unfinished">Version Manager</translation>
+    </message>
+    <message>
+      <source>Path to save versions</source>
+      <translation type="unfinished">Path to save versions</translation>
+    </message>
+    <message>
+      <source>Browse</source>
+      <translation type="unfinished">Browse</translation>
+    </message>
+    <message>
+      <source>Installed</source>
+      <translation type="unfinished">Installed</translation>
+    </message>
+    <message>
+      <source>Selected</source>
+      <translation type="unfinished">Selected</translation>
+    </message>
+    <message>
+      <source>Version</source>
+      <translation type="unfinished">Version</translation>
+    </message>
+    <message>
+      <source>Codename</source>
+      <translation type="unfinished">Codename</translation>
+    </message>
+    <message>
+      <source>Date</source>
+      <translation type="unfinished">Date</translation>
+    </message>
+    <message>
+      <source>Add Custom</source>
+      <translation type="unfinished">Add Custom</translation>
+    </message>
+    <message>
+      <source>Delete</source>
+      <translation type="unfinished">Delete</translation>
+    </message>
+    <message>
+      <source>Refresh List</source>
+      <translation type="unfinished">Refresh List</translation>
+    </message>
+    <message>
+      <source>Download</source>
+      <translation type="unfinished">Download</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release updates at startup</source>
+      <translation type="unfinished">Check for Pre-release updates at startup</translation>
+    </message>
+    <message>
+      <source>Check for Pre-release Updates</source>
+      <translation type="unfinished">Check for Pre-release Updates</translation>
+    </message>
+    <message>
+      <source>Select the folder where the emulator versions will be installed</source>
+      <translation type="unfinished">Select the folder where the emulator versions will be installed</translation>
+    </message>
+    <message>
+      <source>Select executable</source>
+      <translation type="unfinished">Select executable</translation>
+    </message>
+    <message>
+      <source>Executable (*.exe)</source>
+      <translation type="unfinished">Executable (*.exe)</translation>
+    </message>
+    <message>
+      <source>Version name</source>
+      <translation type="unfinished">Version name</translation>
+    </message>
+    <message>
+      <source>Enter the name of this version as it appears in the list.</source>
+      <translation type="unfinished">Enter the name of this version as it appears in the list.</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation type="unfinished">Error</translation>
+    </message>
+    <message>
+      <source>Success</source>
+      <translation type="unfinished">Success</translation>
+    </message>
+    <message>
+      <source>Version added successfully.</source>
+      <translation type="unfinished">Version added successfully.</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder path.</source>
+      <translation type="unfinished">Failed to determine the folder path.</translation>
+    </message>
+    <message>
+      <source>Delete version</source>
+      <translation type="unfinished">Delete version</translation>
+    </message>
+    <message>
+      <source>Do you want to delete the version</source>
+      <translation type="unfinished">Do you want to delete the version</translation>
+    </message>
+    <message>
+      <source>Version list update</source>
+      <translation type="unfinished">Version list update</translation>
+    </message>
+    <message>
+      <source>No news, the version list is already updated.</source>
+      <translation type="unfinished">No news, the version list is already updated.</translation>
+    </message>
+    <message>
+      <source>The latest versions have been added to the list for download.</source>
+      <translation type="unfinished">The latest versions have been added to the list for download.</translation>
+    </message>
+    <message>
+      <source>Error accessing GitHub API</source>
+      <translation type="unfinished">Error accessing GitHub API</translation>
+    </message>
+    <message>
+      <source>First you need to choose a location to save the versions in
+&apos;Path to save versions&apos;</source>
+      <translation type="unfinished">First you need to choose a location to save the versions in
+&apos;Path to save versions&apos;</translation>
+    </message>
+    <message>
+      <source>Do you want to download the version</source>
+      <translation type="unfinished">Do you want to download the version</translation>
+    </message>
+    <message>
+      <source>No files available for this platform.</source>
+      <translation type="unfinished">No files available for this platform.</translation>
+    </message>
+    <message>
+      <source>Downloading %1 , please wait...</source>
+      <translation type="unfinished">Downloading %1 , please wait...</translation>
+    </message>
+    <message>
+      <source>Could not save file.</source>
+      <translation type="unfinished">Could not save file.</translation>
+    </message>
+    <message>
+      <source>Version %1 has been downloaded and selected.</source>
+      <translation type="unfinished">Version %1 has been downloaded and selected.</translation>
+    </message>
+    <message>
+      <source>Failed to create zip extraction script</source>
+      <translation type="unfinished">Failed to create zip extraction script</translation>
+    </message>
+    <message>
+      <source>The GitHub API response is not a valid JSON array.</source>
+      <translation type="unfinished">The GitHub API response is not a valid JSON array.</translation>
+    </message>
+    <message>
+      <source>Auto Updater - Emulator</source>
+      <translation type="unfinished">Auto Updater - Emulator</translation>
+    </message>
+    <message>
+      <source>You already have the latest pre-release version.</source>
+      <translation type="unfinished">You already have the latest pre-release version.</translation>
+    </message>
+    <message>
+      <source>Update Available (Emulator)</source>
+      <translation type="unfinished">Update Available (Emulator)</translation>
+    </message>
+    <message>
+      <source>Current Version</source>
+      <translation type="unfinished">Current Version</translation>
+    </message>
+    <message>
+      <source>Latest Version</source>
+      <translation type="unfinished">Latest Version</translation>
+    </message>
+    <message>
+      <source>Do you want to update?</source>
+      <translation type="unfinished">Do you want to update?</translation>
+    </message>
+    <message>
+      <source>Update</source>
+      <translation type="unfinished">Update</translation>
+    </message>
+    <message>
+      <source>No</source>
+      <translation type="unfinished">No</translation>
+    </message>
+    <message>
+      <source>Show Changelog</source>
+      <translation type="unfinished">Show Changelog</translation>
+    </message>
+    <message>
+      <source>Hide Changelog</source>
+      <translation type="unfinished">Hide Changelog</translation>
+    </message>
+    <message>
+      <source>Network error while fetching changelog</source>
+      <translation type="unfinished">Network error while fetching changelog</translation>
+    </message>
+    <message>
+      <source>Changes</source>
+      <translation type="unfinished">Changes</translation>
+    </message>
+    <message>
+      <source>No download URL found for the specified asset.</source>
+      <translation type="unfinished">No download URL found for the specified asset.</translation>
+    </message>
+    <message>
+      <source>Network error while downloading</source>
+      <translation type="unfinished">Network error while downloading</translation>
+    </message>
+    <message>
+      <source>Failed to save download file</source>
+      <translation type="unfinished">Failed to save download file</translation>
+    </message>
+    <message>
+      <source>Complete installation</source>
+      <translation type="unfinished">Complete installation</translation>
+    </message>
+    <message>
+      <source>Pre-release updated successfully</source>
+      <translation type="unfinished">Pre-release updated successfully</translation>
+    </message>
+    <message>
+      <source>Failed to create the update script file</source>
+      <translation type="unfinished">Failed to create the update script file</translation>
+    </message>
+    <message>
+      <source>Always Show Changelog</source>
+      <translation type="unfinished">Always Show Changelog</translation>
+    </message>
+    <message>
+      <source>No version selected. Please choose one from the list to delete.</source>
+      <translation type="unfinished">No version selected. Please choose one from the list to delete.</translation>
+    </message>
+    <message>
+      <source>Confirm Download</source>
+      <translation type="unfinished">Confirm Download</translation>
+    </message>
+    <message>
+      <source>Extraction failure.</source>
+      <translation type="unfinished">Extraction failure.</translation>
+    </message>
+    <message>
+      <source>A version with that name already exists.</source>
+      <translation type="unfinished">A version with that name already exists.</translation>
+    </message>
+    <message>
+      <source>Local</source>
+      <translation type="unfinished">Local</translation>
+    </message>
+    <message>
+      <source>Failed to determine the folder to remove.</source>
+      <translation type="unfinished">Failed to determine the folder to remove.</translation>
+    </message>
+    <message>
+      <source>Failed to delete folder.</source>
+      <translation type="unfinished">Failed to delete folder.</translation>
+    </message>
+    <message>
+      <source>Unable to get hash of latest pre-release.</source>
+      <translation type="unfinished">Unable to get hash of latest pre-release.</translation>
+    </message>
+    <message>
+      <source>Downloading Pre-release (Nightly), please wait...</source>
+      <translation type="unfinished">Downloading Pre-release (Nightly), please wait...</translation>
+    </message>
+  </context>
+  <context>
+    <name>dimensions_dialog</name>
+    <message>
+      <source>Dimensions Manager</source>
+      <translation type="unfinished">Dimensions Manager</translation>
+    </message>
+    <message>
+      <source>Active Dimensions Figures:</source>
+      <translation type="unfinished">Active Dimensions Figures:</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation type="unfinished">Clear</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation type="unfinished">Load</translation>
+    </message>
+    <message>
+      <source>Move</source>
+      <translation type="unfinished">Move</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation type="unfinished">Unknown Figure</translation>
+    </message>
+    <message>
+      <source>Select Dimensions File</source>
+      <translation type="unfinished">Select Dimensions File</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation type="unfinished">Dimensions Figure (*.bin);;</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation type="unfinished">Failed to open the figure file!</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation type="unfinished">Failed to open the figure file(%1)!
+File may already be in use on the base.</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation type="unfinished">Failed to read the figure file!</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation type="unfinished">Failed to read the figure file(%1)!
+File was too small.</translation>
+    </message>
+  </context>
+  <context>
+    <name>figure_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation type="unfinished">Figure Creator</translation>
+    </message>
+    <message>
+      <source>Filter by Series:</source>
+      <translation type="unfinished">Filter by Series:</translation>
+    </message>
+    <message>
+      <source>All</source>
+      <translation type="unfinished">All</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation type="unfinished">--Unknown--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation type="unfinished">Figure Number:</translation>
+    </message>
+    <message>
+      <source>Series:</source>
+      <translation type="unfinished">Series:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation type="unfinished">Error converting value</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation type="unfinished">Figure number entered is invalid!</translation>
+    </message>
+    <message>
+      <source>Series number entered is invalid!</source>
+      <translation type="unfinished">Series number entered is invalid!</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation type="unfinished">Create Figure File</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation type="unfinished">Infinity Figure (*.bin);;</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file!</source>
+      <translation type="unfinished">Failed to create figure file!</translation>
+    </message>
+    <message>
+      <source>Failed to create figure file:
+%1</source>
+      <translation type="unfinished">Failed to create figure file:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>infinity_dialog</name>
+    <message>
+      <source>Infinity Manager</source>
+      <translation type="unfinished">Infinity Manager</translation>
+    </message>
+    <message>
+      <source>Active Infinity Figures:</source>
+      <translation type="unfinished">Active Infinity Figures:</translation>
+    </message>
+    <message>
+      <source>Play Set/Power Disc</source>
+      <translation type="unfinished">Play Set/Power Disc</translation>
+    </message>
+    <message>
+      <source>Power Disc Two</source>
+      <translation type="unfinished">Power Disc Two</translation>
+    </message>
+    <message>
+      <source>Power Disc Three</source>
+      <translation type="unfinished">Power Disc Three</translation>
+    </message>
+    <message>
+      <source>Player One</source>
+      <translation type="unfinished">Player One</translation>
+    </message>
+    <message>
+      <source>Player One Ability One</source>
+      <translation type="unfinished">Player One Ability One</translation>
+    </message>
+    <message>
+      <source>Player One Ability Two</source>
+      <translation type="unfinished">Player One Ability Two</translation>
+    </message>
+    <message>
+      <source>Player Two</source>
+      <translation type="unfinished">Player Two</translation>
+    </message>
+    <message>
+      <source>Player Two Ability One</source>
+      <translation type="unfinished">Player Two Ability One</translation>
+    </message>
+    <message>
+      <source>Player Two Ability Two</source>
+      <translation type="unfinished">Player Two Ability Two</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation type="unfinished">Clear</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation type="unfinished">Load</translation>
+    </message>
+    <message>
+      <source>Unknown Figure</source>
+      <translation type="unfinished">Unknown Figure</translation>
+    </message>
+    <message>
+      <source>Select Infinity File</source>
+      <translation type="unfinished">Select Infinity File</translation>
+    </message>
+    <message>
+      <source>Infinity Figure (*.bin);;</source>
+      <translation type="unfinished">Infinity Figure (*.bin);;</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file!</source>
+      <translation type="unfinished">Failed to open the figure file!</translation>
+    </message>
+    <message>
+      <source>Failed to open the figure file(%1)!
+File may already be in use on the base.</source>
+      <translation type="unfinished">Failed to open the figure file(%1)!
+File may already be in use on the base.</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file!</source>
+      <translation type="unfinished">Failed to read the figure file!</translation>
+    </message>
+    <message>
+      <source>Failed to read the figure file(%1)!
+File was too small.</source>
+      <translation type="unfinished">Failed to read the figure file(%1)!
+File was too small.</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_creator_dialog</name>
+    <message>
+      <source>Figure Creator</source>
+      <translation type="unfinished">Figure Creator</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation type="unfinished">--Unknown--</translation>
+    </message>
+    <message>
+      <source>Figure Number:</source>
+      <translation type="unfinished">Figure Number:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation type="unfinished">Error converting value</translation>
+    </message>
+    <message>
+      <source>Figure number entered is invalid!</source>
+      <translation type="unfinished">Figure number entered is invalid!</translation>
+    </message>
+    <message>
+      <source>Create Figure File</source>
+      <translation type="unfinished">Create Figure File</translation>
+    </message>
+    <message>
+      <source>Dimensions Figure (*.bin);;</source>
+      <translation type="unfinished">Dimensions Figure (*.bin);;</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file!</source>
+      <translation type="unfinished">Failed to create minifig file!</translation>
+    </message>
+    <message>
+      <source>Failed to create minifig file:
+%1</source>
+      <translation type="unfinished">Failed to create minifig file:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>minifig_move_dialog</name>
+    <message>
+      <source>Figure Mover</source>
+      <translation type="unfinished">Figure Mover</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+    <message>
+      <source>Move Here</source>
+      <translation type="unfinished">Move Here</translation>
+    </message>
+    <message>
+      <source>Pick up and Place</source>
+      <translation type="unfinished">Pick up and Place</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_creator_dialog</name>
+    <message>
+      <source>Skylander Creator</source>
+      <translation type="unfinished">Skylander Creator</translation>
+    </message>
+    <message>
+      <source>--Unknown--</source>
+      <translation type="unfinished">--Unknown--</translation>
+    </message>
+    <message>
+      <source>ID:</source>
+      <translation type="unfinished">ID:</translation>
+    </message>
+    <message>
+      <source>Variant:</source>
+      <translation type="unfinished">Variant:</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+      <source>Error converting value</source>
+      <translation type="unfinished">Error converting value</translation>
+    </message>
+    <message>
+      <source>ID entered is invalid!</source>
+      <translation type="unfinished">ID entered is invalid!</translation>
+    </message>
+    <message>
+      <source>Variant entered is invalid!</source>
+      <translation type="unfinished">Variant entered is invalid!</translation>
+    </message>
+    <message>
+      <source>Create Skylander File</source>
+      <translation type="unfinished">Create Skylander File</translation>
+    </message>
+    <message>
+      <source>Skylander Object (*.sky);;All Files (*)</source>
+      <translation type="unfinished">Skylander Object (*.sky);;All Files (*)</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file!</source>
+      <translation type="unfinished">Failed to create skylander file!</translation>
+    </message>
+    <message>
+      <source>Failed to create skylander file:
+%1</source>
+      <translation type="unfinished">Failed to create skylander file:
+%1</translation>
+    </message>
+  </context>
+  <context>
+    <name>skylander_dialog</name>
+    <message>
+      <source>Skylanders Manager</source>
+      <translation type="unfinished">Skylanders Manager</translation>
+    </message>
+    <message>
+      <source>Active Portal Skylanders:</source>
+      <translation type="unfinished">Active Portal Skylanders:</translation>
+    </message>
+    <message>
+      <source>Skylander %1</source>
+      <translation type="unfinished">Skylander %1</translation>
+    </message>
+    <message>
+      <source>Clear</source>
+      <translation type="unfinished">Clear</translation>
+    </message>
+    <message>
+      <source>Create</source>
+      <translation type="unfinished">Create</translation>
+    </message>
+    <message>
+      <source>Load</source>
+      <translation type="unfinished">Load</translation>
+    </message>
+    <message>
+      <source>Select Skylander File</source>
+      <translation type="unfinished">Select Skylander File</translation>
+    </message>
+    <message>
+      <source>Skylander (*.sky *.bin *.dmp *.dump);;All Files (*)</source>
+      <translation type="unfinished">Skylander (*.sky *.bin *.dmp *.dump);;All Files (*)</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file!</source>
+      <translation type="unfinished">Failed to open the skylander file!</translation>
+    </message>
+    <message>
+      <source>Failed to open the skylander file(%1)!
+File may already be in use on the portal.</source>
+      <translation type="unfinished">Failed to open the skylander file(%1)!
+File may already be in use on the portal.</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file!</source>
+      <translation type="unfinished">Failed to read the skylander file!</translation>
+    </message>
+    <message>
+      <source>Failed to read the skylander file(%1)!
+File was too small.</source>
+      <translation type="unfinished">Failed to read the skylander file(%1)!
+File was too small.</translation>
+    </message>
+    <message>
+      <source>Unknown (Id:%1 Var:%2)</source>
+      <translation type="unfinished">Unknown (Id:%1 Var:%2)</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation type="unfinished">None</translation>
+    </message>
+  </context>
+</TS>

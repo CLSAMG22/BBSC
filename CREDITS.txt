@@ -1,0 +1,36 @@
+BBSC - Bloodborne Seamless Co-op
+Credits
+
+MADE BY
+  CLS_AMG
+
+TESTED BY
+  fra98_ (framilano)
+  Hardwater
+  Onesadeye
+  aboood888848
+  Fahad
+  Mob
+  lelial
+  J2mF
+  Kukar3x
+
+SPECIAL THANKS
+  framilano (fra98_) - Bloodborne Nucleus Co-op Handler
+    split-screen Bloodborne on one PC; BBSC runs in it
+    https://github.com/framilano/BloodborneNucleusCoopHandler
+  Fahad (fhody125) - No Dream For The Hunter
+    the game server and ss.info groundwork BBSC's servers grew from
+
+BUILT ON
+  shadPS4 - the PS4 emulator (shadPS4 team and contributors, GPL-2.0)
+  shadp2p by Wozzardman - the peer-to-peer online fork BBSC is built on
+
+ONLINE
+  shadNet team - shadNet, the official shadPS4 online service (sessions, matchmaking)
+  The Hunter's Dream team - the public Bloodborne game server
+
+BLOODBORNE
+  Bloodborne is developed by FromSoftware and published by Sony Interactive Entertainment.
+  BBSC is a free fan-made project. It is not affiliated with or endorsed by FromSoftware or Sony.
+  You need your own copy of the game. No game files are included.

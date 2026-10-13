@@ -1,0 +1,5 @@
+Welcome to BBSC - Bloodborne Seamless Co-op
+This is a test version (0.0.1): expect bugs, and back up your saves.
+Host: ring the Hunt Bell. Guest: ring the Kin Bell.
+Found a bug? Post it in #bug-reports on our Discord with your logs.
+Help, news and co-op partners: discord.gg/Df7BCmfWdt
