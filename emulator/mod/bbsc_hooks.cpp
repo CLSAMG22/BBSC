@@ -16,7 +16,7 @@
 // whole instructions without RIP-relative operands. Every site BBSC hooks is a fixed, byte-checked
 // instruction sequence that the emulator build has already installed the same way.
 
-#include <windows.h>
+#include "bbsc_platform.h"
 
 #include <cstddef>
 #include <cstring>
@@ -48,11 +48,11 @@ bool area_ok = false;
 
 // The last 1 MB of the emulator's trampoline area after the image, when it is mapped RWX and unused.
 bool EmulatorAreaFree(u64 start) {
-    MEMORY_BASIC_INFORMATION info{};
-    if (VirtualQuery(reinterpret_cast<void*>(start), &info, sizeof(info)) == 0 ||
-        info.State != MEM_COMMIT ||
-        (info.Protect & (PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) == 0 ||
-        reinterpret_cast<u64>(info.BaseAddress) + info.RegionSize < start + OurSize) {
+    using namespace BbscMod::Platform;
+    Region info;
+    if (!QueryRegion(start, info) || !info.committed ||
+        (info.prot & (ProtWrite | ProtExec)) != (ProtWrite | ProtExec) ||
+        info.end < start + OurSize) {
         return false;
     }
     const auto* bytes = reinterpret_cast<const u8*>(start);
@@ -68,16 +68,14 @@ bool EmulatorAreaFree(u64 start) {
 u64 MapOwnArea(u64 image) {
     const u64 image_end = image + EbootAlignedSize + EmulatorTrampolineSize;
     for (u64 at = (image_end + 0xFFFF) & ~0xFFFFULL; at < image + JumpReach; at += 0x10000) {
-        if (void* got = VirtualAlloc(reinterpret_cast<void*>(at), OurSize, MEM_RESERVE | MEM_COMMIT,
-                                     PAGE_EXECUTE_READWRITE)) {
+        if (void* got = BbscMod::Platform::MapCodeAt(at, OurSize)) {
             return reinterpret_cast<u64>(got);
         }
     }
     const u64 low = image > JumpReach - EbootAlignedSize ? image + EbootAlignedSize - JumpReach
                                                          : 0x10000;
     for (u64 at = (image - OurSize) & ~0xFFFFULL; at >= low && at < image; at -= 0x10000) {
-        if (void* got = VirtualAlloc(reinterpret_cast<void*>(at), OurSize, MEM_RESERVE | MEM_COMMIT,
-                                     PAGE_EXECUTE_READWRITE)) {
+        if (void* got = BbscMod::Platform::MapCodeAt(at, OurSize)) {
             return reinterpret_cast<u64>(got);
         }
     }
@@ -110,10 +108,6 @@ bool CheckArea() {
 }
 
 bool WriteJump(u8* site, const void* target, size_t length) {
-    DWORD old = 0;
-    if (!VirtualProtect(site, length, PAGE_EXECUTE_READWRITE, &old)) {
-        return false;
-    }
     std::array<u8, 32> bytes{};
     const s64 rel = reinterpret_cast<s64>(target) - reinterpret_cast<s64>(site + 5);
     bytes[0] = 0xE9;
@@ -122,11 +116,7 @@ bool WriteJump(u8* site, const void* target, size_t length) {
     for (size_t i = 5; i < length; ++i) {
         bytes[i] = 0x90;
     }
-    std::memcpy(site, bytes.data(), length);
-    DWORD ignored = 0;
-    VirtualProtect(site, length, old, &ignored);
-    FlushInstructionCache(GetCurrentProcess(), site, length);
-    return true;
+    return BbscMod::Platform::WriteCode(reinterpret_cast<u64>(site), bytes.data(), length);
 }
 
 } // namespace
@@ -252,8 +242,7 @@ bool InstallGuestCodeHook(void* address, std::span<const u8> expected_instructio
         BbscMod::LogPlain(error.what());
         return false;
     }
-    FlushInstructionCache(GetCurrentProcess(), trampoline_start,
-                          trampoline.getSize() - trampoline_offset);
+    BbscMod::Platform::FlushCode(trampoline_start, trampoline.getSize() - trampoline_offset);
     return WriteJump(code, trampoline_start, expected_instructions.size());
 }
 

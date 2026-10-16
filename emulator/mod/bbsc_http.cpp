@@ -30,8 +30,15 @@
 // Not done: the emulator's 3 s "fast sign" re-posts. They replaced the game's own reply; extra
 // posts from here would take the broker's claim themselves and the game would never join.
 
-#include <windows.h>
+#include "bbsc_platform.h"
+#ifdef _WIN32
 #include <winhttp.h>
+#else
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+#endif
 
 #include <array>
 #include <atomic>
@@ -48,6 +55,7 @@
 #include <vector>
 
 #include "common/logging/log.h"
+#include "common/path_util.h"
 #include "common/types.h"
 #include "core/bloodborne_re.h"
 
@@ -107,12 +115,12 @@ std::atomic<s64> claim_delivered_ms{0}; // our sign's reply carried a host's cla
 std::atomic<bool> was_in_session{false};
 
 s64 NowMs() {
-    return static_cast<s64>(GetTickCount64());
+    return static_cast<s64>(BbscMod::Platform::NowMs());
 }
 
 // ---- host_overrides.json ------------------------------------------------------------------------
 
-std::string ReadFile(const std::wstring& path) {
+std::string ReadFile(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     std::stringstream text;
     text << in.rdbuf();
@@ -121,30 +129,22 @@ std::string ReadFile(const std::wstring& path) {
 
 // {"prefix": "replacement", ...} - flat string pairs, as JOIN-HOST writes them.
 void LoadOverrides() {
-    wchar_t exe[MAX_PATH]{};
-    GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    std::wstring dir{exe};
-    const std::wstring exe_name = dir.substr(dir.find_last_of(L"\\/") + 1);
-    dir = dir.substr(0, dir.find_last_of(L"\\/") + 1);
+    std::string exe_name =
+        Common::FS::PathToUTF8String(BbscMod::Platform::ProgramPath().filename());
+    for (char& c : exe_name) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
     // bbhost sends the game's URLs to its own server ([online] host) itself. shadPS4's
     // host_overrides.json on the same PC pointed them at another server (2026-10-12: game API on
     // the shadPS4 server, NP sessions on bbhost's - nothing matched). BBSC_URL_OVERRIDES=0 does the
     // same for any host.
     const char* switch_env = std::getenv("BBSC_URL_OVERRIDES");
-    if (_wcsnicmp(exe_name.c_str(), L"bbhost", 6) == 0 || (switch_env && switch_env[0] == '0')) {
+    if (exe_name.rfind("bbhost", 0) == 0 || (switch_env && switch_env[0] == '0')) {
         LOG_INFO(Mod, "HTTP: URL overrides off ({}) - the host sends the game's URLs itself",
                  switch_env && switch_env[0] == '0' ? "BBSC_URL_OVERRIDES=0" : "bbhost");
         return;
     }
-    // The emulator's own rule: a "user" folder in the folder it was started in wins (portable).
-    wchar_t cwd[MAX_PATH]{};
-    GetCurrentDirectoryW(MAX_PATH, cwd);
-    std::vector<std::wstring> candidates{std::wstring(cwd) + L"\\user\\host_overrides.json",
-                                        dir + L"user\\host_overrides.json"};
-    if (const wchar_t* appdata = _wgetenv(L"APPDATA")) {
-        candidates.push_back(std::wstring(appdata) + L"\\shadPS4\\host_overrides.json");
-    }
-    for (const auto& path : candidates) {
+    for (const auto& path : BbscMod::Platform::HostOverridesFiles()) {
         const std::string json = ReadFile(path);
         std::vector<std::string> strings;
         for (size_t at = json.find('"'); at != std::string::npos; at = json.find('"', at)) {
@@ -288,7 +288,8 @@ std::string JsonNumber(const std::string& body, const char* key) {
 }
 
 // One plain POST with WinHTTP (the stale-record delete). Returns the status code, 0 on failure.
-DWORD Post(const std::string& url, const std::string& body) {
+#ifdef _WIN32
+u32 Post(const std::string& url, const std::string& body) {
     std::wstring wide(url.begin(), url.end());
     URL_COMPONENTS parts{sizeof(parts)};
     wchar_t host[256]{};
@@ -327,6 +328,81 @@ DWORD Post(const std::string& url, const std::string& body) {
     }
     return status;
 }
+#else
+// Linux: the same POST over a plain socket. The delete only goes to a BBSC host's summon broker
+// (shadnet-p2p's WebAPI, plain http); public servers (https) never get it (IsPublicServer).
+u32 Post(const std::string& url, const std::string& body) {
+    constexpr std::string_view Scheme = "http://";
+    if (url.rfind(Scheme, 0) != 0) {
+        return 0;
+    }
+    const size_t path_at = url.find('/', Scheme.size());
+    const std::string authority = url.substr(Scheme.size(), path_at - Scheme.size());
+    const std::string path = path_at == std::string::npos ? "/" : url.substr(path_at);
+    const size_t colon = authority.rfind(':');
+    const std::string host = authority.substr(0, colon);
+    const std::string port = colon == std::string::npos ? "80" : authority.substr(colon + 1);
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    addrinfo* found = nullptr;
+    if (getaddrinfo(host.c_str(), port.c_str(), &hints, &found) != 0) {
+        return 0;
+    }
+    int s = -1;
+    for (const addrinfo* at = found; at != nullptr && s < 0; at = at->ai_next) {
+        s = socket(at->ai_family, at->ai_socktype | SOCK_CLOEXEC, at->ai_protocol);
+        if (s < 0) {
+            continue;
+        }
+        // WinHTTP's timeouts above: about a second each way, on the game's thread.
+        const timeval send_timeout{1, 0};
+        const timeval receive_timeout{1, 500'000};
+        setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout));
+        setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout));
+        if (connect(s, at->ai_addr, at->ai_addrlen) != 0) {
+            close(s);
+            s = -1;
+        }
+    }
+    freeaddrinfo(found);
+    if (s < 0) {
+        return 0;
+    }
+    const std::string request = "POST " + path + " HTTP/1.1\r\nHost: " + authority +
+                                "\r\nContent-Type: application/json\r\n"
+                                "X-ShadPS4-Bloodborne-Seamless: 1\r\nContent-Length: " +
+                                std::to_string(body.size()) +
+                                "\r\nConnection: close\r\n\r\n" + body;
+    size_t sent = 0;
+    while (sent < request.size()) {
+        const ssize_t n = send(s, request.data() + sent, request.size() - sent, MSG_NOSIGNAL);
+        if (n <= 0) {
+            break;
+        }
+        sent += static_cast<size_t>(n);
+    }
+    u32 status = 0;
+    if (sent == request.size()) {
+        std::string reply;
+        char chunk[256];
+        while (reply.find("\r\n") == std::string::npos && reply.size() < 1024) {
+            const ssize_t n = recv(s, chunk, sizeof(chunk), 0);
+            if (n <= 0) {
+                break;
+            }
+            reply.append(chunk, static_cast<size_t>(n));
+        }
+        // "HTTP/1.1 200 OK"
+        const size_t space = reply.find(' ');
+        if (reply.rfind("HTTP/", 0) == 0 && space != std::string::npos) {
+            status = static_cast<u32>(std::strtoul(reply.c_str() + space + 1, nullptr, 10));
+        }
+    }
+    close(s);
+    return status;
+}
+#endif
 
 // The broker keeps Preparing/Claimed/Delivered records 15 minutes and Bloodborne reuses its
 // SessionId/UserId after a restart, so the first seamless sign of this run removes any old one.
@@ -346,7 +422,7 @@ void ClearStaleRecord(const std::string& url, const std::string& body) {
                                 session + "\",\"UserId\":" + user + ",\"Force\":true}";
     // It must finish before the new sign is created (the delete names the same session), so it
     // stays on this thread - the game's - with short timeouts (2026-10-08: up to 14 s before).
-    const DWORD status = Post(removal_url, removal);
+    const u32 status = Post(removal_url, removal);
     LOG_INFO(Mod, "HTTP: stale summon cleanup for session {} user {}: status {}", session, user,
              status);
 }
@@ -362,13 +438,9 @@ void ClearStaleRecord(const std::string& url, const std::string& body) {
 //   - we were in a session (joining, guest or host) and are back to posting signs.
 s32 SessionState() {
     const u64 manager = *reinterpret_cast<const u64*>(BbscMod::EbootAddress() + 0x05540290);
-    MEMORY_BASIC_INFORMATION info{};
-    constexpr DWORD Readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
-                               PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-    if (manager >= 0x10000 && VirtualQuery(reinterpret_cast<void*>(manager + 0x124), &info,
-                                           sizeof(info)) != 0 &&
-        info.State == MEM_COMMIT && (info.Protect & Readable) != 0 &&
-        (info.Protect & (PAGE_GUARD | PAGE_NOACCESS)) == 0) {
+    BbscMod::Platform::Region info;
+    if (manager >= 0x10000 && BbscMod::Platform::QueryRegion(manager + 0x124, info) &&
+        info.committed && (info.prot & BbscMod::Platform::ProtRead) != 0) {
         return *reinterpret_cast<const s32*>(manager + 0x124);
     }
     return -1;
@@ -420,7 +492,7 @@ int PS4_SYSV_ABI CreateRequestWithURL(int connection, s32 method, const char* ur
 // A slot's value when it holds an emulator function (outside the eboot), else 0.
 u64 CurrentSlot(u64 slot_offset) {
     const u64 base = BbscMod::EbootAddress();
-    const u64 value = *reinterpret_cast<const volatile u64*>(base + slot_offset);
+    const u64 value = BbscMod::Platform::ReadSlot(base + slot_offset);
     return value != 0 && (value < base || value >= base + EbootSize) ? value : 0;
 }
 
@@ -562,34 +634,30 @@ int PS4_SYSV_ABI DeleteRequest(int request) {
 // the game could call the wrapper before the original was stored). False if the slot never filled.
 template <typename Fn>
 bool Swap(u64 slot_offset, Fn wrapper, Fn& original, const char* name) {
-    auto* slot = reinterpret_cast<u64*>(BbscMod::EbootAddress() + slot_offset);
+    const u64 slot = BbscMod::EbootAddress() + slot_offset;
     for (int i = 0; i < 60'000; ++i) {
-        const u64 value = *slot;
+        const u64 value = BbscMod::Platform::ReadSlot(slot);
         if (value != 0 && (value < BbscMod::EbootAddress() || value >= BbscMod::EbootAddress() + EbootSize)) {
             original = reinterpret_cast<Fn>(value);
-            DWORD old = 0;
-            VirtualProtect(slot, 8, PAGE_READWRITE, &old);
-            *slot = reinterpret_cast<u64>(wrapper);
-            DWORD ignored = 0;
-            VirtualProtect(slot, 8, old, &ignored);
+            BbscMod::Platform::WriteSlot(slot, reinterpret_cast<u64>(wrapper));
             BbscMod::GuardSlot(slot_offset, reinterpret_cast<u64>(wrapper),
                                reinterpret_cast<void**>(&original), name);
             return true;
         }
-        Sleep(1);
+        BbscMod::Platform::SleepMs(1);
     }
     return false;
 }
 
 // The two slots read, not swapped: waits for them as Swap does (they are filled at the same time).
 u64 WaitForSlot(u64 slot_offset) {
-    const auto* slot = reinterpret_cast<const u64*>(BbscMod::EbootAddress() + slot_offset);
+    const u64 slot = BbscMod::EbootAddress() + slot_offset;
     for (int i = 0; i < 60'000; ++i) {
-        const u64 value = *slot;
+        const u64 value = BbscMod::Platform::ReadSlot(slot);
         if (value != 0 && (value < BbscMod::EbootAddress() || value >= BbscMod::EbootAddress() + EbootSize)) {
             return value;
         }
-        Sleep(1);
+        BbscMod::Platform::SleepMs(1);
     }
     return 0;
 }
