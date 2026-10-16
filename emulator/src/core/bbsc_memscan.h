@@ -18,4 +18,17 @@ namespace Core::Bbsc {
 std::vector<std::uint64_t> FindInMemory(std::span<const std::uint8_t> needle, std::uint64_t lo,
                                         std::uint64_t hi, std::size_t max_hits);
 
+#ifdef __linux__
+// One line of /proc/self/maps.
+struct MemoryMapEntry {
+    std::uint64_t start;
+    std::uint64_t end;
+    bool read;
+    bool write;
+    bool exec;
+};
+// The process's mappings in address order (also the mod's memory queries on Linux).
+std::vector<MemoryMapEntry> ReadMemoryMap();
+#endif
+
 } // namespace Core::Bbsc
