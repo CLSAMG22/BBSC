@@ -1,0 +1,78 @@
+# Builds the BBSC player package for BBport on Linux (emulator/mod/build-mod.sh) and uploads it as
+# an artifact; on a v* tag it is also attached to that tag's GitHub release.
+# Arch container: the mod needs C++23 and is built with Arch's GCC locally; ubuntu-latest's GCC is
+# older. glibc_compat.h keeps libbbsc.so loadable by the BBport AppImage's glibc (2.42).
+name: BBSC mod (Linux)
+
+on:
+  push:
+    branches: [main, feature/linux-bbport]
+    tags: ['v*']
+    paths-ignore: ['**.md']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install toolchain
+        run: pacman -Syu --noconfirm --needed base-devel git
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch fmt and xbyak
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth 1 emulator/externals/fmt emulator/externals/xbyak
+
+      - name: Build
+        run: |
+          g++ --version | head -1
+          emulator/mod/build-mod.sh
+
+      - name: Check libbbsc.so (glibc <= 2.42, no C++ runtime imports, no exports)
+        run: |
+          so=$(echo build/mod-linux/BBSC-*-BBport-Linux/libbbsc.so)
+          versions=$(objdump -T "$so" | grep -oE '\b(GLIBC|GLIBCXX|CXXABI|GCC)_[0-9.]+' | sort -u -V)
+          echo "$versions"
+          if grep -qvE '^GLIBC_' <<<"$versions"; then
+            echo "::error::libbbsc.so imports C++ runtime/libgcc symbols"; exit 1
+          fi
+          newest=$(sed 's/^GLIBC_//' <<<"$versions" | sort -V | tail -1)
+          if [[ $(printf '%s\n' "$newest" 2.42 | sort -V | tail -1) != 2.42 ]]; then
+            echo "::error::libbbsc.so needs GLIBC_$newest (BBport ships 2.42)"; exit 1
+          fi
+          exports=$(nm -D --defined-only "$so")
+          if [[ -n $exports ]]; then
+            echo "$exports"; echo "::error::libbbsc.so exports symbols"; exit 1
+          fi
+
+      - name: Package name
+        id: pkg
+        run: echo "name=$(basename build/mod-linux/BBSC-*-BBport-Linux.tar.gz .tar.gz)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.name }}
+          path: build/mod-linux/${{ steps.pkg.outputs.name }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: BBSC-*-BBport-Linux
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: BBSC-*-BBport-Linux.tar.gz
