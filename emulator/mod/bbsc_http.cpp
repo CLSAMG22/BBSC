@@ -98,7 +98,7 @@ ReadDataFn original_read_data = nullptr;
 
 std::mutex state_mutex;
 std::map<int, std::string> request_urls;            // reqId -> URL the request really goes to
-std::vector<std::pair<std::string, std::string>> overrides; // URL prefix -> replacement
+std::vector<std::pair<std::string, std::string>> overrides; // URL prefix -> server
 std::atomic<bool> stale_cleared{false};
 std::atomic<s64> placement_received_ms{0};
 // 5-player test 2026-10-12: every player polls /summon_messenger/get, waiting guests too, so every
@@ -190,12 +190,44 @@ std::string FixAnyAddress(std::string text) {
     return text;
 }
 
+// An entry moves the URL to another server the way the emulator's http.cpp (ApplyHostOverride)
+// reads it: the value gives the scheme, host and port, the URL keeps its path, and a value without
+// a port keeps the URL's port (https 443 <-> http 80 aside). 2026-10-16, BBport for Linux: its
+// {"https://ss4.scej-network.jp:20443": "http://play.seamlesshunt.com"} went to port 80 as plain
+// text replacement, and "<server>:18671/summon_messenger" lost "/summon_messenger" - the game could
+// not reach its server.
 std::string Override(const char* url) {
     std::string text = FixAnyAddress(url != nullptr ? url : "");
     for (const auto& [prefix, replacement] : overrides) {
-        if (text.rfind(prefix, 0) == 0) {
+        if (text.rfind(prefix, 0) != 0) {
+            continue;
+        }
+        const size_t scheme_end = text.find("://");
+        if (scheme_end == std::string::npos) {
             return replacement + text.substr(prefix.size());
         }
+        const std::string scheme = text.substr(0, scheme_end);
+        const size_t path_at = std::min(text.find_first_of("/?#", scheme_end + 3), text.size());
+        const std::string authority = text.substr(scheme_end + 3, path_at - scheme_end - 3);
+        const size_t colon = authority.rfind(':');
+        std::string port = colon != std::string::npos ? authority.substr(colon + 1)
+                           : scheme == "https"         ? "443"
+                                                       : "80";
+        std::string new_scheme = scheme;
+        std::string target = replacement;
+        if (const size_t at = target.find("://"); at != std::string::npos) {
+            new_scheme = target.substr(0, at);
+            target = target.substr(at + 3);
+        }
+        target = target.substr(0, target.find('/'));
+        if (target.find(':') == std::string::npos) {
+            if (new_scheme != scheme &&
+                ((scheme == "https" && port == "443") || (scheme == "http" && port == "80"))) {
+                port = new_scheme == "https" ? "443" : "80";
+            }
+            target += ":" + port;
+        }
+        return new_scheme + "://" + target + text.substr(path_at);
     }
     return text;
 }
