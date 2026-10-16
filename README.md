@@ -20,12 +20,12 @@ Dream - up to five hunters, each keeping their own character.
 - A co-op kit with no Insight cost: Hunt Bell, Kin Bell, Bloodlust Bell, Parting Blank, Duel Bell (PvP toggle)
 - Clear co-op messages in place of the vanilla "beckoner / resonance" lines
 - Public server, self-hosted servers (Radmin VPN, Tailscale, LAN, VPS) and split screen (Nucleus Co-op)
-- Runs in shadPS4 and in the BBport Windows build
+- Runs in shadPS4 and in BBport (the Windows build; Linux: test build, see `docs/LINUX-BBPORT.md`)
 
 ## Requirements
 
 - Your own Bloodborne **CUSA03173, version 01.09** - no game files are included
-- Windows (the server also runs on Linux)
+- Windows (the server also runs on Linux), or BBport for Linux (`docs/LINUX-BBPORT.md`)
 
 ## Downloads
 
@@ -57,6 +57,7 @@ Dream - up to five hunters, each keeping their own character.
 
 - Emulator: `build/build-shadp2p.cmd` (Windows, Visual Studio 2022, CMake, Ninja)
 - Mod DLL: `emulator/mod/build-mod.cmd`
+- Mod for BBport on Linux: `emulator/mod/build-mod.sh` (`docs/LINUX-BBPORT.md`)
 - Game server: Python 3, no extra packages (`server/gameserver/bbsc_gameserver.py --shadnet <address>`)
 
 ## Reporting bugs
