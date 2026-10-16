@@ -1,0 +1,5 @@
+/* libbbsc.so exports nothing: it starts from its constructor (bbsc_mod.cpp), and the C++ runtime
+   linked into it must not take the place of bb-probe's own. */
+{
+    local: *;
+};

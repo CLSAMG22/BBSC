@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright 2026 CLS_AMG
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# bbsc-probe - starts BBport's bb-probe (Linux) with the BBSC mod, libbbsc.so, loaded into it: the
+# Linux counterpart of bbsc-launch.exe standing in for bb-probe.exe in BBport for Windows. BBport's
+# run.sh starts BB_PROBE instead of its own bb-probe, so
+#     BB_PROBE=<this folder>/bbsc-probe
+# (BBport launcher: the extra environment variables setting) is all it takes. run.sh's arguments
+# are passed on unchanged. libbbsc.so finds the game in memory by itself (bbsc_mod.cpp) and keeps
+# its logs, captures and save backups in this folder.
+#
+# run.sh also runs bb-gpu-capabilities from the folder of BB_PROBE: that name is a link to this
+# script, which then runs BBport's own. Bash builtins only (the AppImage's PATH is its own).
+set -euo pipefail
+here=${BASH_SOURCE[0]%/*}
+[[ $here == "${BASH_SOURCE[0]}" ]] && here=.
+here=$(cd -- "$here" && pwd)
+# BBport's tools: next to BBSC_EMULATOR (its bb-probe) when set, else where run.sh keeps them (it
+# runs in its own folder): bin/ in a packaged build (the AppImage), out/ when built from source.
+if [[ -n ${BBSC_EMULATOR:-} ]]; then
+    tools=${BBSC_EMULATOR%/*}
+elif [[ -n ${BB_PREBUILT:-} ]]; then
+    tools=$PWD/bin
+else
+    tools=$PWD/out
+fi
+if [[ ${0##*/} == bb-gpu-capabilities ]]; then
+    exec "$tools/bb-gpu-capabilities" "$@"
+fi
+probe=${BBSC_EMULATOR:-$tools/bb-probe}
+if [[ ! -x $probe ]]; then
+    echo "BBSC: bb-probe not found at $probe (set BBSC_EMULATOR)" >&2
+    exit 1
+fi
+if [[ ! -f $here/libbbsc.so ]]; then
+    echo "BBSC: libbbsc.so not found in $here" >&2
+    exit 1
+fi
+# The user folder run.sh gives bb-probe (--user): the mod finds the character's saves there.
+args=("$@")
+for ((i = 0; i + 1 < ${#args[@]}; ++i)); do
+    if [[ ${args[i]} == --user ]]; then
+        export BBSC_USER_DIR=${args[i + 1]}
+    fi
+done
+# As bbsc-launch.exe: the switches of an emulator build with BBSC built in stay off unless set.
+export SHADPS4_BBSC_PERSIST=${SHADPS4_BBSC_PERSIST:-0}
+export SHADPS4_BLOODBORNE_SEAMLESS_COOP=${SHADPS4_BLOODBORNE_SEAMLESS_COOP:-0}
+export SHADPS4_BLOODBORNE_RE_TRACE=${SHADPS4_BLOODBORNE_RE_TRACE:-0}
+# Only bb-probe gets it: libbbsc.so takes itself out of LD_PRELOAD again once loaded.
+export LD_PRELOAD=$here/libbbsc.so${LD_PRELOAD:+:$LD_PRELOAD}
+exec "$probe" "$@"
