@@ -29,19 +29,19 @@ runs `bb-probe` on its own glibc (2.42).
 
 ## Install
 
-Copy the folder to a writable place; the mod keeps its logs, captures and save backups in it:
-
 ```bash
-cp -r build/mod-linux/bbsc ~/.local/share/bbport/bbsc
+emulator/mod/linux/install.sh ~/path/to/Bloodborne-bbport-x86_64.AppImage
 ```
 
-BBport launcher: Settings > Developer > "Extra variables (NAME=value, space-separated)":
+It copies the build to `~/.local/share/bbport/bbsc` (the mod keeps its logs, captures and save
+backups there) and adds **Bloodborne (BBSC)** to the application menu: BBport's own launcher,
+started with `BB_PROBE` pointing at `bbsc-probe`, so every game it starts has BBSC. BBport started
+any other way stays without it. From a terminal: `~/.local/share/bbport/bbsc/bbsc-play` (add
+`--play` to skip the launcher window). For a source build of BBport, give `launcher/bb-launcher.sh`
+instead of the AppImage. `install.sh --uninstall` removes the menu entry.
 
-```text
-BB_PROBE=/home/<user>/.local/share/bbport/bbsc/bbsc-probe
-```
-
-(Keep what is already in the field, separated by a space.) Empty it again to play without BBSC.
+Without the menu entry: put `BB_PROBE=<mod folder>/bbsc-probe` in the launcher's Settings >
+Developer > "Extra variables (NAME=value, space-separated)"; BBport then always starts with BBSC.
 
 Online play is set up as for BBport itself (Online page: account, servers, "Seamless co-op
 (BBSC)"). BBSC reads the `host_overrides.json` that `run.sh` writes for the launch, connects to the
@@ -53,7 +53,7 @@ example `SHADPS4_BBSC_SCALING=0`.
 
 ## Check that it runs
 
-Start the game from the launcher and look at the newest
+Start the game from Bloodborne (BBSC) and look at the newest
 `~/.local/share/bbport/bbsc/logs/bbsc-mod-*.log`:
 
 - `BBSC mod in pid ... (.../bb-probe)` and `Game image found at 0x800000000`
