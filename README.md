@@ -35,6 +35,7 @@ Dream - up to five hunters, each keeping their own character.
 | `BBSC-<version>-Server.zip` | Hosting your own server (Windows) |
 | `BBSC-<version>-Nucleus.zip` | Split screen with the [Bloodborne Nucleus Co-op Handler](https://github.com/framilano/BloodborneNucleusCoopHandler) |
 | `BBSC-<version>-BBport.zip` | Test build for the [BBport Windows build](https://github.com/Supermedo/bloodborne_pc) - same server as shadPS4 players |
+| `BBSC-<version>-BBport-Linux.tar.gz` | Test build for BBport on Linux: extract, run `./install.sh` (`docs/LINUX-BBPORT.md`) |
 
 ## Quick start
 

@@ -23,22 +23,27 @@ git submodule update --init emulator/externals/fmt emulator/externals/xbyak
 emulator/mod/build-mod.sh
 ```
 
-Output: `build/mod-linux/bbsc/` (`libbbsc.so`, `bbsc-probe`, `LICENSE.txt`, `NOTICE.txt`,
-`SUPPORTERS.txt`). The C++ runtime is linked in, so the library also loads in the AppImage, which
-runs `bb-probe` on its own glibc (2.42).
+Output: `build/mod-linux/BBSC-<version>-BBport-Linux.tar.gz` (and its folder), the package for
+players: `libbbsc.so`, `bbsc-probe`, `install.sh`, `README.txt`, `LICENSE.txt`, `NOTICE.txt`,
+`SUPPORTERS.txt`. `<version>` is `emulator/mod/mod.json`'s. The C++ runtime is linked in, so the
+library also loads in the AppImage, which runs `bb-probe` on its own glibc (2.42).
 
-## Install
+## Install (players)
+
+Extract the package anywhere and, in its folder:
 
 ```bash
-emulator/mod/linux/install.sh ~/path/to/Bloodborne-bbport-x86_64.AppImage
+./install.sh
 ```
 
-It copies the build to `~/.local/share/bbport/bbsc` (the mod keeps its logs, captures and save
-backups there) and adds **Bloodborne (BBSC)** to the application menu: BBport's own launcher,
-started with `BB_PROBE` pointing at `bbsc-probe`, so every game it starts has BBSC. BBport started
-any other way stays without it. From a terminal: `~/.local/share/bbport/bbsc/bbsc-play` (add
-`--play` to skip the launcher window). For a source build of BBport, give `launcher/bb-launcher.sh`
-instead of the AppImage. `install.sh --uninstall` removes the menu entry.
+It looks for `Bloodborne-bbport*.AppImage` next to the folder, in `~/Applications`, `~/Downloads`,
+`~/Games` and `~` (otherwise: `./install.sh /path/to/Bloodborne-bbport-x86_64.AppImage`; for a
+source build of BBport, its `launcher/bb-launcher.sh`). It copies the mod to
+`~/.local/share/bbport/bbsc` (logs, captures and save backups go there) and adds
+**Bloodborne (BBSC)** to the application menu: BBport's own launcher, started with `BB_PROBE`
+pointing at `bbsc-probe`, so every game it starts has BBSC. BBport started any other way stays
+without it. From a terminal: `~/.local/share/bbport/bbsc/bbsc-play` (`--play` skips the launcher
+window). `./install.sh --uninstall` removes the menu entry.
 
 Without the menu entry: put `BB_PROBE=<mod folder>/bbsc-probe` in the launcher's Settings >
 Developer > "Extra variables (NAME=value, space-separated)"; BBport then always starts with BBSC.
