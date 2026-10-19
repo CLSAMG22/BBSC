@@ -12803,6 +12803,48 @@ void TickBbscMessages() {
     }
 }
 
+// The leave script (global_event.lua LeaveMessage, run by event 4046 when a player leaves with
+// the Parting Blank) shows 30/20000430 to the one who left and 30/20000435 (with the leaving
+// player's name tag, TAG_IDX_leaveChara) to the others. Neither id is in the game's English text
+// (20000423..20000449 is a gap), so the game showed its "?ActionEventInfo?" placeholder (test
+// 2026-10-20 01:30, on the host). There is no table entry to point elsewhere, so the lookup itself
+// is redirected: its entry gets the id in ecx (category in edx), and the hook swaps the two ids for
+// the game's own lines 20000403 "Returning to own world." and 20000402 "Cooperator <?leaveName?>
+// returned to their own world." before the lookup runs. The callers try category 101 first and
+// then 30, so only 30 is touched.
+constexpr u64 MsgLookupOffset = 0x00F6F340;
+std::atomic<bool> bbsc_leave_text_logged{false};
+
+void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers) {
+    if (registers == nullptr || static_cast<u32>(registers->rdx) != 30) {
+        return;
+    }
+    const u32 id = static_cast<u32>(registers->rcx);
+    const u32 to = id == 20000435 ? 20000402 : id == 20000430 ? 20000403 : 0;
+    if (to == 0) {
+        return;
+    }
+    // The trampoline loads the registers back from the snapshot, so this changes the argument.
+    auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
+    changed->rcx = (changed->rcx & ~0xFFFF'FFFFull) | to;
+    if (!bbsc_leave_text_logged.exchange(true)) {
+        LOG_INFO(Debug, "BBSC messages: leave text 30/{} (not in the game's text) shown as 30/{}",
+                 id, to);
+    }
+}
+
+void InstallBbscLeaveTextHook() {
+    if (image_base == 0 || !BbscMessagesEnabled()) {
+        return;
+    }
+    // mov eax, esi ; mov rsi, [rdi+8]
+    static constexpr std::array<u8, 6> Entry{0x89, 0xF0, 0x48, 0x8B, 0x77, 0x08};
+    if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + MsgLookupOffset),
+                              std::span<const u8>{Entry}, 0, BbscMsgLookupHook)) {
+        LOG_ERROR(Debug, "BBSC messages: failed to hook the text lookup {:#x}", MsgLookupOffset);
+    }
+}
+
 // ---- Boss battle line with the boss's name (2026-10-07) -----------------------------------------
 // The user: "the host started the final battle" should say which boss. The game's line for that
 // (30/105199, and 105299) is one fixed text with no boss tag. BBSC points it at its own text with the
@@ -17812,6 +17854,7 @@ void InstallReverseEngineeringTrace() {
     InstallBbscQuitHook();
     InstallBbscDeathTraceHooks();
     InstallBbscBannerHook();
+    InstallBbscLeaveTextHook();
 }
 
 BbscPresence GetBbscPresence() {
