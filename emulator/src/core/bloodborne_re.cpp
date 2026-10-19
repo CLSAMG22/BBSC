@@ -8625,8 +8625,11 @@ constexpr u64 BlockClear2Offset = 0x013849A0;      // BlockClear2 (rewards, then
 // guest followed the host into an area whose boss the host had killed long before. Writing the
 // host's flags there made the area's boss event run the whole clear chain on the guest - a "prey"
 // banner and the after-boss locks, X did nothing until the game was restarted. So on a guest it
-// only runs when a boss fight was on (its own boss bar, or the host's over the relay) in the last
-// BbscBossClearFightMs.
+// only runs when its own boss bar was up in the last BbscBossClearFightMs: a guest in a real kill
+// always has it. The host's bar does not count (test 2026-10-19 23:44: the host was in Darkbeast
+// Paarl's fight, the guest had no bar of its own and still got Paarl's clear chain and reward,
+// though nobody killed Paarl), and a "boss killed" word from the host would come too late - the
+// guest's BlockClear2 ran before the host's at the 15:13 kill.
 constexpr s64 BbscBossClearFightMs = 60'000;
 u8 bbsc_boss_clear_skip = 0;
 bool BbscHostBossFightRecent(s64 within_ms); // the host's boss bar, see "Boss name line"
@@ -8717,12 +8720,13 @@ void PS4_SYSV_ABI BbscBossClearHook(u64 tag, const GuestRegisterSnapshot* regist
         const s64 now = SteadyNowMs();
         const bool own_bar = BossFightActive() || (bbsc_boss_bar_seen_ms != 0 &&
                                                    now - bbsc_boss_bar_seen_ms <= BbscBossClearFightMs);
-        const bool host_bar = BbscHostBossFightRecent(BbscBossClearFightMs);
-        if (LocalPlayerType() == 1 && !own_bar && !host_bar) {
+        if (LocalPlayerType() == 1 && !own_bar) {
             bbsc_boss_clear_skip = 1;
-            LOG_INFO(Debug, "BBSC boss clear: BlockClear2 on the guest with no boss fight on either "
-                            "side in the last {} s (a boss flag from the host's world?) - skipped",
-                     BbscBossClearFightMs / 1'000);
+            LOG_INFO(Debug, "BBSC boss clear: BlockClear2 on the guest without its own boss bar in "
+                            "the last {} s (a boss flag from the host's world?) - skipped (host's "
+                            "bar {})",
+                     BbscBossClearFightMs / 1'000,
+                     BbscHostBossFightRecent(BbscBossClearFightMs) ? "seen" : "not seen");
         }
         return;
     }
