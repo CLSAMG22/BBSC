@@ -3985,6 +3985,11 @@ constexpr s64 BbscWipeHostSettleMs = 2'000; // let the host's synced position se
 // while the guest was down saw a wipe and a reload, even if it never saw "nobody alive" itself
 // (test 2026-10-06: the guest died while the dead host was already reloading).
 u32 bbsc_spectate_revivals_at_death = 0;
+// bbsc_peer_revivals when the local player went down, saved by TickBbscLifeBroadcast. The death step
+// can reach the hook several seconds later; if the host reloaded in that gap, a count taken in the
+// hook already includes it and the guest misses the wipe (test 2026-10-19).
+u32 bbsc_revivals_at_own_down = 0;
+bool bbsc_own_down = false;
 
 bool BbscSpectateEnabled() {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_SPECTATE");
@@ -8455,7 +8460,8 @@ void PS4_SYSV_ABI BbscSpectateDeathHook(u64 tag, const GuestRegisterSnapshot* re
     bbsc_spectate_saw_wipe = guest_waits_for_host;
     bbsc_spectate_wipe_warped = false;
     bbsc_spectate_host_back_ms = 0;
-    bbsc_spectate_revivals_at_death = bbsc_peer_revivals.load();
+    bbsc_spectate_revivals_at_death =
+        bbsc_own_down ? bbsc_revivals_at_own_down : bbsc_peer_revivals.load();
     bbsc_boss_cleared_since_ms = 0;
     bbsc_death_mode = BbscBossFightAtDeath() || guest_waits_for_host ? BbscDeathMode::Spectate
                                                                       : BbscDeathMode::RespawnNow;
@@ -12208,6 +12214,10 @@ void TickBbscLifeBroadcast() {
     Libraries::Np::NpSignaling::Helpers::SendBbscWorldFlagsToPeers(&packet, sizeof(packet));
     if (dead != last_dead) {
         last_dead = dead;
+        bbsc_own_down = dead;
+        if (dead) {
+            bbsc_revivals_at_own_down = bbsc_peer_revivals.load();
+        }
         LOG_INFO(Debug, "BBSC life: told the others we are {} (session state {})",
                  dead ? "dead" : "alive", state);
     }
