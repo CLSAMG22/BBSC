@@ -12178,9 +12178,61 @@ void PrepareBbscKitRows(u64 table) {
     }
 }
 
+// The game's own param tables, read from SoloParamRepository [0x05540340] instead of a memory scan.
+// Its slots start at +0x70, 0x48 apart, each with an s32 count and the pointer 8 bytes after it (the
+// game's lookups use 56 of them, up to +0x1198); the goods lookup 0x01F1E3D0 reads the slot at +0x148
+// and its table as [[ptr+0x70]+0x70]. The scan took over a minute, and until the kit rows were set up the
+// bells showed with no icon among the key items. The type name at +0x0C picks the table.
+constexpr u64 BbscParamRepoOffset = 0x05540340;
+constexpr u64 BbscParamRepoFirstSlot = 0x70;
+constexpr u64 BbscParamRepoSlotStride = 0x48;
+constexpr u64 BbscParamRepoSlotsEnd = 0x1200;
+
+bool BbscParamRepoReady() {
+    const u64 repo = ReadValue<u64>(image_base + BbscParamRepoOffset, 0);
+    return ReadablePointer(repo, 0x158) && ReadValue<s32>(repo, 0x148) != 0 &&
+           ReadValue<u64>(repo, 0x150) != 0;
+}
+
+std::vector<u64> FindBbscRepoParamTables(std::string_view type, u16 min_rows, u32 first_id) {
+    std::vector<u64> tables;
+    const u64 repo = ReadValue<u64>(image_base + BbscParamRepoOffset, 0);
+    if (!BbscParamRepoReady()) {
+        return tables;
+    }
+    for (u64 slot = BbscParamRepoFirstSlot; slot + 0x10 <= BbscParamRepoSlotsEnd;
+         slot += BbscParamRepoSlotStride) {
+        if (!ReadablePointer(repo + slot, 0x10) || ReadValue<s32>(repo, slot) == 0) {
+            continue;
+        }
+        const u64 cap = ReadValue<u64>(repo, slot + 8);
+        const u64 inner = ReadablePointer(cap, 0x78) ? ReadValue<u64>(cap, 0x70) : 0;
+        const u64 table = ReadablePointer(inner, 0x78) ? ReadValue<u64>(inner, 0x70) : 0;
+        if (!ReadablePointer(table, 0x58) ||
+            !HasMemoryAccess(table + 0x0C, type.size() + 1, MemoryProt::CpuRead) ||
+            std::memcmp(reinterpret_cast<const void*>(table + 0x0C), type.data(), type.size()) != 0 ||
+            ReadValue<u8>(table, 0x0C + type.size()) != 0) {
+            continue;
+        }
+        if (ReadValue<u16>(table, 0x0A) > min_rows && ReadValue<u32>(table, 0x40) == first_id &&
+            std::ranges::find(tables, table) == tables.end()) {
+            tables.push_back(table);
+        }
+    }
+    return tables;
+}
+
+// The repository's table when it has one, else the memory scan.
+std::vector<u64> FindBbscKitParamTables(std::string_view type, u16 min_rows = 1000,
+                                        u32 first_id = 0) {
+    auto tables = FindBbscRepoParamTables(type, min_rows, first_id);
+    return tables.empty() ? FindBbscParamTables(type, min_rows, first_id) : tables;
+}
+
 void PrepareBbscDuelBell() {
-    const auto goods_tables = FindBbscParamTables("EQUIP_PARAM_GOODS_ST", 100, 1);
-    const auto speffect_tables = FindBbscParamTables("SP_EFFECT_PARAM_ST");
+    const bool from_repo = BbscParamRepoReady();
+    const auto goods_tables = FindBbscKitParamTables("EQUIP_PARAM_GOODS_ST", 100, 1);
+    const auto speffect_tables = FindBbscKitParamTables("SP_EFFECT_PARAM_ST");
     size_t goods = 0;
     std::vector<u64> effects;
     std::vector<u64> blanks;
@@ -12227,9 +12279,12 @@ void PrepareBbscDuelBell() {
         ++goods;
     }
     const bool ok = goods != 0 && !effects.empty();
-    LOG_INFO(Debug, "BBSC duel bell: goods {} in {} of {} table(s), SpEffect {} in {} table(s){}",
-             BbscDuelBellGoodsId, goods, goods_tables.size(), BbscDuelBellEffectId,
-             effects.size(), ok ? "" : " - NOT READY, no PvP bell");
+    LOG_INFO(Debug,
+             "BBSC duel bell: goods {} in {} of {} table(s), SpEffect {} in {} table(s), tables from "
+             "{}{}",
+             BbscDuelBellGoodsId, goods, goods_tables.size(), BbscDuelBellEffectId, effects.size(),
+             from_repo ? "the param repository" : "the memory scan",
+             ok ? "" : " - NOT READY, no PvP bell");
     // Review 2026-10-08: the game thread reads these vectors; they are filled only once, here, by
     // this (scan) thread, and published by the ready flag - never replaced while being read.
     if (ok && !bbsc_duel_bell_ready) {
@@ -12246,9 +12301,12 @@ void StartBbscDuelBell() {
         return;
     }
     std::thread{[] {
-        for (int attempt = 0; attempt < 36 && !bbsc_duel_bell_ready; ++attempt) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            PrepareBbscDuelBell();
+        // Once a second while the repository answers (cheap); the memory scan only every 5 s.
+        for (int attempt = 0; attempt < 180 && !bbsc_duel_bell_ready; ++attempt) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (BbscParamRepoReady() || attempt % 5 == 4) {
+                PrepareBbscDuelBell();
+            }
         }
     }}.detach();
 }
