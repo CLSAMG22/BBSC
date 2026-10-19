@@ -12708,6 +12708,63 @@ bool BbscEraseLocalEffect(s32 id) {
     return BbscLocalEffectNode(id) == 0;
 }
 
+// A boss bar left on a guest's screen (2026-10-20 00:14, screenshot: Darkbeast Paarl's bar at a
+// lamp after the wipe follow). The death script that wipes the gauge (Failed_BossAreaMission,
+// 0x0138B302..0x0138B396) did not run for that load. Within BbscStaleBarAfterLoadMs of a load of the
+// guest's own character, a bar the host has not had for BbscStaleBarHostQuietMs (its packets say
+// -1) is wiped the same way. A guest that loads into a running fight is not a case that happens:
+// the fight's fog keeps it out.
+constexpr s64 BbscStaleBarAfterLoadMs = 60'000;
+constexpr s64 BbscStaleBarHostQuietMs = 3'000;
+void TickBbscStaleBossBar() {
+    static s64 last_ms = 0;
+    static u64 last_chr = 0;
+    static s64 loaded_ms = 0;
+    static s64 host_quiet_since_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (image_base == 0 || now - last_ms < 500) {
+        return;
+    }
+    last_ms = now;
+    const u64 chr = GetLocalPlayerCharacter();
+    if (chr != last_chr) {
+        last_chr = chr;
+        loaded_ms = now;
+    }
+    if (GetSessionState() != 6 || chr == 0 || GetCharacterHp(chr) <= 0 ||
+        now - loaded_ms > BbscStaleBarAfterLoadMs) {
+        host_quiet_since_ms = 0;
+        return;
+    }
+    const bool host_fresh = now - bbsc_host_boss_ms.load() < BbscLifeFreshMs;
+    if (!host_fresh || bbsc_host_boss_id.load() != -1) {
+        host_quiet_since_ms = 0;
+        return;
+    }
+    if (host_quiet_since_ms == 0) {
+        host_quiet_since_ms = now;
+    }
+    const s32 own = BbscGaugeBossId();
+    if (own == -1 || now - host_quiet_since_ms < BbscStaleBarHostQuietMs) {
+        return;
+    }
+    const u64 gauge = ReadValue<u64>(image_base + BossGaugePointerOffset, 0);
+    if (!ReadablePointer(gauge, 0x1694) || !HasMemoryAccess(gauge + 0x1658, 0x3C, MemoryProt::CpuWrite)) {
+        return;
+    }
+    for (size_t slot = 0; slot < 3; ++slot) {
+        const size_t at = 0x1658 + slot * 0x14;
+        WriteValue<s32>(gauge, at, -1);
+        WriteValue<s32>(gauge, at + 4, -1);
+        WriteValue<s32>(gauge, at + 8, 0);
+        WriteValue<s32>(gauge, at + 0xC, 0);
+        WriteValue<u8>(gauge, at + 0x10, 0);
+    }
+    LOG_INFO(Debug, "BBSC boss bar: boss {} was still on the guest's bar {} ms after a load while "
+                    "the host has none - cleared",
+             own, now - loaded_ms);
+}
+
 // Test 2026-10-05 14:42: with 9020 on both players, the host world found the invader's sign
 // (SummonType 2), claimed it, opened its room and signalled the invader - who never joined
 // (no JoinSession_Black). The invader carried 9020 too. HYPOTHESIS: a player whose own world is
@@ -13672,6 +13729,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
+        TickBbscStaleBossBar();
         CaptureBbscGuestLoot();
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
