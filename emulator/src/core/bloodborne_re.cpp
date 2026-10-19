@@ -309,7 +309,8 @@ constexpr auto Sites = std::to_array<TraceSite>({
     {"OnSummonResult.TimeOut", 0x01384520, TraceKind::MatchingSignal, ReturnAndPadding, 16},
     {"OnSummonResult.OtherError", 0x01384530, TraceKind::MatchingEvent, StandardRbxPrologue, 5},
     {"ForceSummonFail", 0x01384990, TraceKind::MatchingSignal, ReturnAndPadding, 16},
-    {"ForceSummonSuccess", 0x013849A0, TraceKind::MatchingEvent, StandardR15Prologue, 6},
+    // 0x013849A0 was traced here as "ForceSummonSuccess", but the game registers it as BlockClear2
+    // (ForceSummonSuccess is 0x01384990); its entry is BBSC's BlockClear2 hook now.
 
     {"CSMultiPlayMan.StageUidChanged.Policy",
      MultiPlayStageUidPolicyOffset,
