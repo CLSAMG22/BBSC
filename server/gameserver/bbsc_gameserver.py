@@ -381,21 +381,27 @@ def blood_area(req):
     body = _request(req)
     user = _as_int(body.get("UserId"))
     found = []
+    most = _as_int(body.get("GetMaxCount"), 100) or 100
+    wanted = []  # (region, its GetCount), each region once, in the game's order
+    for area in body.get("AreaInfoList") or []:
+        if _region(area) not in [key for key, _ in wanted]:
+            wanted.append((_region(area), _as_int(area.get("GetCount"), 30) or 30))
     with STORE.lock:
         messages = list(STORE.data["messages"].values())
-        seen = set()
-        for area in body.get("AreaInfoList") or []:
-            key = _region(area)
-            if key in seen:
-                continue
-            seen.add(key)
-            limit = _as_int(area.get("GetCount"), 30) or 30
+        for key, limit in wanted:
             here = [m for m in messages if _region(m) == key and m["UserId"] != user]
             here.sort(key=lambda m: m["BloodMessId"], reverse=True)
             found += [_message_entry(m) for m in here[:limit]]
-            if THD is not None:
-                found += THD.entries_for(key, limit - min(len(here), limit))
-    found = found[:_as_int(body.get("GetMaxCount"), 100) or 100]
+    found = found[:most]
+    if THD is not None and wanted:
+        # The game asks for a whole map's regions at once (20 and more) with GetMaxCount 100:
+        # The Hunter's Dream's messages are shared out over all of them, or the first few regions
+        # would take every place and the one the player stands in could get none.
+        share = max(1, (most - len(found)) // len(wanted))
+        for key, limit in wanted:
+            mine = sum(1 for m in found if _region(m) == key)
+            found += THD.entries_for(key, min(limit - mine, share))
+        found = found[:most]
     total = len(found)
     found = _within_budget(found)
     if len(found) < total:

@@ -275,16 +275,12 @@ class HuntersDreamMessages:
 
     @staticmethod
     def _entry(entry, region):
-        return {"BloodMessId": entry.get("BloodMessId", 0), "PrevBloodMessId": 0,
-                "AreaId": region[0], "AreaRegionId": region[1], "ChannelId": region[2],
-                "BloodData": entry["BloodData"],
-                "BloodDataVersion": entry.get("BloodDataVersion", 0),
-                "CharaData": entry.get("CharaData", True),
-                "CharaDataVersion": entry.get("CharaDataVersion", 1),
-                "EvaluatePlus": entry.get("EvaluatePlus", 0),
-                "EvaluateMinus": entry.get("EvaluateMinus", 0),
-                "MessShellInfo": entry.get("MessShellInfo", ""),
-                "MessShellInfoVersion": entry.get("MessShellInfoVersion", 0)}
+        # Exactly the fields The Hunter's Dream sends, as it sends them: that is what the game
+        # shows in their online mode. (Our own entries' AreaId / CharaData: true were added here
+        # at first, and the game showed none of these messages.)
+        return {key: entry[key] for key in ("BloodMessId", "BloodData", "BloodDataVersion",
+                                            "EvaluatePlus", "EvaluateMinus", "MessShellInfo",
+                                            "MessShellInfoVersion") if key in entry}
 
 
 # ---- signing in (BBSC-GameServer.exe --thd-sign-in) ------------------------------------------------
