@@ -6,19 +6,24 @@ the game's message list. With "write" on as well, the messages the host writes a
 (and removed there when the host deletes them). Messages written by guests stay on the co-op server
 only: posting them would put them under the host's account. Both need the host's sign-in.
 
-It uses the player's own The Hunter's Dream sign-in, the token the bloodborne_pc launcher keeps after
-"Sign in with Discord", and signs in the way the game does in that online mode (/basic_utils/login
-with the X-BB-Token and X-BBHost-Ruleset headers). Answers are kept per region for CACHE_SECONDS and
+It uses the host's own The Hunter's Dream account: BBSC-GameServer.exe --thd-sign-in signs in with
+Discord (the device code flow bbhost and the bloodborne_pc launcher use) and saves the account and
+token in thd-account.json; the token the bloodborne_pc launcher keeps works too. The server then
+signs in the way the game does in that online mode (/basic_utils/login with the X-BB-Token and
+X-BBHost-Ruleset headers). Answers are kept per region for CACHE_SECONDS and
 fetched in the background, so the game never waits on The Hunter's Dream: the first list for a
 region has only our own messages, the next one has theirs too.
 
 Settings, first found wins:
   enabled  --thd-messages, BBSC_THD_MESSAGES=1, or "enabled": true in thd-messages.json
   write    BBSC_THD_WRITE=1 or "write": true in thd-messages.json (default: read only)
-  token    BBSC_THD_TOKEN, "token" in thd-messages.json, or the launcher's settings.json
+  token    BBSC_THD_TOKEN, thd-account.json (--thd-sign-in writes it), "token" in
+           thd-messages.json, or the bloodborne_pc launcher's settings.json
+  account  BBSC_THD_ACCOUNT, thd-account.json, "account" in thd-messages.json, or the launcher's
   ruleset  BBSC_THD_RULESET, "ruleset" in thd-messages.json, else "vanilla"
   url      BBSC_THD_URL, "url" in thd-messages.json, else https://thehuntersdream.com:18671
-thd-messages.json sits next to online-data.json.
+thd-messages.json and thd-account.json sit next to online-data.json. The sign-in has its own file so
+turning the setting on and off never loses it.
 """
 import json
 import os
@@ -26,13 +31,17 @@ import queue
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import webbrowser
 
 DEFAULT_URL = "https://thehuntersdream.com:18671"
+DEFAULT_AUTH = "https://thehuntersdream.com"   # its account service (/auth/device/...)
 CACHE_SECONDS = 120
 RETRY_SECONDS = 60      # after a failed fetch for a region
 TIMEOUT_SECONDS = 10
 CONFIG_NAME = "thd-messages.json"
+ACCOUNT_NAME = "thd-account.json"          # {"account", "token"} from --thd-sign-in
 POSTED_NAME = "thd-messages-posted.json"   # our message id -> its id on The Hunter's Dream
 POST_TRIES = 3
 POST_RETRY_SECONDS = 60
@@ -88,16 +97,19 @@ class HuntersDreamMessages:
                   "the setting in it is ignored".format(config_path))
         enabled = flag or os.environ.get("BBSC_THD_MESSAGES") == "1" or config.get("enabled") is True
         launcher = _read_json(LAUNCHER_SETTINGS)
-        token = (os.environ.get("BBSC_THD_TOKEN") or config.get("token")
+        signed_in = _read_json(os.path.join(data_dir, ACCOUNT_NAME))
+        token = (os.environ.get("BBSC_THD_TOKEN") or signed_in.get("token") or config.get("token")
                  or launcher.get("thd_token") or "")
-        account = config.get("account") or launcher.get("thd_online_id") or ""
+        account = (os.environ.get("BBSC_THD_ACCOUNT") or signed_in.get("account")
+                   or config.get("account") or launcher.get("thd_online_id") or "")
         ruleset = os.environ.get("BBSC_THD_RULESET") or config.get("ruleset") or "vanilla"
         url = os.environ.get("BBSC_THD_URL") or config.get("url") or DEFAULT_URL
         write = os.environ.get("BBSC_THD_WRITE") == "1" or config.get("write") is True
         found = cls(enabled, token, account, ruleset, url, write, data_dir)
         if enabled and not token:
-            print("THD messages: on, but no The Hunter's Dream sign-in found (sign in on the "
-                  "launcher's Online page) - off")
+            print("THD messages: on, but no The Hunter's Dream sign-in found (run "
+                  "BBSC-GameServer.exe --thd-sign-in, or sign in on the bloodborne_pc launcher's "
+                  "Online page) - off")
         elif enabled:
             print("THD messages: on - The Hunter's Dream's messages are added to ours{} (account "
                   "{}, ruleset {}, {})".format(", the host's are posted there" if found.write
@@ -273,3 +285,68 @@ class HuntersDreamMessages:
                 "EvaluateMinus": entry.get("EvaluateMinus", 0),
                 "MessShellInfo": entry.get("MessShellInfo", ""),
                 "MessShellInfoVersion": entry.get("MessShellInfoVersion", 0)}
+
+
+# ---- signing in (BBSC-GameServer.exe --thd-sign-in) ------------------------------------------------
+
+def _auth_call(url, body):
+    request = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            text = response.read()
+    except urllib.error.HTTPError as error:
+        text = error.read()
+    reply = json.loads(text or b"{}")
+    if not isinstance(reply, dict) or reply.get("ResKind", 0) != 0:
+        raise RuntimeError("The Hunter's Dream refused: {}".format(
+            reply.get("Message") or reply.get("ResKind") if isinstance(reply, dict) else reply))
+    return reply
+
+
+def sign_in(data_dir, open_page=True):
+    """Discord sign-in with a code to approve on The Hunter's Dream's website; the account and token
+    go into thd-account.json. Returns 0 on success."""
+    auth = (os.environ.get("BBSC_THD_AUTH") or DEFAULT_AUTH).rstrip("/")
+    try:
+        start = _auth_call(auth + "/auth/device/start",
+                           {"DeviceName": "BBSC co-op server on {}".format(
+                               os.environ.get("COMPUTERNAME", "PC"))})
+        device, code = start.get("DeviceCode", ""), start.get("UserCode", "")
+        if not device or not code:
+            raise RuntimeError("no code in the reply")
+        interval = max(1, int(start.get("Interval") or 5))
+        deadline = time.monotonic() + int(start.get("ExpiresIn") or 600)
+        page = start.get("VerificationUri") or auth + "/link"
+        page += ("&" if "?" in page else "?") + "code=" + urllib.parse.quote(code)
+        print("\n  Sign in to The Hunter's Dream with Discord and approve this code:\n\n"
+              "      {}\n\n  on {}\n  (not in its \"code from the game\" box). Waiting...".format(
+                  code, page), flush=True)
+        if open_page:
+            webbrowser.open(page)
+        while time.monotonic() < deadline:
+            time.sleep(interval)
+            poll = _auth_call(auth + "/auth/device/poll", {"DeviceCode": device})
+            status = poll.get("Status")
+            if status == "approved":
+                if not poll.get("OnlineId") or not poll.get("Token"):
+                    raise RuntimeError("no token in the reply")
+                path = os.path.join(data_dir, ACCOUNT_NAME)
+                temp = path + ".tmp"
+                with open(temp, "w", encoding="utf-8") as handle:
+                    json.dump({"account": poll["OnlineId"], "token": poll["Token"]}, handle)
+                os.replace(temp, path)
+                print("\n  Signed in as {}. Saved in {}.".format(poll["OnlineId"], path), flush=True)
+                if not _read_json(os.path.join(data_dir, CONFIG_NAME)).get("enabled"):
+                    print("  The messages are still off: turn them on to use them.", flush=True)
+                return 0
+            if status == "slow_down":
+                interval += 5
+            elif status == "denied":
+                raise RuntimeError("the sign-in was denied")
+            elif status == "expired":
+                break
+        raise RuntimeError("the code expired; try again")
+    except Exception as error:  # noqa: BLE001 - a console tool: say what went wrong
+        print("\n  Sign-in failed: {}".format(error), flush=True)
+        return 1

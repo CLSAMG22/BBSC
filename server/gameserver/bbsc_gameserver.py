@@ -1475,6 +1475,11 @@ def start_bbhost():
 def main():
     global ARGS, SS_INFO_B64, SS_INFO_LOCAL_B64, SS_INFO_BBHOST_B64, SS_INFO_BBHOST_LOCAL_B64
     global AREA_REPLY_BUDGET
+    if "--thd-sign-in" in sys.argv[1:]:
+        # The Hunter's Dream sign-in for the messages setting (thd_messages.py), saved next to
+        # online-data.json; it needs none of the server's own options.
+        data_home = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else HERE
+        return thd_messages.sign_in(data_home)
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--shadnet", required=True,
@@ -1503,6 +1508,8 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="log headers and request bodies")
     parser.add_argument("--thd-messages", action="store_true",
                         help="add The Hunter's Dream's messages to ours (see thd_messages.py)")
+    parser.add_argument("--thd-sign-in", action="store_true",
+                        help="sign in to The Hunter's Dream with Discord for --thd-messages, then exit")
     parser.add_argument("--no-bbhost", dest="bbhost", action="store_false",
                         help="turn off the bbhost players' services (bbhost_service.py)")
     parser.add_argument("--bbhost-port", type=int, default=18671,
