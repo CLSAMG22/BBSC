@@ -39,6 +39,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import bbhost_service
+import thd_messages
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "ss_info_template.xml")
@@ -307,6 +308,7 @@ class OnlineStore:
 
 
 STORE = None  # OnlineStore, set up in main()
+THD = None    # thd_messages.HuntersDreamMessages, set up in main()
 
 def _request(req):
     try:
@@ -387,6 +389,9 @@ def blood_area(req):
             here = [m for m in messages if _region(m) == key and m["UserId"] != user]
             here.sort(key=lambda m: m["BloodMessId"], reverse=True)
             found += [_message_entry(m) for m in here[:limit]]
+            if THD is not None:
+                found += THD.entries_for(key, limit - min(len(here), limit))
+    found = found[:_as_int(body.get("GetMaxCount"), 100) or 100]
     total = len(found)
     found = _within_budget(found)
     if len(found) < total:
@@ -1489,6 +1494,8 @@ def main():
                         help="message / bloodstain reply budget in bytes (default 65536 - the "
                              "Dantelion2 Panic 265 fix); 0 = no cap")
     parser.add_argument("--verbose", action="store_true", help="log headers and request bodies")
+    parser.add_argument("--thd-messages", action="store_true",
+                        help="add The Hunter's Dream's messages to ours (see thd_messages.py)")
     parser.add_argument("--no-bbhost", dest="bbhost", action="store_false",
                         help="turn off the bbhost players' services (bbhost_service.py)")
     parser.add_argument("--bbhost-port", type=int, default=18671,
@@ -1533,6 +1540,9 @@ def main():
     STORE = OnlineStore(ARGS.data)
     print("messages and bloodstains: {} ({} messages, {} bloodstains)".format(
         ARGS.data, len(STORE.data["messages"]), len(STORE.data["tombs"])))
+    global THD
+    THD = thd_messages.HuntersDreamMessages.from_settings(ARGS.thd_messages,
+                                                          os.path.dirname(os.path.abspath(ARGS.data)))
 
     if not os.path.exists(TEMPLATE):
         print("missing {}".format(TEMPLATE))
