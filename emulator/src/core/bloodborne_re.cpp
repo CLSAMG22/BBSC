@@ -13412,18 +13412,36 @@ void TickBbscDeadWatchdog() {
         return;
     }
     bbsc_dead_since_ms = 0;
-    if (repeat && BbscBossFightAtDeath() && LivingPartnerExists()) {
+    // A guest's repeat death with nobody left alive is a wipe: like the death step, it waits for
+    // the host's reload and then follows with a reload of its own (TickBbscSpectate). Respawning
+    // in place there kept the old load (test 2026-10-20 01:01, Vicar Amelia: the guest stayed in
+    // the fight with the boss bar and no enemies while the host's world had reloaded, and the
+    // host's copy of the guest was invisible).
+    const bool guest_waits_for_host = repeat && session_state == 6 && !LivingPartnerExists();
+    if (repeat && (guest_waits_for_host || (BbscBossFightAtDeath() && LivingPartnerExists()))) {
         // Same rule as the death step: in a boss fight the dead player waits for the boss kill or
         // for nobody to be left alive (TickBbscSpectate).
         bbsc_spectate_name = "repeat death";
         bbsc_spectate_since_ms = now;
+        bbsc_spectate_chr = player;
         bbsc_spectate_alone_since_ms = 0;
+        bbsc_spectate_logged_wait = false;
+        bbsc_spectate_saw_wipe = guest_waits_for_host;
+        bbsc_spectate_wipe_warped = false;
+        bbsc_spectate_host_back_ms = 0;
+        bbsc_spectate_revivals_at_death =
+            bbsc_own_down ? bbsc_revivals_at_own_down : bbsc_peer_revivals.load();
         bbsc_boss_cleared_since_ms = 0;
         bbsc_death_mode = BbscDeathMode::Spectate;
         bbsc_spectate_active = true;
-        LOG_INFO(Debug, "BBSC death: repeat death in a boss fight (session state {}) -> spectate "
-                        "until the boss dies or nobody is alive",
-                 session_state);
+        if (guest_waits_for_host) {
+            LOG_INFO(Debug, "BBSC death: repeat death with nobody alive (guest) -> wait for the "
+                            "host's reload, then follow it");
+        } else {
+            LOG_INFO(Debug, "BBSC death: repeat death in a boss fight (session state {}) -> "
+                            "spectate until the boss dies or nobody is alive",
+                     session_state);
+        }
         BBSC_TIMELINE("DEATH", "death: repeat death in a boss fight (session state {}) -> spectate "
                         "until the boss dies or nobody is alive",
                  session_state);
