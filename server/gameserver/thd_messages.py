@@ -72,7 +72,13 @@ class HuntersDreamMessages:
 
     @classmethod
     def from_settings(cls, flag, data_dir):
-        config = _read_json(os.path.join(data_dir, CONFIG_NAME))
+        config_path = os.path.join(data_dir, CONFIG_NAME)
+        config = _read_json(config_path)
+        if not config and os.path.exists(config_path):
+            # 2026-10-19: written by a script run as administrator, the file belonged to the
+            # Administrators group and the server (run as the user) could not read it.
+            print("THD messages: {} exists but could not be read (written as administrator?) - "
+                  "the setting in it is ignored".format(config_path))
         enabled = flag or os.environ.get("BBSC_THD_MESSAGES") == "1" or config.get("enabled") is True
         launcher = _read_json(LAUNCHER_SETTINGS)
         token = (os.environ.get("BBSC_THD_TOKEN") or config.get("token")
