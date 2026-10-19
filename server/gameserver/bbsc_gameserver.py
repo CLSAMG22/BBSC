@@ -309,6 +309,8 @@ class OnlineStore:
 
 STORE = None  # OnlineStore, set up in main()
 THD = None    # thd_messages.HuntersDreamMessages, set up in main()
+# Whether the request being handled comes from the game on this PC (the host's own game).
+_CALLER = threading.local()
 
 def _request(req):
     try:
@@ -370,6 +372,8 @@ def blood_create(req):
                 del STORE.data["messages"][str(old["BloodMessId"])]
         STORE.save()
     print("      messages: user {} wrote {}".format(user, created), flush=True)
+    if THD is not None and getattr(_CALLER, "local", False):
+        THD.post(body, created)  # the host's own messages only: a guest's would be under its name
     return empty("BloodMessCreateResponse", BloodMessId=created[0] if created else 0,
                  BloodMessIdList=created)
 
@@ -452,6 +456,8 @@ def blood_delete(req):
                 STORE.data["deleted"] = (STORE.data["deleted"] + [msg_id])[-1000:]
         STORE.save()
     print("      messages: user {} removed {}".format(user, ids), flush=True)
+    if THD is not None:
+        THD.remove(ids)
     return empty("BloodMessRemoveResponse")
 
 def shell_upload(req):
@@ -876,6 +882,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_inner(self):
         caller = self.client_address[0]
         is_local = caller in LOCAL_ADDRESSES or (ARGS.advertise and caller == ARGS.advertise)
+        _CALLER.local = bool(is_local)
         path = self.path.split("?", 1)[0]
         length = int(self.headers.get("Content-Length") or 0)
         payload = self.rfile.read(length).decode("utf-8", "replace") if length else ""

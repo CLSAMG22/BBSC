@@ -2,7 +2,9 @@
 
 The co-op server only knows the messages its own players wrote, so the world is nearly empty. With
 this on, the messages The Hunter's Dream (thehuntersdream.com) has for the same areas are added to
-the game's message list. Read only: nothing is written, rated or deleted there.
+the game's message list, and the messages the host writes are posted there too (and removed there
+when the host deletes them). Messages written by guests stay on the co-op server only: posting them
+would put them under the host's account. "write": false keeps it read only.
 
 It uses the player's own The Hunter's Dream sign-in, the token the bloodborne_pc launcher keeps after
 "Sign in with Discord", and signs in the way the game does in that online mode (/basic_utils/login
@@ -12,6 +14,7 @@ region has only our own messages, the next one has theirs too.
 
 Settings, first found wins:
   enabled  --thd-messages, BBSC_THD_MESSAGES=1, or "enabled": true in thd-messages.json
+  write    read only with BBSC_THD_WRITE=0 or "write": false in thd-messages.json (default: write)
   token    BBSC_THD_TOKEN, "token" in thd-messages.json, or the launcher's settings.json
   ruleset  BBSC_THD_RULESET, "ruleset" in thd-messages.json, else "vanilla"
   url      BBSC_THD_URL, "url" in thd-messages.json, else https://thehuntersdream.com:18671
@@ -30,6 +33,9 @@ CACHE_SECONDS = 120
 RETRY_SECONDS = 60      # after a failed fetch for a region
 TIMEOUT_SECONDS = 10
 CONFIG_NAME = "thd-messages.json"
+POSTED_NAME = "thd-messages-posted.json"   # our message id -> its id on The Hunter's Dream
+POST_TRIES = 3
+POST_RETRY_SECONDS = 60
 LAUNCHER_SETTINGS = os.path.expandvars(r"%APPDATA%\bbport-launcher\settings.json")
 
 
@@ -43,8 +49,14 @@ def _read_json(path):
 
 
 class HuntersDreamMessages:
-    def __init__(self, enabled, token, account, ruleset, url):
+    def __init__(self, enabled, token, account, ruleset, url, write=False, data_dir=None):
         self.enabled = enabled and bool(token)
+        self.write = self.enabled and write
+        self.posted_path = os.path.join(data_dir, POSTED_NAME) if data_dir else None
+        self.posted = {}      # str(our id) -> their id, for deletes and to leave our own out
+        if self.posted_path:
+            self.posted = {str(k): v for k, v in _read_json(self.posted_path).items()}
+        self.own_ids = set(self.posted.values())
         self.token = token
         self.account = account
         self.ruleset = ruleset
@@ -68,13 +80,16 @@ class HuntersDreamMessages:
         account = config.get("account") or launcher.get("thd_online_id") or ""
         ruleset = os.environ.get("BBSC_THD_RULESET") or config.get("ruleset") or "vanilla"
         url = os.environ.get("BBSC_THD_URL") or config.get("url") or DEFAULT_URL
-        found = cls(enabled, token, account, ruleset, url)
+        write = os.environ.get("BBSC_THD_WRITE", "1") != "0" and config.get("write", True) is not False
+        found = cls(enabled, token, account, ruleset, url, write, data_dir)
         if enabled and not token:
             print("THD messages: on, but no The Hunter's Dream sign-in found (sign in on the "
                   "launcher's Online page) - off")
         elif enabled:
-            print("THD messages: on - The Hunter's Dream's messages are added to ours (account {}, "
-                  "ruleset {}, {})".format(account or "?", ruleset, found.url))
+            print("THD messages: on - The Hunter's Dream's messages are added to ours{} (account "
+                  "{}, ruleset {}, {})".format(", the host's are posted there" if found.write
+                                               else " (read only)", account or "?", ruleset,
+                                               found.url))
         return found
 
     # ---- what the game asks ----------------------------------------------------------------------
@@ -89,7 +104,18 @@ class HuntersDreamMessages:
             if now - fetched > CACHE_SECONDS and region not in self.pending:
                 self.pending.add(region)
                 self.jobs.put(region)
+            entries = [e for e in entries if e["BloodMessId"] not in self.own_ids]
         return entries[:limit]
+
+    def post(self, body, our_ids):
+        """The host wrote messages (our ids, in the order of body's BloodMessList): post them."""
+        if self.write and our_ids:
+            self.jobs.put(("create", body, list(our_ids), 1))
+
+    def remove(self, our_ids):
+        """Messages deleted here: delete the ones we had posted."""
+        if self.write and any(str(i) in self.posted for i in our_ids):
+            self.jobs.put(("delete", list(our_ids), 1))
 
     # ---- talking to The Hunter's Dream -----------------------------------------------------------
 
@@ -126,12 +152,77 @@ class HuntersDreamMessages:
                 self._login()  # the session may have ended (their server restarts now and then)
         raise RuntimeError("message list refused (ResKind {})".format(reply.get("ResKind")))
 
+    def _call(self, path, body):
+        """A call with our session; signs in again once if the session has ended."""
+        if self.session is None:
+            self._login()
+        for attempt in (0, 1):
+            reply = self._post(path, dict(body, SessionId=self.session[0], UserId=self.session[1]))
+            if reply.get("ResKind") == 0:
+                return reply
+            if attempt == 0:
+                self._login()
+        raise RuntimeError("{} refused (ResKind {})".format(path, reply.get("ResKind")))
+
+    def _save_posted(self):
+        if not self.posted_path:
+            return
+        temp = self.posted_path + ".tmp"
+        with open(temp, "w", encoding="utf-8") as handle:
+            json.dump(self.posted, handle)
+        os.replace(temp, self.posted_path)
+
+    def _write_job(self, job):
+        if job[0] == "create":
+            _, body, our_ids, _tries = job
+            reply = self._call("/blood_messenger/create", body)
+            theirs = [i for i in (reply.get("BloodMessIdList") or [reply.get("BloodMessId")]) if i]
+            with self.lock:
+                for ours, their in zip(our_ids, theirs):
+                    self.posted[str(ours)] = their
+                    self.own_ids.add(their)
+            self._save_posted()
+            print("      THD messages: posted {} there as {}".format(our_ids, theirs), flush=True)
+        else:
+            _, our_ids, _tries = job
+            with self.lock:
+                theirs = [self.posted[str(i)] for i in our_ids if str(i) in self.posted]
+            if theirs:
+                self._call("/blood_messenger/delete", {"MessageId": "BloodMessRemoveRequest",
+                                                       "BloodMessIdList": theirs})
+            with self.lock:
+                for i in our_ids:
+                    self.posted.pop(str(i), None)
+            self._save_posted()
+            print("      THD messages: removed {} there".format(theirs), flush=True)
+
+    def _retry_later(self, job):
+        if job[-1] >= POST_TRIES:
+            print("      THD messages: gave up on {} {} after {} tries".format(
+                job[0], job[2] if job[0] == "create" else job[1], job[-1]), flush=True)
+            return
+        again = job[:-1] + (job[-1] + 1,)
+        timer = threading.Timer(POST_RETRY_SECONDS, self.jobs.put, args=(again,))
+        timer.daemon = True
+        timer.start()
+
     def _worker(self):
-        # Any failure only costs this one fetch: the region keeps what it had (or nothing) and is
-        # asked again RETRY_SECONDS later, so the messages come back once The Hunter's Dream does.
+        # Any failure only costs this one job: a region keeps what it had (or nothing) and is
+        # asked again RETRY_SECONDS later, so the messages come back once The Hunter's Dream does;
+        # a post or delete is tried again POST_RETRY_SECONDS later, POST_TRIES times in all.
         # Nothing here may end the thread.
         while True:
             region = self.jobs.get()
+            if isinstance(region[0], str):  # ("create" | "delete", ...)
+                try:
+                    self._write_job(region)
+                except Exception as error:  # noqa: BLE001 - passive: never let it stop the worker
+                    self.session = None
+                    print("      THD messages: could not {} on The Hunter's Dream ({}: {}) - "
+                          "trying again later".format(region[0], type(error).__name__, error),
+                          flush=True)
+                    self._retry_later(region)
+                continue
             entries = None
             try:
                 entries = [self._entry(e, region) for e in self._fetch(region)
