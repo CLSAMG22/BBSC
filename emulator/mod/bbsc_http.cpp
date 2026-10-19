@@ -30,12 +30,15 @@
 // Not done: the emulator's 3 s "fast sign" re-posts. They replaced the game's own reply; extra
 // posts from here would take the broker's claim themselves and the game would never join.
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <winhttp.h>
 
 #include <array>
 #include <atomic>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -190,14 +193,106 @@ std::string FixAnyAddress(std::string text) {
     return text;
 }
 
+// The host's own game reaching its own servers (2026-10-19, host log): host_overrides.json names
+// the host's VPN address (Tailscale 100.x) for everyone, the host included, and the host's first
+// GET of ss.info timed out (error 14) although the server was up and answered the game's retry.
+// The game's connect timeout is short, and a first connection to the PC's own VPN address can lose
+// its SYN (Windows resends after ~3 s). So an http:// address that belongs to this PC goes to
+// 127.0.0.1 instead - only when that port answers on 127.0.0.1 too, so a server bound to the VPN
+// address alone is left as it is. Checked once per address and port.
+bool IsOwnAddress(const std::string& ip) {
+    static const bool started = [] {
+        WSADATA data{};
+        return WSAStartup(MAKEWORD(2, 2), &data) == 0;
+    }();
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    if (!started || inet_pton(AF_INET, ip.c_str(), &address.sin_addr) != 1 ||
+        (ntohl(address.sin_addr.s_addr) >> 24) == 127) {
+        return false;
+    }
+    const SOCKET probe = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (probe == INVALID_SOCKET) {
+        return false;
+    }
+    // Binding works only to an address one of this PC's network adapters has.
+    const bool own = bind(probe, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0;
+    closesocket(probe);
+    return own;
+}
+
+bool LoopbackAnswers(u16 port) {
+    const SOCKET probe = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (probe == INVALID_SOCKET) {
+        return false;
+    }
+    u_long non_blocking = 1;
+    ioctlsocket(probe, FIONBIO, &non_blocking);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    connect(probe, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
+    fd_set writable;
+    FD_ZERO(&writable);
+    FD_SET(probe, &writable);
+    fd_set failed = writable;
+    timeval wait{0, 300'000};
+    const bool answered = select(0, nullptr, &writable, &failed, &wait) == 1 &&
+                          FD_ISSET(probe, &writable);
+    closesocket(probe);
+    return answered;
+}
+
+std::string OwnAddressToLoopback(std::string text) {
+    constexpr std::string_view scheme = "http://";
+    if (text.rfind(scheme, 0) != 0) {
+        return text;
+    }
+    const size_t host_end = text.find_first_of(":/", scheme.size());
+    const std::string host = text.substr(scheme.size(), host_end - scheme.size());
+    u16 port = 80;
+    if (host_end != std::string::npos && text[host_end] == ':') {
+        port = static_cast<u16>(std::atoi(text.c_str() + host_end + 1));
+    }
+    static std::mutex mutex;
+    static std::map<std::pair<std::string, u16>, bool> decided;
+    bool loopback = false;
+    {
+        std::scoped_lock lock{mutex};
+        const auto key = std::make_pair(host, port);
+        const auto found = decided.find(key);
+        if (found != decided.end()) {
+            loopback = found->second;
+        } else {
+            const bool own = IsOwnAddress(host);
+            loopback = own && LoopbackAnswers(port);
+            decided[key] = loopback;
+            if (own) {
+                LOG_INFO(Mod, "HTTP: {}:{} is this PC - {}", host, port,
+                         loopback ? "the game reaches it over 127.0.0.1"
+                                  : "nothing answers on 127.0.0.1, left as it is");
+            }
+        }
+    }
+    return loopback ? text.replace(scheme.size(), host.size(), "127.0.0.1") : text;
+}
+
+bool IsSummon(const std::string& url);
+
+// Summon calls keep the address they were given: the broker may take a sign's address from them.
+std::string ToLoopbackUnlessSummon(std::string text) {
+    return IsSummon(text) ? text : OwnAddressToLoopback(std::move(text));
+}
+
 std::string Override(const char* url) {
     std::string text = FixAnyAddress(url != nullptr ? url : "");
     for (const auto& [prefix, replacement] : overrides) {
         if (text.rfind(prefix, 0) == 0) {
-            return replacement + text.substr(prefix.size());
+            return ToLoopbackUnlessSummon(replacement + text.substr(prefix.size()));
         }
     }
-    return text;
+    return ToLoopbackUnlessSummon(text);
 }
 
 // ---- Summon paths -------------------------------------------------------------------------------
