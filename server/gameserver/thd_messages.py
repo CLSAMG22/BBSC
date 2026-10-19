@@ -74,7 +74,14 @@ class HuntersDreamMessages:
     def from_settings(cls, flag, data_dir):
         config_path = os.path.join(data_dir, CONFIG_NAME)
         config = _read_json(config_path)
-        if not config and os.path.exists(config_path):
+        try:
+            with open(config_path, "rb"):
+                unreadable = False
+        except FileNotFoundError:
+            unreadable = False
+        except OSError:
+            unreadable = True
+        if unreadable:
             # 2026-10-19: written by a script run as administrator, the file belonged to the
             # Administrators group and the server (run as the user) could not read it.
             print("THD messages: {} exists but could not be read (written as administrator?) - "
