@@ -10342,6 +10342,21 @@ void NoteBbscBossRewardEvent(s64 event) {
                                          [event](const auto& r) { return r.event == event; })) {
         return;
     }
+    // Same rule as the BlockClear2 skip: a guest that had no boss bar of its own did not fight
+    // (test 2026-10-20 00:12: event 12301800 reached the wait right after the guest followed the
+    // host into m23_00, 40 s before anyone fought there, and the guest got that boss's lot).
+    const s64 now = SteadyNowMs();
+    if (!BossFightActive() &&
+        (bbsc_boss_bar_seen_ms == 0 || now - bbsc_boss_bar_seen_ms > BbscBossClearFightMs)) {
+        static s64 skipped_event = -1;
+        if (skipped_event != event) {
+            skipped_event = event;
+            LOG_INFO(Debug, "BBSC boss drop: event {} reached its player-type wait on the guest "
+                            "without its own boss bar in the last {} s - no reward",
+                     event, BbscBossClearFightMs / 1'000);
+        }
+        return;
+    }
     std::scoped_lock lock{bbsc_boss_reward_mutex};
     if (std::ranges::find(bbsc_boss_reward_given, event) == bbsc_boss_reward_given.end() &&
         std::ranges::find(bbsc_boss_reward_queue, event) == bbsc_boss_reward_queue.end()) {
