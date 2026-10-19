@@ -2,9 +2,9 @@
 
 The co-op server only knows the messages its own players wrote, so the world is nearly empty. With
 this on, the messages The Hunter's Dream (thehuntersdream.com) has for the same areas are added to
-the game's message list, and the messages the host writes are posted there too (and removed there
-when the host deletes them). Messages written by guests stay on the co-op server only: posting them
-would put them under the host's account. "write": false keeps it read only.
+the game's message list. With "write" on as well, the messages the host writes are posted there too
+(and removed there when the host deletes them). Messages written by guests stay on the co-op server
+only: posting them would put them under the host's account. Both need the host's sign-in.
 
 It uses the player's own The Hunter's Dream sign-in, the token the bloodborne_pc launcher keeps after
 "Sign in with Discord", and signs in the way the game does in that online mode (/basic_utils/login
@@ -14,7 +14,7 @@ region has only our own messages, the next one has theirs too.
 
 Settings, first found wins:
   enabled  --thd-messages, BBSC_THD_MESSAGES=1, or "enabled": true in thd-messages.json
-  write    read only with BBSC_THD_WRITE=0 or "write": false in thd-messages.json (default: write)
+  write    BBSC_THD_WRITE=1 or "write": true in thd-messages.json (default: read only)
   token    BBSC_THD_TOKEN, "token" in thd-messages.json, or the launcher's settings.json
   ruleset  BBSC_THD_RULESET, "ruleset" in thd-messages.json, else "vanilla"
   url      BBSC_THD_URL, "url" in thd-messages.json, else https://thehuntersdream.com:18671
@@ -86,7 +86,7 @@ class HuntersDreamMessages:
         account = config.get("account") or launcher.get("thd_online_id") or ""
         ruleset = os.environ.get("BBSC_THD_RULESET") or config.get("ruleset") or "vanilla"
         url = os.environ.get("BBSC_THD_URL") or config.get("url") or DEFAULT_URL
-        write = os.environ.get("BBSC_THD_WRITE", "1") != "0" and config.get("write", True) is not False
+        write = os.environ.get("BBSC_THD_WRITE") == "1" or config.get("write") is True
         found = cls(enabled, token, account, ruleset, url, write, data_dir)
         if enabled and not token:
             print("THD messages: on, but no The Hunter's Dream sign-in found (sign in on the "
