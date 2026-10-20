@@ -13159,7 +13159,11 @@ bool ArmBbscRejoin() {
 
     const s64 now = SteadyNowMs();
     std::scoped_lock rejoin_lock{bbsc_rejoin_mutex};
-    if (bbsc_rejoin_armed_map != 0 &&
+    // A second load right after the first is a load of its own once the first one's reinsert
+    // finished (bbsc_v8_pending cleared): 2026-10-20 18:20, the wipe reload and then a follow
+    // reload 5 s later - the follow was taken for the same load, nothing queued the phantom type,
+    // and the guest came back as player type 0, which a boss kill later sent home.
+    if (bbsc_rejoin_armed_map != 0 && bbsc_v8_pending &&
         (bbsc_rejoin_deferred || now - bbsc_rejoin_armed_ms < BbscRejoinDescriptorTimeoutMs)) {
         return false; // this load is already redirected
     }
@@ -13184,7 +13188,7 @@ bool ArmBbscRejoin() {
     if (BbscRejoinV7Enabled()) {
         // Several kept-end hooks can fire during one death load; snapshot once per load.
         static s64 v7_last_ms = 0;
-        if (v7_last_ms != 0 && now - v7_last_ms < BbscRejoinDescriptorTimeoutMs) {
+        if (v7_last_ms != 0 && bbsc_v8_pending && now - v7_last_ms < BbscRejoinDescriptorTimeoutMs) {
             return false;
         }
         v7_last_ms = now;
