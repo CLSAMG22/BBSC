@@ -14790,6 +14790,37 @@ bool BbscEraseLocalEffect(s32 id) {
     return BbscLocalEffectNode(id) == 0;
 }
 
+// The X lock after a revive in place (2026-10-20, the guest's X did nothing after being revived
+// at a boss kill, 09:58 and 15:57). The state snapshot at 15:57:27, while X was locked, had every
+// lock BBSC knows about clear but SpEffect 2 on the guest (stateInfo 52, no duration), which the
+// game puts on a dead player and which a normal death's reload throws away. A revive in place has
+// no reload, so it stayed. It was absent whenever X worked (the Amelia kill at 01:03, the host). For
+// BbscDeathMarkWatchMs after a revive in place, a living local player carrying it has it taken off.
+constexpr s32 BbscDeathMarkEffectId = 2;
+constexpr s64 BbscDeathMarkWatchMs = 30'000;
+void TickBbscDeathMarkClear() {
+    static s64 last_ms = 0;
+    static s64 logged_for = 0;
+    const s64 now = SteadyNowMs();
+    if (bbsc_inplace_respawn_ms == 0 || image_base == 0 || now - last_ms < 500 ||
+        now - bbsc_inplace_respawn_ms > BbscDeathMarkWatchMs) {
+        return;
+    }
+    last_ms = now;
+    const u64 player = GetLocalPlayerCharacter();
+    if (player == 0 || GetCharacterHp(player) <= 0 ||
+        BbscLocalEffectNode(BbscDeathMarkEffectId) == 0) {
+        return;
+    }
+    const bool gone = BbscEraseLocalEffect(BbscDeathMarkEffectId);
+    if (logged_for != bbsc_inplace_respawn_ms) {
+        logged_for = bbsc_inplace_respawn_ms;
+        LOG_INFO(Debug, "BBSC revive: SpEffect {} (dead) was still on us {} ms after the revive - "
+                        "taken off ({})",
+                 BbscDeathMarkEffectId, now - bbsc_inplace_respawn_ms, gone ? "gone" : "STILL THERE");
+    }
+}
+
 // See BbscBossProbeMs: once a second after a real boss clear on the guest, which SpEffects it
 // carries and the control flags byte the state diffs showed changing (+0x40: 00 -> 08 at both kills
 // of 2026-10-19), and 4680 taken off if it is there.
@@ -16201,6 +16232,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         if (BbscSpectateEnabled()) {
             TickBbscRemoteRevive();
             TickBbscDeathLockClear();
+            TickBbscDeathMarkClear();
             TickBbscStateDiff();
             TickBbscJoinTeleport();
         }
