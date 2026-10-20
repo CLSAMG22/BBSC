@@ -4203,8 +4203,17 @@ void NoteBbscBossBar() {
 
 // A boss fight was on when the player died: a bar is up now, or was up moments ago and no boss
 // has been killed since.
+bool BbscHostBossBarRecent(s64 within_ms); // see "Boss name line"
+constexpr s64 BbscHostBossAtDeathMs = 5'000;
+
 bool BbscBossFightAtDeath() {
     if (BossFightActive()) {
+        return true;
+    }
+    // A guest also counts the host's boss bar (sent every second): on 2026-10-20 at Darkbeast Paarl
+    // the guest died twice in the fight and was revived within seconds each time, as if no boss
+    // fight was on, instead of spectating until the kill.
+    if (GetSessionState() == 6 && BbscHostBossBarRecent(BbscHostBossAtDeathMs)) {
         return true;
     }
     return bbsc_boss_bar_seen_ms != 0 && bbsc_boss_killed_ms < bbsc_boss_bar_seen_ms &&
@@ -12826,6 +12835,11 @@ constexpr s64 BbscHostBossFreshMs = 10'000;
 std::array<char16_t, 160> bbsc_boss_line_text{};
 std::atomic<s32> bbsc_host_boss_id{-1};
 std::atomic<s64> bbsc_host_boss_ms{0};
+
+// The host's boss bar, from its boss packets: up within the last within_ms.
+bool BbscHostBossBarRecent(s64 within_ms) {
+    return bbsc_host_boss_id.load() != -1 && SteadyNowMs() - bbsc_host_boss_ms.load() <= within_ms;
+}
 const char* BbscBossNameById(s32 id); // see "Discord status"
 
 // The name id on our own boss bar, or -1.
@@ -13445,6 +13459,18 @@ void TickBbscDeadWatchdog() {
         BBSC_TIMELINE("DEATH", "death: repeat death in a boss fight (session state {}) -> spectate "
                         "until the boss dies or nobody is alive",
                  session_state);
+        return;
+    }
+    // The host's repeat death with nobody left alive is a wipe: the guests wait for the host's
+    // reload and follow it, so the host must reload, not revive in place (2026-10-20 17:48: the
+    // guest died, the host died a second later, BBSC revived the host in place, and the guest sat
+    // dead waiting for a reload that never came until he left).
+    if (repeat && session_state == 3 && !LivingPartnerExists()) {
+        LOG_INFO(Debug, "BBSC death: repeat death of the host with nobody alive (a wipe) - the "
+                        "normal reload, so the guests can follow it");
+        bbsc_spectate_active = false;
+        BbscApplyDeathPenalty("wipe");
+        RequestBbscDeathReload("host's repeat death in a wipe");
         return;
     }
     if (repeat) {
