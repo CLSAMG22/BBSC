@@ -14770,6 +14770,11 @@ void TickBbscStaleBossBar() {
     static u64 last_chr = 0;
     static s64 loaded_ms = 0;
     static s64 host_quiet_since_ms = 0;
+    // Only a bar that was there from the load on is a leftover. One that shows up after the load is
+    // a fight starting (2026-10-20 16:33: Darkbeast Paarl's bar was wiped 33 ms after it appeared,
+    // 38 s after the guest's load, because the host's packets still said "no boss"; the guest's
+    // deaths then counted as outside a boss fight).
+    static bool bar_since_load = false;
     const s64 now = SteadyNowMs();
     if (image_base == 0 || now - last_ms < 500) {
         return;
@@ -14779,6 +14784,14 @@ void TickBbscStaleBossBar() {
     if (chr != last_chr) {
         last_chr = chr;
         loaded_ms = now;
+        bar_since_load = chr != 0 && BbscGaugeBossId() != -1;
+    }
+    if (BbscGaugeBossId() == -1) {
+        bar_since_load = false; // gone once: whatever comes next is a new fight
+    }
+    if (!bar_since_load) {
+        host_quiet_since_ms = 0;
+        return;
     }
     if (GetSessionState() != 6 || chr == 0 || GetCharacterHp(chr) <= 0 ||
         now - loaded_ms > BbscStaleBarAfterLoadMs) {
