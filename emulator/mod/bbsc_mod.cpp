@@ -822,12 +822,18 @@ float PadAxis(u8 value) {
     return std::abs(v) < Dead ? 0.0f : std::clamp((v - std::copysign(Dead, v)) / (1.0f - Dead), -1.0f, 1.0f);
 }
 
+// When the game last read the pad through the wrapper (GetTickCount64), see the XInput fallback.
+std::atomic<u64> pad_read_last_ms{0};
+std::atomic<u64> pad_reads{0};
+
 // OrbisPadData: +0 buttons (u32), +4 left stick x/y, +6 right stick x/y, +8 L2, +9 R2 (u8).
 int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
     const int result = original_pad_read(handle, data);
     if (result != 0 || data == nullptr) {
         return result;
     }
+    pad_read_last_ms = GetTickCount64();
+    ++pad_reads;
     u32 buttons = 0;
     std::memcpy(&buttons, data, 4);
     std::scoped_lock lock{cine_mutex};
@@ -881,6 +887,88 @@ void InstallPadWrapper() {
     LOG_WARNING(Mod, "Pad: scePadReadState slot never filled - F1 camera keyboard only");
 }
 
+// The XInput fallback (2026-10-21, the user: "when dead I cannot freelook with my controller"; no
+// L3 + R3 toggle was ever logged). When the game has not read the pad through the wrapper for
+// 500 ms, the camera reads the first XInput controller itself: Xbox pads, and most others through
+// Steam Input. The game still gets that controller's input then (the hunter is dead when the camera
+// comes on by itself). Called with cine_mutex held.
+struct XiGamepad {
+    WORD buttons;
+    BYTE left_trigger, right_trigger;
+    SHORT lx, ly, rx, ry;
+};
+struct XiState {
+    DWORD packet;
+    XiGamepad pad;
+};
+using XInputGetStateFn = DWORD(WINAPI*)(DWORD user, XiState* state);
+
+float XiAxis(SHORT value) {
+    const float v = static_cast<float>(value) / 32767.0f;
+    constexpr float Dead = 0.15f;
+    return std::abs(v) < Dead ? 0.0f : std::clamp((v - std::copysign(Dead, v)) / (1.0f - Dead), -1.0f, 1.0f);
+}
+
+void PollXInputPadLocked() {
+    static XInputGetStateFn get_state = [] {
+        for (const char* dll : {"xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"}) {
+            if (HMODULE module = LoadLibraryA(dll)) {
+                if (auto fn = reinterpret_cast<XInputGetStateFn>(GetProcAddress(module, "XInputGetState"))) {
+                    LOG_INFO(Mod, "Pad: XInput fallback for the F1 camera ready ({})", dll);
+                    return fn;
+                }
+            }
+        }
+        LOG_WARNING(Mod, "Pad: no XInput - the F1 camera has no controller fallback");
+        return static_cast<XInputGetStateFn>(nullptr);
+    }();
+    if (get_state == nullptr) {
+        return;
+    }
+    XiState state{};
+    bool found = false;
+    for (DWORD user = 0; user < 4 && !found; ++user) {
+        found = get_state(user, &state) == ERROR_SUCCESS;
+    }
+    if (!found) {
+        return;
+    }
+    const WORD xb = state.pad.buttons;
+    u32 buttons = 0;
+    buttons |= (xb & 0x0001) ? PadUp : 0;
+    buttons |= (xb & 0x0002) ? PadDown : 0;
+    buttons |= (xb & 0x0004) ? PadLeft : 0;
+    buttons |= (xb & 0x0008) ? PadRight : 0;
+    buttons |= (xb & 0x0040) ? PadL3 : 0;
+    buttons |= (xb & 0x0080) ? PadR3 : 0;
+    buttons |= (xb & 0x0100) ? PadL1 : 0;
+    buttons |= (xb & 0x0200) ? PadR1 : 0;
+    buttons |= (xb & 0x1000) ? PadCross : 0;
+    buttons |= (xb & 0x4000) ? PadSquare : 0;
+    buttons |= (xb & 0x8000) ? PadTriangle : 0;
+    const u32 pressed = buttons & ~cine_pad.last_buttons;
+    cine_pad.last_buttons = buttons;
+    if ((buttons & (PadL3 | PadR3)) == (PadL3 | PadR3) && (pressed & (PadL3 | PadR3)) != 0) {
+        const bool enabled = !cine_state.enabled;
+        cine_state = CinematicInput{};
+        cine_state.enabled = enabled;
+        LOG_INFO(Debug, "BBSC cinematic camera: {} (L3 + R3, XInput)", enabled ? "on" : "off");
+    }
+    if (!cine_state.enabled) {
+        return;
+    }
+    cine_pad.buttons = buttons;
+    cine_pad.lx = XiAxis(state.pad.lx);
+    cine_pad.ly = -XiAxis(state.pad.ly); // the PS4 pad's y grows downwards
+    cine_pad.rx = XiAxis(state.pad.rx);
+    cine_pad.ry = -XiAxis(state.pad.ry);
+    cine_pad.l2 = static_cast<float>(state.pad.left_trigger) / 255.0f;
+    cine_pad.r2 = static_cast<float>(state.pad.right_trigger) / 255.0f;
+    cine_pad.speed_steps += ((pressed & PadUp) ? 1 : 0) - ((pressed & PadDown) ? 1 : 0);
+    cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
+    cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
+}
+
 bool CineKeyPressed(int key, bool down) {
     const bool pressed = down && !cine_was_down[key];
     cine_was_down[key] = down;
@@ -899,6 +987,20 @@ CinematicInput TakeCinematicInput() {
         cine_state.enabled = enabled;
         LOG_INFO(Debug, "BBSC cinematic camera: {} (F1)", enabled ? "on" : "off");
     }
+    const u64 tick = GetTickCount64();
+    const bool game_reads_pad = tick - pad_read_last_ms.load() < 500;
+    if (!game_reads_pad) {
+        PollXInputPadLocked();
+    }
+    static bool was_enabled = false;
+    if (cine_state.enabled && !was_enabled) {
+        const u64 last = pad_read_last_ms.load();
+        LOG_INFO(Debug, "BBSC cinematic camera: controller - {} game pad read(s) so far, the last {} "
+                        "- {}",
+                 pad_reads.load(), last == 0 ? std::string{"never"} : fmt::format("{} ms ago", tick - last),
+                 game_reads_pad ? "the game's pad" : "XInput fallback");
+    }
+    was_enabled = cine_state.enabled;
     if (!cine_state.enabled) {
         cine_looking = false;
         cine_mouse_owned = false;
