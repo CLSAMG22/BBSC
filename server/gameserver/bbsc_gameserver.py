@@ -1386,8 +1386,8 @@ def _relay_client(conn, address):
 
 # ---- Client logs (2026-10-20) ---------------------------------------------------------------------
 # Debugging co-op needs every player's BBSC log. GET /bbsc/request_logs (from this PC only) sends
-# relay frame 0x7E + u32 request id to every player connected to the relay; a player who allows it
-# (share-logs.on next to their bbsc.dll, see bbsc_logshare.cpp) POSTs its newest logs to
+# relay frame 0x7E + u32 request id to every player connected to the relay; each player's game
+# (bbsc_logshare.cpp) POSTs its newest logs to
 # /bbsc/client_log?request=<id>&file=<name>. Only a request this server made in the last
 # CLIENT_LOG_WINDOW seconds, from an address connected to the relay, and a bbsc-mod-*.log name are
 # accepted. They go to <log dir>\clients\<request time>\<address>\<file>.

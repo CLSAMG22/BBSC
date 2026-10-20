@@ -5,22 +5,21 @@
 //
 // Bugs in co-op need both players' logs, and getting a guest's logs meant asking them to find the
 // folder and send it by hand. The game server can now ask every player connected to its relay for
-// theirs (relay frame 0x7E + u32 request id, see bbsc_relay.cpp). A player who allows it answers
-// with an HTTP POST of each of its newest logs to the same game server:
+// theirs (relay frame 0x7E + u32 request id, see bbsc_relay.cpp). Each player answers with an HTTP
+// POST of each of its newest logs to the same game server:
 //     POST http://<server>:<http port>/bbsc/client_log?request=<id>&file=<name>
 // with the file as the body. The server keeps them under its logs\clients folder.
 //
-// Off unless the player allows it: a file named share-logs.on next to bbsc.dll, or
-// BBSC_SHARE_LOGS=1. It is checked on every request, so it can be switched without a restart.
-// Only BBSC's own logs\bbsc-mod-*.log files go, the newest BbscShareLogCount of them (the current
-// run's included), nothing else.
+// No setting (the user, 2026-10-20: the logs are for stability work, so a request is always
+// answered). Only on request, only to the game server the player is connected to, and only BBSC's
+// own logs\bbsc-mod-*.log files, the newest BbscShareLogCount of them (the current run's
+// included), nothing else. The server takes them only for a request it made itself.
 
 #include <windows.h>
 #include <winhttp.h>
 
 #include <algorithm>
 #include <atomic>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -50,14 +49,6 @@ struct Job {
 
 void Log(const std::string& text) {
     BbscMod::LogPlain(("Logs: " + text).c_str());
-}
-
-bool SharingAllowed() {
-    if (const char* env = std::getenv("BBSC_SHARE_LOGS"); env != nullptr && env[0] == '1') {
-        return true;
-    }
-    std::error_code ignored;
-    return std::filesystem::exists(BbscMod::ModDir() / L"share-logs.on", ignored);
 }
 
 // The newest bbsc-mod-*.log files, newest first.
@@ -186,11 +177,6 @@ namespace BbscMod {
 
 // From the relay thread (bbsc_relay.cpp): the game server asks for our logs.
 void OnLogRequest(u32 request, const std::string& server, u16 http_port) {
-    if (!SharingAllowed()) {
-        Log("the game server asked for our logs (request " + std::to_string(request) +
-            ") - not sent: log sharing is off (no share-logs.on next to bbsc.dll)");
-        return;
-    }
     if (server.empty() || busy.exchange(true)) {
         return;
     }
