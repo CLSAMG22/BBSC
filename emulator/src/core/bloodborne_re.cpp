@@ -12832,6 +12832,24 @@ void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers)
     const u32 id = static_cast<u32>(registers->rcx);
     const auto found = std::ranges::find(BbscMissingTexts, id, &std::pair<u32, u32>::first);
     if (found == BbscMissingTexts.end()) {
+        // Not one we map: if the game lacks it too, say which id it is, once (2026-10-20 15:58: a
+        // ?ActionEventInfo? box with no swap logged, so its id was not in the table).
+        static std::mutex checked_mutex;
+        static std::vector<u32> checked;
+        {
+            std::scoped_lock lock{checked_mutex};
+            if (std::ranges::find(checked, id) != checked.end() || checked.size() > 4096) {
+                return;
+            }
+            checked.push_back(id);
+        }
+        u64 fmg = 0;
+        const u64 slot = FindBbscMessageSlot(30, id, &fmg);
+        if (id != 0 && (slot == 0 || ReadValue<u64>(slot, 0) == 0)) {
+            LOG_WARNING(Debug, "BBSC messages: text 30/{} is not in the game's text either - the "
+                               "game shows ?ActionEventInfo? (no line mapped for it)",
+                        id);
+        }
         return;
     }
     const u32 to = found->second;
