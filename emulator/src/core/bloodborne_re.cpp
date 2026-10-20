@@ -14782,6 +14782,142 @@ void SendBbscCommunionPacket(u8 kind, const std::vector<u32>& ids) {
         packet.data(), static_cast<u32>(packet.size()));
 }
 
+// The key items we hold, carried or in storage.
+std::vector<u32> BbscHeldKeyItems() {
+    const u64 carried = BbscCarriedInventory();
+    const u64 storage = BbscStorageInventory();
+    std::vector<u32> held;
+    for (const u32 id : bbsc_key_goods_ids) {
+        const u32 code = 0x40000000u | id;
+        if ((carried != 0 && BbscInventoryHas(carried, code)) ||
+            (storage != 0 && BbscInventoryHas(storage, code))) {
+            held.push_back(id);
+        }
+    }
+    return held;
+}
+
+// The same as "N [ids]".
+std::string BbscHeldKeyItemsText(size_t* count = nullptr) {
+    const u64 carried = BbscCarriedInventory();
+    const u64 storage = BbscStorageInventory();
+    std::string ids;
+    size_t held = 0;
+    for (const u32 id : bbsc_key_goods_ids) {
+        const u32 code = 0x40000000u | id;
+        if ((carried != 0 && BbscInventoryHas(carried, code)) ||
+            (storage != 0 && BbscInventoryHas(storage, code))) {
+            ids += fmt::format("{}{}", ids.empty() ? "" : " ", id);
+            ++held;
+        }
+    }
+    if (count != nullptr) {
+        *count = held;
+    }
+    return fmt::format("{} [{}]", held, ids);
+}
+
+// Report 2026-10-21 (the guest): the key items from the chalice were gone after the trip home.
+// The chalice gave all 16 of the host's as new, so a guest's inventory may not be the one it takes
+// home. The key items held are logged as a guest and once home, and the chalice's are given again
+// once home (only the ones missing then). Report 2026-10-21 again: his own key items went too. So
+// the key items held at home before a session are noted, and any of them missing after the trip
+// home are given back the same way: a session never takes a key item away.
+std::vector<u32> bbsc_communion_keys; // guest: the host's key items from the last chalice
+std::vector<u32> bbsc_keys_before_session; // home: refreshed every 5 s while home and settled
+
+bool BbscHomeSettled(s64 now, s64& since_ms) {
+    const u64 global = GetGlobalState();
+    const u64 player = GetLocalPlayerCharacter();
+    const bool home = ReadablePointer(global, 0x1598) && ReadValue<u8>(global, 0x1592) != 0 &&
+                      ReadValue<u8>(global, 0x08) == 0 && player != 0 &&
+                      GetCharacterHp(player) > 0;
+    if (!home) {
+        since_ms = 0;
+        return false;
+    }
+    if (since_ms == 0) {
+        since_ms = now;
+    }
+    return now - since_ms >= 8'000;
+}
+
+void TickBbscCommunionKeysHome(s32 state) {
+    static s32 last_state = -1;
+    static s64 joined_ms = 0;
+    static bool guest_logged = false;
+    static bool went_home = false;
+    static s64 home_since_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (state == 6 && last_state != 6) {
+        joined_ms = now;
+        guest_logged = false;
+    }
+    if (state != 6 && last_state == 6) {
+        went_home = true;
+        home_since_ms = 0;
+        LOG_INFO(Debug, "BBSC key items: leaving the session with {}", BbscHeldKeyItemsText());
+    }
+    last_state = state;
+    if (state == 6 && !guest_logged && joined_ms != 0 && now - joined_ms >= 10'000 &&
+        GetLocalPlayerType() == 1) {
+        guest_logged = true;
+        LOG_INFO(Debug, "BBSC key items: as a guest we hold {}", BbscHeldKeyItemsText());
+    }
+    if (state == 0 && !went_home) {
+        static s64 own_since_ms = 0;
+        static s64 noted_ms = 0;
+        if (BbscHomeSettled(now, own_since_ms) && now - noted_ms >= 5'000) {
+            noted_ms = now;
+            bbsc_keys_before_session = BbscHeldKeyItems();
+        }
+        return;
+    }
+    if (!went_home || state != 0 || !BbscHomeSettled(now, home_since_ms)) {
+        return;
+    }
+    went_home = false;
+    LOG_INFO(Debug, "BBSC key items: home again with {} (before the session: {})",
+             BbscHeldKeyItemsText(), bbsc_keys_before_session.size());
+    std::vector<u32> owed = bbsc_keys_before_session;
+    for (const u32 id : bbsc_communion_keys) {
+        if (std::ranges::find(owed, id) == owed.end()) {
+            owed.push_back(id);
+        }
+    }
+    if (owed.empty()) {
+        return;
+    }
+    const u64 carried = BbscCarriedInventory();
+    const u64 storage = BbscStorageInventory();
+    if (carried == 0) {
+        return;
+    }
+    size_t given = 0;
+    std::string ids;
+    for (const u32 id : owed) {
+        const u32 code = 0x40000000u | id;
+        if (BbscInventoryHas(carried, code) || (storage != 0 && BbscInventoryHas(storage, code))) {
+            continue;
+        }
+        BbscBossGoodsLot lot{0, id, 1, 0};
+        if (GiveBbscBossGoods(lot)) {
+            ++given;
+            ids += fmt::format("{}{}", ids.empty() ? "" : " ", id);
+        }
+    }
+    LOG_INFO(Debug, "BBSC key items: home again - {} of {} key item(s) (our own before the session "
+                    "and the chalice's) were missing and are given back [{}]; now {}",
+             given, owed.size(), ids, BbscHeldKeyItemsText());
+    if (given != 0) {
+        static std::u16string text;
+        const std::string line = fmt::format("{} key item(s) restored after the session.", given);
+        text.assign(line.begin(), line.end());
+        BbscAnnounce(text.c_str(), "key items restored");
+    }
+    bbsc_communion_keys.clear();
+}
+
 void TickBbscCommunion() {
     if (!bbsc_communion_ready.load(std::memory_order_acquire)) {
         return;
@@ -14792,6 +14928,7 @@ void TickBbscCommunion() {
         bbsc_communion_this_session = false; // a new session: NPC states only once rung in it
     }
     last_state = state;
+    TickBbscCommunionKeysHome(state);
     // The ring.
     static bool rung_was = false;
     const bool rung =
@@ -14867,10 +15004,13 @@ void TickBbscCommunion() {
         return;
     }
     size_t given = 0;
+    LOG_INFO(Debug, "BBSC communion bell: before the gift we hold {}", BbscHeldKeyItemsText());
+    bbsc_communion_keys.clear();
     for (const u32 id : got) {
         if (std::ranges::find(bbsc_key_goods_ids, id) == bbsc_key_goods_ids.end()) {
             continue; // only key items, whatever the packet says
         }
+        bbsc_communion_keys.push_back(id);
         const u32 code = 0x40000000u | id;
         if (BbscInventoryHas(carried, code) || (storage != 0 && BbscInventoryHas(storage, code))) {
             continue;
