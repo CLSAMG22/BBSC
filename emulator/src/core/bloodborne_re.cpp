@@ -7383,6 +7383,8 @@ bool BbscDiedRightAfterRespawn(std::string_view why) {
     return true;
 }
 
+bool BbscHostBossBarRecent(s64 within_ms); // see "Boss name line"
+constexpr s64 BbscHostBossFightNearMs = 5'000;
 constexpr float BbscLampNearHostM = 150.0f; // see "A lamp far from the host" below
 bool BbscRespawnInPlace(std::string_view why) {
     // Replicates the local-player branch of the game's event revive 0x013CBAD0(10000, ...)
@@ -7470,6 +7472,9 @@ bool BbscRespawnInPlace(std::string_view why) {
         // A lamp far from the host can be in a part of the map that is not loaded here: the guest
         // revived there and died again 18 s later, death cause 7 (a fall; 2026-10-20 09:58, the
         // lamp about 290 m from the host). Beside the host instead, where the world is loaded.
+        // Not beside a host who is fighting a boss, though (2026-10-20 Paarl: the guest came back
+        // in the arena): then the lamp nearest the body, below.
+        const bool host_in_boss_fight = BbscHostBossBarRecent(BbscHostBossFightNearMs);
         if (target.has_value() && where == "host's last lamp" && partner_here) {
             if (const u64 partner = FindLivingPartnerCharacter()) {
                 if (const auto host = ReadCharacterTransform(partner)) {
@@ -7477,7 +7482,13 @@ bool BbscRespawnInPlace(std::string_view why) {
                     const float dy = target->position[1] - host->position[1];
                     const float dz = target->position[2] - host->position[2];
                     const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-                    if (distance > BbscLampNearHostM) {
+                    if (distance > BbscLampNearHostM && host_in_boss_fight) {
+                        LOG_INFO(Debug, "BBSC respawn: the host's last lamp is {:.0f} m from the "
+                                        "host, who is in a boss fight - the lamp nearest the body "
+                                        "instead",
+                                 distance);
+                        target.reset();
+                    } else if (distance > BbscLampNearHostM) {
                         LOG_INFO(Debug, "BBSC respawn: the host's last lamp is {:.0f} m from the "
                                         "host (over {:.0f}), maybe not loaded here - beside the "
                                         "host instead",
@@ -12855,6 +12866,11 @@ constexpr s64 BbscHostBossFreshMs = 10'000;
 std::array<char16_t, 160> bbsc_boss_line_text{};
 std::atomic<s32> bbsc_host_boss_id{-1};
 std::atomic<s64> bbsc_host_boss_ms{0};
+
+// The host's boss bar, from its boss packets: up within the last within_ms.
+bool BbscHostBossBarRecent(s64 within_ms) {
+    return bbsc_host_boss_id.load() != -1 && SteadyNowMs() - bbsc_host_boss_ms.load() <= within_ms;
+}
 const char* BbscBossNameById(s32 id); // see "Discord status"
 
 // The name id on our own boss bar, or -1.
