@@ -32,6 +32,9 @@ namespace BbscMod {
 void LogPlain(const char* text);
 std::filesystem::path ModDir(); // bbsc_mod.cpp
 } // namespace BbscMod
+namespace Core::Bloodborne {
+void RequestBbscStateSnapshot(); // bloodborne_re.cpp
+} // namespace Core::Bloodborne
 
 namespace {
 
@@ -128,6 +131,9 @@ DWORD Upload(HINTERNET connection, u32 request, const std::wstring& name, const 
 DWORD WINAPI ShareThread(void* raw) {
     const Job job = *static_cast<Job*>(raw);
     delete static_cast<Job*>(raw);
+    // Give the game thread a moment to log its state snapshot, so the current log has it.
+    Core::Bloodborne::RequestBbscStateSnapshot();
+    Sleep(1'500);
     const auto logs = NewestLogs();
     Log("the game server asked for our logs (request " + std::to_string(job.request) +
         ") - sending " + std::to_string(logs.size()) + " file(s) to " + job.server + ":" +

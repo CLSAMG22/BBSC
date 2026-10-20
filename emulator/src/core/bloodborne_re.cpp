@@ -14729,6 +14729,52 @@ bool BbscEraseLocalEffect(s32 id) {
     return BbscLocalEffectNode(id) == 0;
 }
 
+// State snapshot for a log request (2026-10-20: the guest's X stopped working after a boss kill
+// and two revives, and nothing in the log showed the action-blocking state at that moment). When
+// the game server asks for logs (bbsc_logshare.cpp), the game thread logs these first: the
+// boss-clear and death locks BBSC clears elsewhere, the control flags, and the SpEffects.
+std::atomic<bool> bbsc_snapshot_requested{false};
+void TickBbscStateSnapshot() {
+    if (!bbsc_snapshot_requested.exchange(false) || image_base == 0) {
+        return;
+    }
+    const u64 player = GetLocalPlayerCharacter();
+    const u64 global = GetGlobalState();
+    const u64 menu = ReadValue<u64>(image_base + 0x05562878, 0);
+    const u64 slots = ReadValue<u64>(image_base + PlayerSlotManagerPointerOffset, 0);
+    const u64 control = ReadablePointer(player, 0x60) ? ReadValue<u64>(player, 0x58) : 0;
+    const u64 flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
+    std::string effects;
+    const u64 list = ReadablePointer(player, 0x1D0) ? ReadValue<u64>(player, 0x1C8) : 0;
+    u64 entry = ReadablePointer(list, 0x10) ? ReadValue<u64>(list, 0x08) : 0;
+    for (int guard = 0; entry != 0 && guard < 64 && ReadablePointer(entry, 0x60); ++guard) {
+        effects += fmt::format("{}{}", effects.empty() ? "" : " ", ReadValue<s32>(entry, 0x40));
+        entry = ReadValue<u64>(entry, 0x58);
+    }
+    u32 leaving = 0;
+    if (ReadablePointer(slots, 0xB0)) {
+        for (u32 slot = 0; slot < 4; ++slot) {
+            leaving |= ReadValue<u8>(slots, 0xA9 + slot * 2) != 0 ? 1u << slot : 0;
+        }
+    }
+    const bool loading = !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0;
+    LOG_INFO(Debug,
+             "BBSC state snapshot: session state {}, player type {}, hp {}, loading {}; flags "
+             "4047={} 4000={} 4092={}; mission-clear menu (+0x2F0) {}, menu brake (+0x2DC) {}, "
+             "death pending {}, slot leaving mask {:#x}; control +0x114 {:#06x}, flags +0x40 {:#04x} "
+             "+0x48 {:#04x}, chr +0x1E4 {:#04x}; SpEffects [{}]",
+             GetSessionState(), LocalPlayerType(), player != 0 ? GetCharacterHp(player) : -1,
+             loading, !loading && BbscEventFlag(4047), !loading && BbscEventFlag(4000),
+             !loading && BbscEventFlag(4092),
+             ReadablePointer(menu, 0x2F8) ? ReadValue<s32>(menu, 0x2F0) : -1,
+             ReadablePointer(menu, 0x2E0) ? ReadValue<s32>(menu, 0x2DC) : -1,
+             ReadablePointer(slots, 0x78) ? ReadValue<u8>(slots, 0x70) : -1, leaving,
+             ReadablePointer(control, 0x118) ? ReadValue<u16>(control, 0x114) : 0xFFFF,
+             ReadablePointer(flags, 0x50) ? ReadValue<u8>(flags, 0x40) : 0xFF,
+             ReadablePointer(flags, 0x50) ? ReadValue<u8>(flags, 0x48) : 0xFF,
+             ReadablePointer(player, 0x1E8) ? ReadValue<u8>(player, 0x1E4) : 0xFF, effects);
+}
+
 // Test 2026-10-05 14:42: with 9020 on both players, the host world found the invader's sign
 // (SummonType 2), claimed it, opened its room and signalled the invader - who never joined
 // (no JoinSession_Black). The invader carried 9020 too. HYPOTHESIS: a player whose own world is
@@ -16082,6 +16128,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
+        TickBbscStateSnapshot();
         CaptureBbscGuestLoot();
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
@@ -17817,6 +17864,11 @@ void InstallReverseEngineeringTrace() {
 BbscPresence GetBbscPresence() {
     std::scoped_lock lock{bbsc_presence_mutex};
     return bbsc_presence;
+}
+
+// From the log upload thread (bbsc_logshare.cpp): the game thread logs the snapshot on its next tick.
+void RequestBbscStateSnapshot() {
+    bbsc_snapshot_requested = true;
 }
 
 } // namespace Core::Bloodborne
