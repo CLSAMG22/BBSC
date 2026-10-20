@@ -7343,6 +7343,98 @@ void TickBbscDeathCurtain() {
     }
 }
 
+// ---- Fall guard after a far lamp ----------------------------------------------------------------
+// A guest respawned at a host's lamp far from the host can land where the map is not loaded yet
+// and fall (2026-10-20 09:58, the lamp about 290 m away). Beside the host instead was no better:
+// the guest came back in the dark next to the host's enemies and died again 3.5 s after the
+// revive (2026-10-21 00:00:01, the host's lamp 189 m away), and the user wants the lamp. So the
+// lamp it is, and for 25 s this watches the guest: falling fast (over 6 m in 1 s) and 15 m below
+// the lamp means there was no floor. The first time the guest is put back on the lamp, by then the
+// game has loaded the ground around it; the second time beside the host.
+constexpr s64 BbscLampGuardMs = 25'000;
+constexpr float BbscLampGuardBelowM = 15.0f;
+constexpr float BbscLampGuardDropPerSecondM = 6.0f;
+struct BbscLampGuard {
+    s64 since_ms = 0; // 0 = off
+    BbscTransform lamp{};
+    s64 sample_ms = 0;
+    float sample_y = 0.0f;
+    bool put_back = false;
+};
+BbscLampGuard bbsc_lamp_guard;
+
+bool WarpBbscLocalPlayer(u64 player, const BbscTransform& to) {
+    const u64 vtable = ReadValue<u64>(player, 0);
+    const u64 warp = ReadablePointer(vtable, 0x600) ? ReadValue<u64>(vtable, 0x5F8) : 0;
+    if (!IsEbootCodeAddress(warp)) {
+        return false;
+    }
+    alignas(16) std::array<float, 4> position = to.position;
+    alignas(16) std::array<float, 4> rotation = to.rotation;
+    position[3] = 1.0f;
+    rotation[3] = 0.0f;
+    using Warp = void PS4_SYSV_ABI (*)(u64 chr, float* position, float* rotation, u32 flag);
+    reinterpret_cast<Warp>(warp)(player, position.data(), rotation.data(), 1);
+    WriteValue<u8>(player, 0x1E4, static_cast<u8>(ReadValue<u8>(player, 0x1E4) | 0x02));
+    using PhysicsReset = void PS4_SYSV_ABI (*)(u64 chr, u8 flag);
+    reinterpret_cast<PhysicsReset>(image_base + 0x018BCF30)(player, 1); // as the F8 unstuck
+    return true;
+}
+
+void TickBbscLampGuard() {
+    BbscLampGuard& guard = bbsc_lamp_guard;
+    if (guard.since_ms == 0) {
+        return;
+    }
+    const s64 now = SteadyNowMs();
+    const s32 session_state = GetSessionState();
+    const u64 player = GetLocalPlayerCharacter();
+    const auto here = player != 0 ? ReadCharacterTransform(player) : std::nullopt;
+    if (session_state != 6 || !here.has_value() || GetCharacterHp(player) <= 0) {
+        guard.since_ms = 0;
+        return;
+    }
+    if (now - guard.since_ms > BbscLampGuardMs) {
+        LOG_INFO(Debug, "BBSC respawn: the far lamp held (no fall in {} s)", BbscLampGuardMs / 1000);
+        guard.since_ms = 0;
+        return;
+    }
+    const float y = here->position[1];
+    if (guard.sample_ms == 0 || now - guard.sample_ms < 1'000) {
+        if (guard.sample_ms == 0) {
+            guard.sample_ms = now;
+            guard.sample_y = y;
+        }
+        return;
+    }
+    const float drop = guard.sample_y - y;
+    guard.sample_ms = now;
+    guard.sample_y = y;
+    if (drop < BbscLampGuardDropPerSecondM || guard.lamp.position[1] - y < BbscLampGuardBelowM) {
+        return;
+    }
+    if (!guard.put_back) {
+        guard.put_back = true;
+        guard.since_ms = now;
+        guard.sample_ms = 0;
+        const bool moved = WarpBbscLocalPlayer(player, guard.lamp);
+        LOG_INFO(Debug, "BBSC respawn: falling below the far lamp ({:.0f} m in 1 s, {:.0f} m under "
+                        "it) - {}",
+                 drop, guard.lamp.position[1] - y,
+                 moved ? "put back on the lamp" : "could not move the player");
+        return;
+    }
+    guard.since_ms = 0;
+    const u64 partner = FindLivingPartnerCharacter();
+    auto beside = partner != 0 ? ReadCharacterTransform(partner) : std::nullopt;
+    if (beside.has_value()) {
+        beside->position[0] += 1.0f;
+    }
+    const bool moved = beside.has_value() && WarpBbscLocalPlayer(player, *beside);
+    LOG_INFO(Debug, "BBSC respawn: fell below the far lamp again ({:.0f} m in 1 s) - {}", drop,
+             moved ? "put beside the host" : "no host to go to");
+}
+
 // Revive the local player and teleport it, without any load.
 // A lamp's respawn point id carries its map: 2412951 = area 24, block 1 -> 0x18010000.
 u32 BbscLampPointMap(s32 point) {
@@ -7490,12 +7582,11 @@ bool BbscRespawnInPlace(std::string_view why) {
                         target.reset();
                     } else if (distance > BbscLampNearHostM) {
                         LOG_INFO(Debug, "BBSC respawn: the host's last lamp is {:.0f} m from the "
-                                        "host (over {:.0f}), maybe not loaded here - beside the "
-                                        "host instead",
+                                        "host (over {:.0f}) - the lamp anyway, with a fall guard",
                                  distance, BbscLampNearHostM);
-                        target = host;
-                        target->position[0] += 1.0f;
-                        where = "partner";
+                        bbsc_lamp_guard = {};
+                        bbsc_lamp_guard.since_ms = SteadyNowMs();
+                        bbsc_lamp_guard.lamp = *target;
                     }
                 }
             }
@@ -16134,6 +16225,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscDeadWatchdog();
         TickBbscDeathCurtain();
         TickBbscLoadingScreenClose();
+        TickBbscLampGuard();
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
