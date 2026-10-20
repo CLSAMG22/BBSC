@@ -14775,7 +14775,27 @@ void TickBbscCommunion() {
             BbscAnnounce(u"Communion Bell rung.\nAsking the host for its progress...",
                          "communion asked");
         } else {
-            LOG_INFO(Debug, "BBSC communion bell: rung outside a guest's session (state {})", state);
+            // Not a guest: show what a guest would get from us (for a test alone or as host).
+            const u64 carried = BbscCarriedInventory();
+            const u64 storage = BbscStorageInventory();
+            std::string ids;
+            size_t held = 0;
+            for (const u32 id : bbsc_key_goods_ids) {
+                const u32 code = 0x40000000u | id;
+                if ((carried != 0 && BbscInventoryHas(carried, code)) ||
+                    (storage != 0 && BbscInventoryHas(storage, code))) {
+                    ids += fmt::format("{}{}", ids.empty() ? "" : " ", id);
+                    ++held;
+                }
+            }
+            size_t boss_flags = 0;
+            for (const u32 flag : BbscProgressFlags) {
+                boss_flags += BbscEventFlag(flag) ? 1 : 0;
+            }
+            LOG_INFO(Debug, "BBSC communion bell: rung outside a guest's session (state {}) - a guest "
+                            "ringing it in our world would get our {} key item(s) [{}] and our "
+                            "progress ({} of {} boss flags set here)",
+                     state, held, ids, boss_flags, BbscProgressFlags.size());
             BbscAnnounce(u"Ring the Communion Bell as a guest\nin another hunter's world.",
                          "communion alone");
         }
