@@ -123,6 +123,27 @@ std::atomic<bool> was_in_session{false};
 std::atomic<s64> own_user_id{0};          // UserId of our own sign (from its /create body)
 std::atomic<bool> placement_aimed{false}; // the placement came aimed at our sign
 
+// The scheme, host and port a URL goes to, for the log.
+std::string Origin(const std::string& url) {
+    const size_t start = url.find("://");
+    const size_t end = start == std::string::npos ? std::string::npos : url.find('/', start + 3);
+    return url.substr(0, end);
+}
+
+std::string JsonNumber(const std::string& body, const char* key); // below
+
+// Our own sign, as it goes out and as the summon server answers it (test 2026-10-20: with no log
+// of either, a rung Kin Bell gave no way to tell whether the sign reached the server). The game
+// posts its sign again about every 30 s, so every post is logged.
+int SendOwnSign(int request, const std::string& url, const void* data, u64 size) {
+    const int result = original_send(request, data, size);
+    const std::string body(static_cast<const char*>(data), static_cast<size_t>(size));
+    const std::string area = JsonNumber(body, "AreaId");
+    LOG_INFO(Mod, "HTTP: our sign posted to {} (AreaId {}, {} bytes) - send result {}",
+             Origin(url), area.empty() ? "?" : area, size, result);
+    return result;
+}
+
 s64 NowMs() {
     return static_cast<s64>(GetTickCount64());
 }
@@ -502,6 +523,9 @@ int PS4_SYSV_ABI SendRequest(int request, const void* data, u64 size) {
     original_add_header(request, "X-ShadPS4-Bloodborne-Seamless", "1", 0);
     if (IsSummonDelete(url)) {
         own_sign_deleted_ms = NowMs();
+        const int result = original_send(request, data, size);
+        LOG_INFO(Mod, "HTTP: our sign taken down at {} - send result {}", Origin(url), result);
+        return result;
     }
     if (IsSummonClaim(url)) {
         // The host rang one sign: the broker gets our placement with the claim and only that
@@ -561,8 +585,9 @@ int PS4_SYSV_ABI SendRequest(int request, const void* data, u64 size) {
         if (RewriteAreaId(body)) {
             original_set_content_length(request, body.size());
             // The emulator copies the body during the call, so a local buffer is fine.
-            return original_send(request, body.data(), body.size());
+            return SendOwnSign(request, url, body.data(), body.size());
         }
+        return SendOwnSign(request, url, data, size);
     }
     return original_send(request, data, size);
 }
@@ -604,6 +629,15 @@ int PS4_SYSV_ABI ReadData(int request, void* data, u64 size) {
         }
         if (IsSummonCreate(url)) {
             const std::string_view reply(static_cast<const char*>(data), static_cast<size_t>(read));
+            if (!IsPublicServer(url)) {
+                std::string text(reply.substr(0, 160));
+                for (char& c : text) {
+                    if (static_cast<unsigned char>(c) < 0x20) {
+                        c = '.';
+                    }
+                }
+                LOG_INFO(Mod, "HTTP: summon server answered our sign ({} bytes): {}", read, text);
+            }
             if (reply.find("\"UserId\"") != std::string_view::npos &&
                 claim_delivered_ms.exchange(NowMs()) == 0) {
                 LOG_INFO(Mod, "HTTP: a host's claim came with our sign ({} bytes) - waiting for the "
