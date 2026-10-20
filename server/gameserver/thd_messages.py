@@ -59,14 +59,19 @@ def _read_json(path):
 
 
 def _their_ids(reply):
-    """The message ids in a create reply: plain numbers, or {"BloodMessId": n} entries."""
+    """The message ids in a reply: plain numbers, or {"BloodMessId": n} entries.
+
+    In a create reply each entry is {"BloodMessId": 9739, "PrevBloodMessId": 9287300121196685962}
+    (2026-10-20). The second one is the game's own id for the message (it sends it with the post),
+    and that is the one The Hunter's Dream knows it by: its lists, ratings and existence check use
+    it, and the small number was "lost" there. So PrevBloodMessId wins when it is there."""
     raw = reply.get("BloodMessIdList")
     if not isinstance(raw, list):
         raw = [reply.get("BloodMessId")]
     ids = []
     for item in raw:
         if isinstance(item, dict):
-            item = item.get("BloodMessId")
+            item = item.get("PrevBloodMessId") or item.get("BloodMessId")
         if isinstance(item, str) and item.isdigit():
             item = int(item)
         if isinstance(item, int) and not isinstance(item, bool) and item:
