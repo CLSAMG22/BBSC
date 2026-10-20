@@ -4,6 +4,7 @@
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "common/singleton.h"
+#include "core/bbsc_cinematic.h"
 #include "core/emulator_settings.h"
 #include "core/libraries/libs.h"
 #include "core/libraries/pad/pad_errors.h"
@@ -467,6 +468,13 @@ int PS4_SYSV_ABI scePadReadHistory() {
 int PS4_SYSV_ABI scePadReadState(s32 handle, OrbisPadData* pData) {
     LOG_TRACE(Lib_Pad, "handle: {}", handle);
     const int result = scePadRead(handle, pData, 1);
+    if (result > 0 && pData != nullptr) {
+        // BBSC: dead in co-op, the camera watching a living hunter reads R1 / L1 and the sticks
+        // (bbsc_cinematic.cpp). The game's data is not changed.
+        Core::Bbsc::CinematicPadRead(static_cast<u32>(pData->buttons), pData->rightStick.x,
+                                     pData->rightStick.y, pData->leftStick.x,
+                                     pData->leftStick.y);
+    }
     return result < 0 ? result : ORBIS_OK;
 }
 

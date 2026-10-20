@@ -1,7 +1,7 @@
 {
   "id": "bbsc",
   "name": "BBSC - Bloodborne Seamless Co-op",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "CLS_AMG; seamless summon by Wozzardman; server format by fhody125",
   "description": "One co-op session across areas, deaths, lamps, bosses and the Hunter's Dream. Bloodborne CUSA03173 v1.09 only. Warps and world sync go through the host's game server relay (port 20444). Off = the vanilla online game.",
   "games": ["CUSA03173"],
@@ -24,6 +24,7 @@
     {"id": "solid_npcs", "name": "Solid NPCs", "description": "A guest sees NPCs solid, not as grey ghosts", "type": "bool", "default": true, "env": "SHADPS4_BBSC_SOLID_NPCS"},
     {"id": "death_penalty", "name": "Bloodstain on death", "description": "A kept death still drops a bloodstain and echoes", "type": "bool", "default": true, "env": "SHADPS4_BBSC_DEATH_PENALTY"},
     {"id": "free_bell", "name": "Free Beckoning Bell", "description": "The bell costs no Insight", "type": "bool", "default": true, "env": "SHADPS4_BBSC_FREE_BELL"},
+    {"id": "bells_anywhere", "name": "Bells anywhere", "description": "The kit's bells ring anywhere, the Hunter's Dream included (your role, Insight and being online still count)", "type": "bool", "default": true, "env": "SHADPS4_BBSC_BELLS_ANYWHERE"},
     {"id": "five_hunters", "name": "Five hunters", "description": "The host may summon up to 4 guests", "type": "bool", "default": true, "env": "SHADPS4_BBSC_FIVE_HUNTERS"},
     {"id": "messages", "name": "Co-op texts", "description": "Texts that fit seamless play (no \"Returning to your world\")", "type": "bool", "default": true, "env": "SHADPS4_BBSC_MESSAGES"},
     {"id": "load_cover", "name": "Black fade on joins", "description": "The guest's loads happen behind a black fade", "type": "bool", "default": true, "env": "SHADPS4_BBSC_LOAD_COVER"},
@@ -36,7 +37,7 @@
     {"id": "scale_enemy_stagger", "name": "Enemy stagger resistance per guest (%)", "description": "Harder to stagger normal enemies, per guest", "type": "int", "default": 15, "min": 0, "max": 200, "env": "BBSC_SCALE_ENEMY_STAGGER"},
     {"id": "scale_boss_stagger", "name": "Boss stagger resistance per guest (%)", "description": "Harder to stagger bosses, per guest", "type": "int", "default": 20, "min": 0, "max": 200, "env": "BBSC_SCALE_BOSS_STAGGER"},
     {"id": "shared_progress", "name": "Shared progress", "description": "When a guest goes home, bosses, shortcuts, doors and lamps the host has done are added to the guest's own world (adds only, never removes; NPC quests and your character are not touched; saves backed up first)", "type": "bool", "default": true, "env": "SHADPS4_BBSC_SHARED_PROGRESS"},
-    {"id": "discord", "name": "Discord status", "description": "Shows BBSC, your area, boss fights and the number of hunters on your Discord profile", "type": "bool", "default": true, "env": "SHADPS4_BBSC_DISCORD"},
+    {"id": "discord", "name": "Discord status", "description": "Shows BBSC, your area, your build, boss fights with a timer, when you are dead or spectating, and the number of hunters on your Discord profile", "type": "bool", "default": true, "env": "SHADPS4_BBSC_DISCORD"},
     {"id": "p2p_channel", "name": "P2P channel", "description": "Sends BBSC's own messages (follow, world sync, scaling, leaving) straight to the other players over the game's own connection when there is no BBSC relay - needed on public servers (The Hunter's Dream)", "type": "bool", "default": true, "env": "SHADPS4_BBSC_P2P_CHANNEL"},
     {"id": "relay", "name": "Relay address", "description": "host:20444 - leave empty to use the game server address from host_overrides.json (JOIN-HOST sets it)", "type": "text", "default": "", "env": "BBSC_RELAY"}
   ]

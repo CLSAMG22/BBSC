@@ -23,6 +23,7 @@
 // clang-format on
 #include "common/assert.h"
 #include "common/logging/log.h"
+#include "core/bloodborne_re.h"
 #include "common/singleton.h"
 #include "core/libraries/kernel/kernel.h"
 #include "core/libraries/network/net_util.h"
@@ -489,13 +490,14 @@ public:
     // receiver files the frame under the same endpoint its signaling code uses for that peer (an
     // ActivationRequest answer goes to the packet's mapped_addr + the frame's source port).
     // A peer that reaches us through the relay is answered through it at once.
-    // SHADPS4_P2P_RELAY=0 turns it off, =force relays every known peer from the first frame;
-    // SHADPS4_P2P_RELAY_PORT changes the port.
+    // Public players can be behind CGNAT or strict routers, so use the relay from the first frame.
+    // Direct copies still go out until the peer answers. SHADPS4_P2P_RELAY=auto (or direct)
+    // opts into direct-first with relay fallback after 2 s; =0/off disables the relay.
     void RelaySetServer(u32 addr_nbo) {
         std::lock_guard lock(relay_mutex);
         const char* env = std::getenv("SHADPS4_P2P_RELAY");
         const std::string mode = env != nullptr ? env : "";
-        relay_force = mode == "force";
+        relay_force = mode != "auto" && mode != "direct";
         u16 port = 3478;
         if (const char* p = std::getenv("SHADPS4_P2P_RELAY_PORT"); p != nullptr && *p != 0) {
             const long parsed = std::strtol(p, nullptr, 10);
@@ -561,21 +563,15 @@ public:
         }
         std::lock_guard lock(relay_mutex);
         const std::string id = PadId(online_id);
-        const u64 key = EndpointKey(addr_nbo, port_nbo);
-        if (const auto old = relay_ids.find(id); old != relay_ids.end() && old->second != key) {
-            // The peer moved (new run, new port): carry the path choice over.
-            const auto old_peer = relay_peers.find(old->second);
-            if (old_peer != relay_peers.end()) {
-                RelayPeer moved = old_peer->second;
-                relay_peers.erase(old_peer);
-                relay_peers[key] = moved;
-            }
-        }
-        relay_ids[id] = key;
-        RelayPeer& peer = relay_peers[key];
+        // Peers are kept by online id; every endpoint signaling or the relay ever gave for it
+        // stays an alias. (Before 2026-10-13 the peer was filed under ONE endpoint and moved when
+        // the relay brought another one - signaling's sends to the endpoint it knows then found
+        // no relay entry and went direct only: one-way relay, DEAD after 30 s behind CGNAT.)
+        RelayPeer& peer = relay_peers[id];
         peer.id = id;
-        peer.addr = addr_nbo;
+        peer.addr = addr_nbo; // the endpoint signaling uses: relayed frames arrive "from" it
         peer.port = port_nbo;
+        AddRelayAliasLocked(id, addr_nbo, port_nbo, "signaling");
     }
 
 private:
@@ -622,6 +618,31 @@ private:
         return (static_cast<u64>(addr_nbo) << 16) | port_nbo;
     }
 
+    // relay_mutex held.
+    void AddRelayAliasLocked(const std::string& id, u32 addr_nbo, u16 port_nbo, const char* from) {
+        if (addr_nbo == 0 || port_nbo == 0) {
+            return;
+        }
+        const u64 key = EndpointKey(addr_nbo, port_nbo);
+        const auto it = relay_alias.find(key);
+        if (it != relay_alias.end() && it->second == id) {
+            return;
+        }
+        relay_alias[key] = id;
+        LOG_INFO(Lib_Net, "P2P relay fallback: '{}' known at {:#x}:{} (from {})", IdText(id),
+                 addr_nbo, ntohs(port_nbo), from);
+    }
+
+    // relay_mutex held.
+    RelayPeer* FindRelayPeerLocked(u32 addr_nbo, u16 port_nbo) {
+        const auto alias = relay_alias.find(EndpointKey(addr_nbo, port_nbo));
+        if (alias == relay_alias.end()) {
+            return nullptr;
+        }
+        const auto it = relay_peers.find(alias->second);
+        return it == relay_peers.end() ? nullptr : &it->second;
+    }
+
     bool IsRelayServer(u32 addr_nbo, u16 port_nbo) {
         std::lock_guard lock(relay_mutex);
         return relay_server_addr != 0 && addr_nbo == relay_server_addr &&
@@ -658,7 +679,7 @@ private:
             relay_status_sent = relay_sent;
             relay_status_received = relay_received;
             std::string peers;
-            for (const auto& [key, peer] : relay_peers) {
+            for (const auto& [id, peer] : relay_peers) {
                 if (!peers.empty()) {
                     peers += ", ";
                 }
@@ -688,11 +709,11 @@ private:
             dest_addr_nbo == relay_server_addr) {
             return RelayPath::Direct;
         }
-        const auto it = relay_peers.find(EndpointKey(dest_addr_nbo, dest_port_nbo));
-        if (it == relay_peers.end()) {
+        RelayPeer* const found = FindRelayPeerLocked(dest_addr_nbo, dest_port_nbo);
+        if (found == nullptr) {
             return RelayPath::Direct;
         }
-        RelayPeer& peer = it->second;
+        RelayPeer& peer = *found;
         const auto now = std::chrono::steady_clock::now();
         if (peer.relayed && now < peer.missing_until) {
             return RelayPath::Direct;
@@ -758,9 +779,9 @@ private:
         if (relay_peers.empty()) {
             return;
         }
-        const auto it = relay_peers.find(EndpointKey(addr_nbo, port_nbo));
-        if (it != relay_peers.end() && !it->second.direct_rx) {
-            RelayPeer& peer = it->second;
+        RelayPeer* const found = FindRelayPeerLocked(addr_nbo, port_nbo);
+        if (found != nullptr && !found->direct_rx) {
+            RelayPeer& peer = *found;
             peer.direct_rx = true;
             peer.early.clear();
             if (peer.relayed && !peer.relay_seen) {
@@ -791,9 +812,9 @@ private:
         if (data[4] == 0x05 && size >= 5 + kRelayIdSize) {
             const std::string id(reinterpret_cast<const char*>(data + 5), kRelayIdSize);
             std::lock_guard lock(relay_mutex);
-            const auto known = relay_ids.find(id);
-            if (known != relay_ids.end()) {
-                RelayPeer& peer = relay_peers[known->second];
+            const auto known = relay_peers.find(id);
+            if (known != relay_peers.end()) {
+                RelayPeer& peer = known->second;
                 peer.missing_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
                 if (!peer.missing_logged) {
                     peer.missing_logged = true;
@@ -802,6 +823,9 @@ private:
                                 "older than 2026-10-12, or it is not running) - direct only; if "
                                 "direct does not work either, it cannot connect until it updates",
                                 IdText(peer.id));
+                    Core::Bloodborne::BbscTimelineEvent(
+                        "NET", fmt::format("'{}' is not on the relay (old emulator or not running)",
+                                           IdText(peer.id)));
                 }
             }
             return;
@@ -818,35 +842,24 @@ private:
         u16 from_port = 0;
         {
             std::lock_guard lock(relay_mutex);
-            if (ep_addr != 0 && ep_port != 0) {
-                // File the peer under the endpoint it gave (moves an earlier made-up one).
-                const u64 key = EndpointKey(ep_addr, ep_port);
-                if (const auto old = relay_ids.find(id); old != relay_ids.end() && old->second != key) {
-                    const auto old_peer = relay_peers.find(old->second);
-                    if (old_peer != relay_peers.end()) {
-                        RelayPeer moved = old_peer->second;
-                        relay_peers.erase(old_peer);
-                        relay_peers[key] = moved;
-                    }
-                }
-                relay_ids[id] = key;
-                RelayPeer& filed = relay_peers[key];
-                filed.id = id;
-                filed.addr = ep_addr;
-                filed.port = ep_port;
-            }
-            if (!relay_ids.contains(id)) {
-                // A peer we never looked up: give it a made-up endpoint (169.254.x.x, never sent
-                // to directly) so the answers go back through the relay.
-                const u32 addr = htonl(0xA9FE0000u | (relay_next_pseudo++ & 0xFFFFu));
-                const u16 port = htons(3173);
-                relay_ids[id] = EndpointKey(addr, port);
-                RelayPeer& made = relay_peers[EndpointKey(addr, port)];
+            if (!relay_peers.contains(id)) {
+                // A peer signaling never looked up: the endpoint it gave, else a made-up one
+                // (169.254.x.x, never sent to directly) so the answers go back through the relay.
+                RelayPeer& made = relay_peers[id];
                 made.id = id;
-                made.addr = addr;
-                made.port = port;
+                if (ep_addr != 0 && ep_port != 0) {
+                    made.addr = ep_addr;
+                    made.port = ep_port;
+                } else {
+                    made.addr = htonl(0xA9FE0000u | (relay_next_pseudo++ & 0xFFFFu));
+                    made.port = htons(3173);
+                }
+                AddRelayAliasLocked(id, made.addr, made.port, "relay, new peer");
             }
-            RelayPeer& peer = relay_peers[relay_ids[id]];
+            // Its own endpoint is one more alias; the peer keeps the endpoint signaling knows,
+            // so the frame below arrives from where signaling expects it.
+            AddRelayAliasLocked(id, ep_addr, ep_port, "relay");
+            RelayPeer& peer = relay_peers[id];
             peer.relay_seen = true;
             peer.missing_until = {};
             if (!peer.relayed) {
@@ -874,8 +887,8 @@ private:
     u16 relay_self_port{0};
     std::chrono::steady_clock::time_point relay_last_register{};
     std::vector<std::string> relay_local_ids;
-    std::unordered_map<u64, RelayPeer> relay_peers;
-    std::unordered_map<std::string, u64> relay_ids;
+    std::unordered_map<std::string, RelayPeer> relay_peers; // by padded online id
+    std::unordered_map<u64, std::string> relay_alias;       // every known endpoint -> online id
     u32 relay_next_pseudo{1};
     u64 relay_sent{0};
     u64 relay_received{0};

@@ -422,8 +422,10 @@ def _matches(request, sign):
     types = {f.get("SummonType") for f in request.get("SummonTypeList") or [] if "SummonType" in f}
     if types and sign.get("SummonType") not in types:
         return False
+    # The password must be the same on both sides, as in the game (2026-10-19): a search with no
+    # password used to match passworded signs too. None/absent = no password.
     word = request.get("SummonWord") or ""
-    if word and word != (sign.get("SummonWord") or ""):
+    if word != (sign.get("SummonWord") or ""):
         return False
     level, theirs = request.get("MatchingLevel"), sign.get("MatchingLevel")
     if not word and isinstance(level, int) and isinstance(theirs, int) and level >= 0 and theirs >= 0:
@@ -621,6 +623,13 @@ SHAD_MAGIC = b"BBR1"
 class Relay:
     def __init__(self):
         self.sock = None
+        # Observability only. No changes to the BBHOST or BBR1 wire protocols.
+        self.datagrams_in = 0
+        self.bytes_in = 0
+        self.datagrams_out = 0
+        self.bytes_out = 0
+        self.send_errors = 0
+        self.unrecognized_in = 0
         self.by_token = {}   # token -> port
         self.ports = {}      # port -> {"token", "addr": (ip, port), "seen"}
         self.frames = 0
@@ -628,12 +637,47 @@ class Relay:
         self.shad_frames = 0
         self.shad_missing = {}  # (src, dst) -> (last told, last logged) for unregistered dst
 
-    def start(self, bind, port):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((bind, port))
+    def start(self, bind, port, rcvbuf_bytes=0):
+        # Explicit opt-in only. Linux doubles SO_RCVBUF for accounting and caps
+        # the requested value using net.core.rmem_max (unless SO_RCVBUFFORCE).
+        # Log the observed value; changing sysctl alone does not resize a socket.
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            if rcvbuf_bytes:
+                if not 8192 <= rcvbuf_bytes <= 64 * 1024 * 1024:
+                    raise ValueError("UDP receive buffer must be 8192..67108864 bytes")
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf_bytes)
+            sock.bind((bind, port))
+        except Exception:
+            sock.close()
+            raise
+        self.sock = sock
+        actual = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+        if rcvbuf_bytes:
+            say("UDP SO_RCVBUF: requested {} bytes; kernel reports {} bytes (Linux accounting includes 2x)".format(
+                rcvbuf_bytes, actual))
+            if actual < rcvbuf_bytes * 2:
+                say("UDP buffer capped by kernel; check net.core.rmem_max before tuning")
         threading.Thread(target=self._loop, daemon=True, name="bbhost-stun").start()
         say("STUN + relay on udp {}:{} (relay ports {}-{}, players reach it at {})".format(
             bind, port, OPTS["relay_ports"][0], OPTS["relay_ports"][1], OPTS["public_ip"] or "?"))
+
+    def _send_packet(self, data, addr):
+        """Exactly the original sendto(data, addr), with counters only."""
+        try:
+            result = self.sock.sendto(data, addr)
+        except OSError:
+            self.send_errors += 1
+            raise
+        self.datagrams_out += 1
+        self.bytes_out += result
+        return result
+
+    def counters(self):
+        """Cumulative traffic counters for read-only periodic diagnostics."""
+        return {k: getattr(self, k) for k in (
+            "datagrams_in", "bytes_in", "datagrams_out", "bytes_out",
+            "send_errors", "unrecognized_in", "frames", "shad_frames")}
 
     def expire(self, now):
         with LOCK:
@@ -669,7 +713,13 @@ class Relay:
             try:
                 data, addr = self.sock.recvfrom(65536)
             except OSError:
+                # Do not spin at 100% CPU after a socket is closed.
+                if self.sock.fileno() < 0:
+                    return
+                time.sleep(0.01)
                 continue
+            self.datagrams_in += 1
+            self.bytes_in += len(data)
             try:
                 if data[:4] == SHAD_MAGIC:
                     self._shad(data, addr)
@@ -677,6 +727,8 @@ class Relay:
                     self._forward(data, addr)
                 elif len(data) >= 20 and data[0:2] == b"\x00\x01":
                     self._binding(data, addr)
+                else:
+                    self.unrecognized_in += 1
             except Exception as e:  # one bad datagram must not stop the relay
                 say("stun/relay error from {}: {!r}".format(addr, e))
 
@@ -692,7 +744,7 @@ class Relay:
             target = self.ports.get(dst)
             to = target and target.get("addr")
         if to:
-            self.sock.sendto(bytes([0xFB, ord("r")]) + struct.pack("!H", src_port) + data[12:], to)
+            self._send_packet(bytes([0xFB, ord("r")]) + struct.pack("!H", src_port) + data[12:], to)
             self.frames += 1
 
     # shadPS4 P2P relay (BBSC fork, 2026-10-12). Players whose routers or CGNAT stop direct P2P
@@ -713,7 +765,7 @@ class Relay:
             if old is None or old["addr"] != addr:
                 say("shadPS4 relay: {} registered from {}:{}".format(
                     npid.rstrip(b"\0").decode("ascii", "replace"), addr[0], addr[1]))
-            self.sock.sendto(SHAD_MAGIC + b"\x02", addr)
+            self._send_packet(SHAD_MAGIC + b"\x02", addr)
         elif kind == 0x03 and len(data) >= 37:
             dst, src = data[5:21], data[21:37]
             with LOCK:
@@ -732,11 +784,11 @@ class Relay:
                     tell, logged = now - last[0] >= 10, now - last[1] >= 60
                     self.shad_missing[key] = (now if tell else last[0], now if logged else last[1])
             if to:
-                self.sock.sendto(SHAD_MAGIC + b"\x04" + src + data[37:], to)
+                self._send_packet(SHAD_MAGIC + b"\x04" + src + data[37:], to)
                 self.shad_frames += 1
             else:
                 if tell:
-                    self.sock.sendto(SHAD_MAGIC + b"\x05" + dst, addr)
+                    self._send_packet(SHAD_MAGIC + b"\x05" + dst, addr)
                 if logged:
                     say("shadPS4 relay: {} -> {} dropped - {} is not on the relay (older emulator?)".format(
                         src.rstrip(b"\0").decode("ascii", "replace"),
@@ -773,7 +825,7 @@ class Relay:
             mapped = (ip, port)
         value = struct.pack("!BBH", 0, 1, mapped[1]) + socket.inet_aton(mapped[0])
         attrs = struct.pack("!HH", 0x0001, len(value)) + value + attrs
-        self.sock.sendto(struct.pack("!HH", 0x0101, len(attrs)) + txid + attrs, addr)
+        self._send_packet(struct.pack("!HH", 0x0101, len(attrs)) + txid + attrs, addr)
 
 
 RELAY = Relay()

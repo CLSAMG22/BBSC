@@ -274,7 +274,7 @@ constexpr std::array<ByteEdit, 17> ByteEdits{{
     // instruction (0x018C52FF), so the guest's copy gives the guest's insight too; host and solo
     // never took the jump anyway.
     {"Echoes.GuestBossInsight", 0x018C52F9, {0x0F, 0x84}, {0xEB, 0x04}, Group::Echoes},
-    // Five hunters (test 2026-10-08, host with 2 guests: a third player's co-op sign got
+    // Five hunters (test 2026-10-08, host hardwater with 2 guests: a third player's co-op sign got
     // 18 empty sign lists in a row, the same player's invader sign was found at once). The host's
     // sign search 0x01872360 asks the server for co-op signs (type 7) only while one of vanilla's
     // two co-op slots is free - the slot table 0x0186FE40 fills [rbp-0x9C] / [rbp-0x90] with the
@@ -360,7 +360,7 @@ constexpr std::array<WideEdit, 11> WideEdits{{
     // (The Kin Bell already works in the Dream through the general path - left as it is.)
     {"KitBells.HuntBellChecks", 0x0157F857, {0xC8, 0x00, 0x00, 0x00}, {0xB0, 0x0F, 0x00, 0x00},
      Group::KitBells},
-    // Three players, 2026-10-08 (host, guest cls_amg; a tester's game had crashed but his
+    // Three players, 2026-10-08 (host hardwater, guest cls_amg; abood's game had crashed but his
     // sign was still listed): the host summoned the dead sign and sat in CreateWait for 6 minutes,
     // then its own game raised "OnIrregularLeaveSession" (0x017897DA) and ended the session for the
     // guest too. That is the reliable-packet send 0x017894E0: a packet it cannot deliver to a member

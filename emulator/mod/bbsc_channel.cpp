@@ -41,6 +41,8 @@
 
 namespace BbscMod {
 u64 EbootAddress(); // bbsc_mod.cpp
+bool ReadSlotSafely(u64 address, u64* value);  // bbsc_mod.cpp: no fault if unreadable
+bool WriteSlotSafely(u64 address, u64 value);
 void GuardSlot(u64 slot_offset, u64 wrapper, void** original, const char* name);
 void RelayDispatch(const std::vector<u8>& wrapped); // bbsc_relay.cpp
 } // namespace BbscMod
@@ -170,17 +172,16 @@ s32 PS4_SYSV_ABI ConnectionStatus(s32 ctx, s32 conn, u32* status, u32* addr, u16
 
 template <typename Fn>
 bool Swap(u64 slot_offset, Fn wrapper, Fn& original, const char* name) {
-    auto* slot = reinterpret_cast<u64*>(BbscMod::EbootAddress() + slot_offset);
+    const u64 slot = BbscMod::EbootAddress() + slot_offset;
     for (int i = 0; i < 60'000; ++i) {
-        const u64 value = *slot;
-        if (value != 0 &&
+        u64 value = 0;
+        if (BbscMod::ReadSlotSafely(slot, &value) && value != 0 &&
             (value < BbscMod::EbootAddress() || value >= BbscMod::EbootAddress() + EbootSize)) {
             original = reinterpret_cast<Fn>(value);
-            DWORD old = 0;
-            VirtualProtect(slot, 8, PAGE_READWRITE, &old);
-            *slot = reinterpret_cast<u64>(wrapper);
-            DWORD ignored = 0;
-            VirtualProtect(slot, 8, old, &ignored);
+            if (!BbscMod::WriteSlotSafely(slot, reinterpret_cast<u64>(wrapper))) {
+                Sleep(1);
+                continue; // page not writable right now: try again
+            }
             BbscMod::GuardSlot(slot_offset, reinterpret_cast<u64>(wrapper),
                                reinterpret_cast<void**>(&original), name);
             return true;
@@ -192,8 +193,9 @@ bool Swap(u64 slot_offset, Fn wrapper, Fn& original, const char* name) {
 
 template <typename Fn>
 Fn ReadSlot(u64 slot_offset) {
-    const u64 value = *reinterpret_cast<const u64*>(BbscMod::EbootAddress() + slot_offset);
-    if (value == 0 || (value >= BbscMod::EbootAddress() && value < BbscMod::EbootAddress() + EbootSize)) {
+    u64 value = 0;
+    if (!BbscMod::ReadSlotSafely(BbscMod::EbootAddress() + slot_offset, &value) || value == 0 ||
+        (value >= BbscMod::EbootAddress() && value < BbscMod::EbootAddress() + EbootSize)) {
         return nullptr;
     }
     return reinterpret_cast<Fn>(value);

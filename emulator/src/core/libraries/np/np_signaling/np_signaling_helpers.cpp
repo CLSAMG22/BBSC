@@ -19,6 +19,7 @@
 #include "core/libraries/np/np_signaling/np_signaling_helpers.h"
 #include "core/libraries/np/np_signaling/np_signaling_state.h"
 #include "core/libraries/np/np_signaling/np_signaling_stubs.h"
+#include "core/bbsc_relay_client.h"
 #include "core/bloodborne_re.h"
 
 namespace Libraries::Np::NpSignaling::Helpers {
@@ -181,15 +182,14 @@ u32 SendBbscWorldFlagsToPeers(const void* packet, u32 size) {
             ++sent;
         }
     }
+    // BBSC (2026-10-19): and to the game server's relay, where mod players (BBport...) listen.
+    Core::Bbsc::RelaySendPacket(packet, size);
     return sent;
 }
 
 u32 SendBbscFollowToPeers(u32 packed_map, float x, float y, float z, float heading, u32 sequence,
                           s32 lamp_point) {
     const std::vector<BbscPeer> peers = EstablishedBbscPeers();
-    if (peers.empty()) {
-        return 0;
-    }
     SignalingBbscFollow packet{};
     packet.packed_map = packed_map;
     packet.x = x;
@@ -204,6 +204,8 @@ u32 SendBbscFollowToPeers(u32 packed_map, float x, float y, float z, float headi
             ++sent;
         }
     }
+    // BBSC (2026-10-19): the relay too - a mod guest finds its host there by this position.
+    Core::Bbsc::RelaySendPacket(&packet, sizeof(packet));
     return sent;
 }
 
@@ -377,6 +379,7 @@ static void ReceiveThreadMain() {
             type == static_cast<u8>(SignalingPacketType::BbscFollow)) {
             SignalingBbscFollow follow{}; // lamp_point stays -1 for an older build's packet
             std::memcpy(&follow, buf, static_cast<size_t>(nbytes));
+            Core::Bbsc::NoteSignalingBbscPacket();
             Core::Bloodborne::OnBbscHostFollowPacket(follow.packed_map, follow.x, follow.y,
                                                      follow.z, follow.heading, follow.sequence,
                                                      follow.lamp_point);
@@ -384,7 +387,34 @@ static void ReceiveThreadMain() {
         }
         if (nbytes == sizeof(SignalingBbscWorldFlags) &&
             type == static_cast<u8>(SignalingPacketType::BbscWorldFlags)) {
+            Core::Bbsc::NoteSignalingBbscPacket();
             Core::Bloodborne::OnBbscWorldFlagsPacket(buf, static_cast<u32>(nbytes));
+            continue;
+        }
+        if (nbytes == sizeof(SignalingBbscPvp) &&
+            type == static_cast<u8>(SignalingPacketType::BbscPvp)) {
+            SignalingBbscPvp pvp{};
+            std::memcpy(&pvp, buf, sizeof(pvp));
+            if (pvp.kind == 0) {
+                Core::Bbsc::NoteSignalingBbscPacket(); // kind 0 = the host's state
+            }
+            Core::Bloodborne::OnBbscPvpPacket(pvp.kind, pvp.on);
+            continue;
+        }
+        // BBSC (2026-10-19): the host's progress ("SHAD" 0x26 + u8 count + count x u32 flags it has
+        // on) and the boss on its boss bar ("SHAD" 0x27 + s32). The mod's relay took them all along;
+        // this receive dropped them as unexpected, so a guest on the emulator build never got the
+        // host's boss flags for shared progress, nor (now) its time of night. Only a host sends them.
+        if (type == 0x26 && nbytes >= 6 && nbytes == 6 + 4 * static_cast<size_t>(buf[5])) {
+            std::vector<u32> flags(buf[5]);
+            std::memcpy(flags.data(), buf + 6, flags.size() * 4);
+            Core::Bloodborne::OnBbscProgressPacket(flags.data(), flags.size());
+            continue;
+        }
+        if (type == 0x27 && nbytes == 9) {
+            s32 boss = -1;
+            std::memcpy(&boss, buf + 5, 4);
+            Core::Bloodborne::OnBbscHostBossPacket(boss);
             continue;
         }
         if (nbytes == sizeof(SignalingEchoPong) &&

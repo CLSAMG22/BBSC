@@ -10,6 +10,7 @@
 #include "common/string_util.h"
 #include "core/aerolib/aerolib.h"
 #include "core/bbsc_persistence.h"
+#include "core/bbsc_relay_client.h"
 #include "core/bloodborne_re.h"
 #include "imgui/bbsc_intro_layer.h"
 #include "core/cpu_patches.h"
@@ -360,6 +361,8 @@ void Module::LoadModuleToMemory(u32& max_tls_index) {
                 Bloodborne::InstallSeamlessCoopPatches();
                 Bbsc::InstallPersistentSessionPatches();
                 Bloodborne::InstallReverseEngineeringTrace();
+                Bbsc::StartRelayClient(MemoryPatcher::g_game_serial);
+                Bbsc::StartDiscordStatus(MemoryPatcher::g_game_serial);
                 Bbsc::StartIntro(MemoryPatcher::g_game_serial);
             } else {
                 LOG_INFO(Core_Linker, "BBSC build: vanilla - no built-in BBSC, it runs as the "

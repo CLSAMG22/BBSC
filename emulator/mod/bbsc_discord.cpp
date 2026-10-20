@@ -1,33 +1,41 @@
 // SPDX-FileCopyrightText: Copyright 2026 CLS_AMG
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// BBSC Discord status: "Playing BBSC - In Central Yharnam - Hosting (2 of 5)", or the boss during a
-// boss fight. Talks to the Discord app's local pipe (\\.\pipe\discord-ipc-N) itself - no Discord
-// library: a frame is {u32 opcode, u32 length, JSON}; opcode 0 = handshake with the application ID,
-// opcode 1 = a command (SET_ACTIVITY). The game state comes from bloodborne_re.cpp's game tick
+// BBSC Discord status: "Playing BBSC - In Central Yharnam - Hosting - Arcane build (2 of 5)", the
+// boss and a fight timer during a boss fight, "Dead - watching hunter 1 of 2" while spectating.
+// Talks to the Discord app's local pipe (\\.\pipe\discord-ipc-N) itself - no Discord library: a
+// frame is {u32 opcode, u32 length, JSON}; opcode 0 = handshake with the application ID, opcode 1 =
+// a command (SET_ACTIVITY). The game state comes from bloodborne_re.cpp's game tick
 // (GetBbscPresence). Off with the Mods tab switch "Discord status" (SHADPS4_BBSC_DISCORD=0).
 // No Discord running = nothing happens; it tries again every 20 s.
+// 2026-10-20: compiled into the emulator build too (before, only the mod showed it - the shadPS4
+// package had only shadPS4's own "Playing Bloodborne"); the emulator then leaves its own status off.
+
+#include "core/bloodborne_re.h"
+
+#ifdef _WIN32
 
 #include <windows.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <fmt/format.h>
 
-#include "core/bloodborne_re.h"
-
-namespace BbscMod {
-void LogPlain(const char* text);
-}
+#include "common/logging/log.h"
+#include "core/bbsc_persistence.h"
 
 namespace {
 
 constexpr const char* DiscordApplicationId = "1554935855674691645"; // "BBSC" (CLS_AMG)
+
+std::atomic<bool> discord_running{false};
 
 bool DiscordStatusEnabled() {
     const char* value = std::getenv("SHADPS4_BBSC_DISCORD");
@@ -113,7 +121,7 @@ public:
                 return false;
             }
             if (header[0] == 2) { // CLOSE: wrong application ID or Discord shutting down
-                BbscMod::LogPlain(("Discord status: Discord closed the connection: " + body).c_str());
+                LOG_INFO(Debug, "Discord status: Discord closed the connection: {}", body);
                 Close();
                 return false;
             }
@@ -144,6 +152,7 @@ std::string ActivityJson(const Core::Bloodborne::BbscPresence& p, std::int64_t g
     if (!p.in_game) {
         details = "At the title screen";
     } else if (!p.boss.empty()) {
+        // The timer counts from when the boss bar appeared (Discord shows it as "mm:ss elapsed").
         details = "Boss fight: " + p.boss;
         large_text = "In " + p.area;
         start = p.boss_since_s;
@@ -152,6 +161,20 @@ std::string ActivityJson(const Core::Bloodborne::BbscPresence& p, std::int64_t g
     }
     if (p.in_game) {
         state = p.role == 1 ? "Hosting" : p.role == 2 ? "Co-op guest" : "Solo hunter";
+        if (p.dead) {
+            if (p.spectating && p.watch_count > 0) {
+                state += fmt::format(" - dead, watching hunter {} of {}", p.watching, p.watch_count);
+            } else if (p.spectating) {
+                state += " - dead, spectating";
+            } else {
+                state += " - dead";
+            }
+        } else if (!p.build.empty()) {
+            state += " - " + p.build;
+        }
+        if (!p.build.empty() && (p.dead || !p.boss.empty())) {
+            large_text += " - " + p.build;
+        }
     }
     std::string activity = "{\"details\":" + Json(details);
     if (!state.empty()) {
@@ -187,7 +210,7 @@ DWORD WINAPI DiscordThread(LPVOID) {
                 continue;
             }
             if (!logged_connect) {
-                BbscMod::LogPlain("Discord status: connected to Discord");
+                LOG_INFO(Debug, "Discord status: connected to Discord");
                 logged_connect = true;
             }
             sent.clear();
@@ -212,17 +235,53 @@ DWORD WINAPI DiscordThread(LPVOID) {
 
 } // namespace
 
-namespace BbscMod {
+namespace Core::Bbsc {
 
-void StartDiscordStatus() {
+bool DiscordStatusRunning() {
+    return discord_running.load();
+}
+
+void StartDiscordStatus(std::string_view serial) {
+#ifndef BBSC_MOD
+    // The emulator build: only for the game BBSC knows, and only while its own BBSC runs (the mod
+    // shows the status itself when bbsc-launch switches these off).
+    if (serial != "CUSA03173" || !SwitchEnabled("SHADPS4_BLOODBORNE_RE_TRACE") ||
+        !SwitchEnabled("SHADPS4_BBSC_PERSIST")) {
+        return;
+    }
+#endif
     if (!DiscordStatusEnabled()) {
-        LogPlain("Discord status: off (Mods tab)");
+        LOG_INFO(Debug, "Discord status: off (Mods tab)");
+        return;
+    }
+    if (discord_running.exchange(true)) {
         return;
     }
     if (HANDLE thread = CreateThread(nullptr, 0, DiscordThread, nullptr, 0, nullptr)) {
         CloseHandle(thread);
-        LogPlain("Discord status: on - shows when the Discord app is running");
+        LOG_INFO(Debug, "Discord status: on - shows when the Discord app is running");
+    } else {
+        discord_running = false;
     }
 }
 
+} // namespace Core::Bbsc
+
+#else // not Windows: no Discord pipe
+
+namespace Core::Bbsc {
+bool DiscordStatusRunning() {
+    return false;
+}
+void StartDiscordStatus(std::string_view) {}
+} // namespace Core::Bbsc
+
+#endif
+
+#ifdef BBSC_MOD
+namespace BbscMod {
+void StartDiscordStatus() {
+    Core::Bbsc::StartDiscordStatus("CUSA03173");
+}
 } // namespace BbscMod
+#endif

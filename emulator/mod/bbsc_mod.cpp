@@ -40,6 +40,9 @@
 #include "core/bbsc_cinematic.h"
 #include "core/bbsc_patch_tables.h"
 #include "core/bloodborne_re.h"
+
+// One line in this run's BBSC timeline (bloodborne_re.cpp, "Timeline").
+#define BBSC_TIMELINE(kind, ...) Core::Bloodborne::BbscTimelineEvent(kind, fmt::format(__VA_ARGS__))
 #include "core/debugger.h"
 #include "core/libraries/np/np_matching2/np_matching2_mm.h"
 #include "core/memory.h"
@@ -48,7 +51,7 @@ using namespace Core::Bbsc::PatchTables;
 
 // Public version (2026-10-11): 0.MINOR.PATCH while testing - PATCH for bug fixes, MINOR for new
 // features, 1.0.0 the finished release. Keep it equal to "version" in mod.json.
-#define BBSC_VERSION "0.0.1"
+#define BBSC_VERSION "0.0.2"
 
 namespace BbscMod {
 void LogPlain(const char* text);
@@ -328,9 +331,14 @@ DWORD WINAPI Worker(void*) {
     OpenLog();
     wchar_t exe[MAX_PATH]{};
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    BbscMod::LogPlain("BBSC mod loaded - version " BBSC_VERSION);
+    // The build time tells two DLLs of one version apart in a tester's log (2026-10-18 triage: no
+    // log said which 0.0.1 DLL a report came from).
+    BbscMod::LogPlain("BBSC mod loaded - version " BBSC_VERSION " (built " __DATE__ " " __TIME__ ")");
     if (!NoticesPresent()) {
         LOG_ERROR(Mod, "LICENSE.txt / NOTICE.txt / SUPPORTERS.txt missing or changed in {} - BBSC "
+                       "is off",
+                  Common::FS::PathToUTF8String(mod_dir));
+        BBSC_TIMELINE("START", "LICENSE.txt / NOTICE.txt / SUPPORTERS.txt missing or changed in {} - BBSC "
                        "is off",
                   Common::FS::PathToUTF8String(mod_dir));
         MessageBoxW(nullptr,
@@ -361,6 +369,9 @@ DWORD WINAPI Worker(void*) {
             LOG_INFO(Mod, "Public game server ({}): vanilla summons - seamless summon patches and the "
                           "5-hunter search off (the session itself stays seamless)",
                      server);
+            BBSC_TIMELINE("START", "Public game server ({}): vanilla summons - seamless summon patches and the "
+                          "5-hunter search off (the session itself stays seamless)",
+                     server);
         }
     }
     BuildSites();
@@ -369,6 +380,9 @@ DWORD WINAPI Worker(void*) {
     while ((EbootBase = FindEbootBase()) == 0) {
         if (GetTickCount() - started > WaitForImageMs) {
             LOG_ERROR(Mod, "No Bloodborne CUSA03173 01.09 image in memory after {} s - not this "
+                           "game or not this version; nothing was changed",
+                      WaitForImageMs / 1000);
+            BBSC_TIMELINE("START", "No Bloodborne CUSA03173 01.09 image in memory after {} s - not this "
                            "game or not this version; nothing was changed",
                       WaitForImageMs / 1000);
             return 0;
@@ -431,6 +445,7 @@ DWORD WINAPI Worker(void*) {
         written = SyncSites();
     }
     LOG_INFO(Mod, "Image verified after {} ms: {} byte patch sites written", verified, written);
+    BBSC_TIMELINE("START", "Image verified after {} ms: {} byte patch sites written", verified, written);
 
     Core::Bloodborne::InstallReverseEngineeringTrace();
     BbscMod::StartRelay();
@@ -475,6 +490,63 @@ u64 EbootAddress() {
     return EbootBase;
 }
 
+// Import slot reads and writes that never take the game down (2026-10-19, BBport player, 0.0.2
+// test): the game closed 3 s after start, five times in a row - "Fault: read access to
+// 00000008053e4f48 at bbsc.dll+0x1933": BBSC read the Sendto slot while BBport's loader had that
+// page unreadable (it links the eboot's imports itself at start). A slot is only touched while
+// its page is committed and readable, and a fault in between (the page changing right after the
+// check) is caught here. Used by the slot guard below and by the swaps in bbsc_http.cpp and
+// bbsc_channel.cpp.
+namespace {
+bool SlotPageReadable(u64 address) {
+    MEMORY_BASIC_INFORMATION info{};
+    if (VirtualQuery(reinterpret_cast<void*>(address), &info, sizeof(info)) == 0 ||
+        info.State != MEM_COMMIT || (info.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0) {
+        return false;
+    }
+    constexpr DWORD Readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
+                               PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+    return (info.Protect & Readable) != 0;
+}
+
+bool TryReadSlot(const volatile u64* slot, u64* value) {
+    __try {
+        *value = *slot;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+bool TryWriteSlot(volatile u64* slot, u64 value) {
+    __try {
+        *slot = value;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+} // namespace
+
+bool ReadSlotSafely(u64 address, u64* value) {
+    return SlotPageReadable(address) &&
+           TryReadSlot(reinterpret_cast<const volatile u64*>(address), value);
+}
+
+bool WriteSlotSafely(u64 address, u64 value) {
+    if (!SlotPageReadable(address)) {
+        return false;
+    }
+    DWORD old = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(address), 8, PAGE_READWRITE, &old)) {
+        return false;
+    }
+    const bool written = TryWriteSlot(reinterpret_cast<volatile u64*>(address), value);
+    DWORD ignored = 0;
+    VirtualProtect(reinterpret_cast<void*>(address), 8, old, &ignored);
+    return written;
+}
+
 // Import slots the DLL swapped for its wrappers (bbsc_http.cpp, bbsc_channel.cpp). The official
 // shadPS4 links the eboot's imports again when the game loads a library later (2026-10-10: no
 // wrapper ever ran on the nightly - the slots were written back to the emulator's functions), so a
@@ -492,22 +564,29 @@ std::mutex guarded_mutex;
 std::vector<GuardedSlot> guarded_slots;
 
 DWORD WINAPI SlotGuardThread(void*) {
+    int skipped = 0;
     for (;;) {
         Sleep(5);
         std::scoped_lock lock{guarded_mutex};
         for (auto& guarded : guarded_slots) {
-            auto* slot = reinterpret_cast<volatile u64*>(EbootBase + guarded.slot_offset);
-            const u64 value = *slot;
+            const u64 slot = EbootBase + guarded.slot_offset;
+            u64 value = 0;
+            if (!ReadSlotSafely(slot, &value)) {
+                if (++skipped == 1) {
+                    LOG_INFO(Mod, "Import {}: its page is not readable right now (the emulator is "
+                                  "still linking) - checked again later",
+                             guarded.name);
+                }
+                continue;
+            }
             if (value == guarded.wrapper || value == 0 ||
                 (value >= EbootBase && value < EbootBase + EbootSize)) {
                 continue;
             }
             *reinterpret_cast<void* volatile*>(guarded.original) = reinterpret_cast<void*>(value);
-            DWORD old = 0;
-            VirtualProtect(const_cast<u64*>(slot), 8, PAGE_READWRITE, &old);
-            *slot = guarded.wrapper;
-            DWORD ignored = 0;
-            VirtualProtect(const_cast<u64*>(slot), 8, old, &ignored);
+            if (!WriteSlotSafely(slot, guarded.wrapper)) {
+                continue; // the next round tries again
+            }
             if (++guarded.rewritten <= 3) {
                 LOG_INFO(Mod, "Import {} was linked again by the emulator - wrapper put back ({}x)",
                          guarded.name, guarded.rewritten);
@@ -732,6 +811,7 @@ struct CinePad {
     u32 last_buttons = 0;
     float lx = 0.0f, ly = 0.0f, rx = 0.0f, ry = 0.0f, l2 = 0.0f, r2 = 0.0f;
     int speed_steps = 0, smooth_steps = 0;
+    int switch_steps = 0; // R1 / L1 presses: the hunter to watch while dead
     bool zoom_reset = false;
 };
 CinePad cine_pad;
@@ -773,6 +853,7 @@ int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
     cine_pad.speed_steps += ((pressed & PadUp) ? 1 : 0) - ((pressed & PadDown) ? 1 : 0);
     cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
     cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
+    cine_pad.switch_steps += ((pressed & PadR1) ? 1 : 0) - ((pressed & PadL1) ? 1 : 0);
     // The game sees a controller at rest (connected, nothing pressed).
     const u32 rest_buttons = buttons & 0x80000000u;
     std::memcpy(data, &rest_buttons, 4);
@@ -852,6 +933,15 @@ CinematicInput TakeCinematicInput() {
                      (CineKeyPressed(VK_OEM_4, down(VK_OEM_4)) ? 1 : 0) + p.smooth_steps;
     cine_pad.speed_steps = 0;
     cine_pad.smooth_steps = 0;
+    // Watching a living hunter while dead: Tab / E / left click next, Shift+Tab / Q previous,
+    // R1 / L1 on the controller; F flies freely instead and back (bloodborne_re.cpp).
+    const bool shift = down(VK_SHIFT);
+    c.switch_target = (CineKeyPressed(VK_TAB, down(VK_TAB)) ? (shift ? -1 : 1) : 0) +
+                      (CineKeyPressed('E', down('E')) ? 1 : 0) -
+                      (CineKeyPressed('Q', down('Q')) ? 1 : 0) +
+                      (CineKeyPressed(VK_LBUTTON, down(VK_LBUTTON)) ? 1 : 0) + p.switch_steps;
+    cine_pad.switch_steps = 0;
+    c.toggle_free = CineKeyPressed('F', down('F'));
     c.pad_move_x = p.lx;
     c.pad_move_y = -p.ly; // stick up = smaller y = forward
     c.pad_rise = ((p.buttons & PadR1) ? 1.0f : 0.0f) - ((p.buttons & PadL1) ? 1.0f : 0.0f);
@@ -901,6 +991,11 @@ void CinematicForceOn() {
     cine_pad = CinePad{.last_buttons = cine_pad.last_buttons};
     cine_looking = false;
 }
+
+// The mod reads the controller itself (PadReadState: the whole pad goes to the camera while it is
+// on), so watching needs nothing more here.
+void CinematicSetWatching(bool) {}
+void CinematicPadRead(unsigned, unsigned char, unsigned char, unsigned char, unsigned char) {}
 
 } // namespace Bbsc
 } // namespace Core

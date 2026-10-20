@@ -10,15 +10,22 @@
 #include <charconv>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 #include <fstream>
 #include <iomanip>
 #include <limits>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <span>
 #include <sstream>
 #include <string>
@@ -954,6 +961,133 @@ bool EnvFlagEnabled(const char* name) {
     return Core::Bbsc::SwitchEnabled(name);
 }
 
+// ---- Timeline (2026-10-19) ---------------------------------------------------------------------
+// The user: "instead of always guessing, make something that always shows what's happening". The
+// full logs are 30 MB of trace lines, most reports came without the guest's side or without the
+// build. So every run also writes a short timeline of what matters - the build, who hosts whom,
+// joins and leaves, areas, world state written, deaths and respawns, bosses and rewards, Insight
+// and echoes, invasions, the relay, crashes - one line each, written through at once (a crash keeps
+// everything before it):
+//   emulator build: <user>\log\bbsc-timeline-<date>-<time>-<pid>.txt
+//   mod DLL:        <mod>\logs\bbsc-timeline-<date>-<time>-<pid>.txt
+// Each line: clock time, the kind of event, where we were (role and area as of the last game tick)
+// and the event. Events come from any thread; game memory is never read here.
+std::atomic<s32> bbsc_timeline_state{-1};   // session state as of the last game tick
+std::atomic<u32> bbsc_timeline_map{0};      // packed map as of the last game tick
+std::atomic<s32> bbsc_timeline_type{-1};    // local player type (0 host/own, 1 co-op, 2 invader)
+std::string BbscAreaName(u32 packed_map);   // see "Discord status"
+const std::string& BbscProcessUserId();     // see "Shared progress on disk"
+
+long BbscTimelinePid() {
+#ifdef _WIN32
+    return static_cast<long>(_getpid());
+#else
+    return static_cast<long>(getpid());
+#endif
+}
+
+std::string BbscTimelineWhere() {
+    const s32 state = bbsc_timeline_state.load();
+    const s32 type = bbsc_timeline_type.load();
+    const u32 map = bbsc_timeline_map.load();
+    const char* role = "solo";
+    switch (state) {
+    case 3:
+        role = "host";
+        break;
+    case 4:
+        role = "joining";
+        break;
+    case 6:
+        role = type == 2 || type == 12 ? "invader" : "guest";
+        break;
+    case 7:
+        role = "leaving";
+        break;
+    case -1:
+        role = "-";
+        break;
+    default:
+        break;
+    }
+    if (map == 0 || map == 0xFFFFFFFFu) {
+        return role;
+    }
+    return fmt::format("{}, {}", role, BbscAreaName(map));
+}
+
+void BbscTimeline(std::string_view kind, std::string_view text) {
+    static const bool enabled =
+        Core::Bbsc::BuiltIn && EnvFlagEnabled("SHADPS4_BLOODBORNE_RE_TRACE") &&
+        EnvFlagEnabled("SHADPS4_BBSC_TIMELINE");
+    if (!enabled) {
+        return;
+    }
+    static std::mutex mutex;
+    static std::ofstream file;
+    static bool opened = false;
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &now_c);
+#else
+    localtime_r(&now_c, &local);
+#endif
+    std::scoped_lock lock{mutex};
+    if (!opened) {
+        opened = true;
+        namespace fs = std::filesystem;
+#ifdef BBSC_MOD
+        const fs::path dir = Common::FS::GetUserPath(Common::FS::PathType::LogDir) / "logs";
+        const char* program = "mod DLL";
+#else
+        const fs::path dir = Common::FS::GetUserPath(Common::FS::PathType::LogDir);
+        const char* program = "emulator build";
+#endif
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        const fs::path path =
+            dir / fmt::format("bbsc-timeline-{:04}{:02}{:02}-{:02}{:02}{:02}-{}.txt",
+                              local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+                              local.tm_hour, local.tm_min, local.tm_sec,
+                              static_cast<long>(BbscTimelinePid()));
+        file.open(path, std::ios::out | std::ios::app);
+        if (file) {
+            // Switches that are on by default but turned off here: the first thing to know.
+            std::string off;
+            for (const std::string_view name : Core::Bbsc::DefaultOnSwitches) {
+#ifdef BBSC_MOD
+                if (name == "SHADPS4_BBSC_PERSIST") {
+                    continue; // bbsc-launch sets it to 0 for the emulator's own BBSC, not the mod's
+                }
+#endif
+                if (!EnvFlagEnabled(std::string(name).c_str())) {
+                    off += fmt::format("{}{}", off.empty() ? "" : " ", name);
+                }
+            }
+            file << fmt::format("BBSC timeline - {} built {} {}; shadPS4 user {}; started "
+                                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}\n",
+                                program, __DATE__, __TIME__,
+                                BbscProcessUserId().empty() ? std::string("default")
+                                                            : BbscProcessUserId(),
+                                local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+                                local.tm_hour, local.tm_min, local.tm_sec)
+                 << "Switched off: " << (off.empty() ? std::string("nothing") : off) << "\n"
+                 << "time     kind     where | what\n";
+            file.flush();
+        }
+    }
+    if (!file) {
+        return;
+    }
+    file << fmt::format("{:02}:{:02}:{:02} {:<8} {} | {}\n", local.tm_hour, local.tm_min,
+                        local.tm_sec, kind, BbscTimelineWhere(), text);
+    file.flush();
+}
+
+#define BBSC_TIMELINE(kind, ...) BbscTimeline(kind, fmt::format(__VA_ARGS__))
+
 std::string BytesToHex(std::span<const u8> bytes) {
     std::ostringstream out;
     out << std::hex << std::setfill('0');
@@ -1245,6 +1379,10 @@ void BbscWriteConnectFirstPlacement(std::string_view when) {
                     WriteValue<u8>(state, 0x1648, 1);
     LOG_INFO(Debug,
              "BBSC connect-first: placement {} at {} (map {:#x} area {} at ({:.2f}, {:.2f}, "
+             "{:.2f}); block had map {:#x}, sign map {:#x}; current map {:#x})",
+             ok ? "written" : "WRITE FAILED", when, host->packed_region, host->area, host->x,
+             host->y, host->z, previous_map, previous_sign_map, GetCurrentPackedMap());
+    BBSC_TIMELINE("JOIN", "connect-first: placement {} at {} (map {:#x} area {} at ({:.2f}, {:.2f}, "
              "{:.2f}); block had map {:#x}, sign map {:#x}; current map {:#x})",
              ok ? "written" : "WRITE FAILED", when, host->packed_region, host->area, host->x,
              host->y, host->z, previous_map, previous_sign_map, GetCurrentPackedMap());
@@ -3153,6 +3291,9 @@ bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why);
 void LogBbscHostWorldFlagsDiff(u32 packed_map, std::string_view why);
 void ApplyBbscGuestLootView(u32 packed_map, std::string_view why); // see "Guest loot view"
 void KeepBbscOwnWorldGroup(u32 key, const u8* live); // see "Own world journal"
+void KeepBbscOwnTimeBits();                           // see "Time of night in the host's world"
+void ApplyBbscHostTime(std::string_view why);
+void KeepBbscHomeSpot();                              // see "Back home where we were"
 void CaptureBbscOwnWorldBeforeJoin();
 void WriteBbscOwnWorldFile();
 void NoteBbscOwnDreamRestored(u32 key, const u8* live);
@@ -3172,7 +3313,12 @@ void WriteLuaSessionEvent(std::ostream& out, const GuestRegisterSnapshot& regist
         << (return_address >= image_base ? return_address - image_base : 0) << std::dec << "\"}";
     LOG_INFO(Debug, "BBSC lua event: {} (caller {:#x})", name,
              return_address >= image_base ? return_address - image_base : 0);
+    BBSC_TIMELINE("GAME", "lua event: {} (caller {:#x})", name,
+             return_address >= image_base ? return_address - image_base : 0);
     // The guest accepted a summon: its summon load is next (see "Load cover").
+    if (name.starts_with("JoinSession_") && GetSessionState() != 3) {
+        KeepBbscHomeSpot(); // where we stand now is where the trip home goes back to
+    }
     if (name == "JoinSession_White" && GetSessionState() != 3) {
         CaptureBbscOwnWorldBeforeJoin(); // first: the load resets the map's item flags
         StartBbscLoadCover("summon");
@@ -3806,6 +3952,7 @@ void RequestBbscDeathReload(std::string_view why) {
     using ReloadRequest = u64 PS4_SYSV_ABI (*)();
     const u64 result = reinterpret_cast<ReloadRequest>(image_base + DeathReloadRequestOffset)();
     LOG_INFO(Debug, "BBSC death: reload requested ({}), result {}", why, result);
+    BBSC_TIMELINE("DEATH", "death: reload requested ({}), result {}", why, result);
 }
 s64 bbsc_spectate_since_ms = 0;
 // The local character when the spectate started. A load builds a new one: someone reloaded (the
@@ -3823,7 +3970,7 @@ s64 bbsc_spectate_alone_since_ms = 0;
 // no such load comes within BbscGuestWaitHostMs does it fall back to its own reload.
 constexpr s64 BbscGuestWaitHostMs = 45'000;
 bool bbsc_spectate_logged_wait = false;
-// Test 2026-10-04 (mod 15, CLS_AMG host, guest): the wait worked, the host reloaded and came
+// Test 2026-10-04 (mod 15, CLS_AMG host, brother guest): the wait worked, the host reloaded and came
 // back alive - but the host's reload does NOT reload a summoned guest, so the guest's character
 // never changed, "a load ended the boss fight" never fired and the guest stayed dead waiting for a
 // boss kill. So once a guest has seen nobody alive (a wipe), the host coming back alive means the
@@ -4150,7 +4297,9 @@ u64 FindLivingPartnerCharacter() {
 // once we have not been a guest for BbscRelayUnlockMs.
 constexpr s64 BbscRelayHostFreshMs = 5'000;
 constexpr s64 BbscRelayUnlockMs = 5'000;
-constexpr float BbscRelayLockMetres = 15.0f;
+// 2026-10-19: 15 m -> 6 m and 3 checks in a row (see TickBbscRelayHostLock).
+constexpr float BbscRelayLockMetres = 6.0f;
+constexpr u32 BbscRelayLockChecks = 3;
 struct BbscRelayHostSeen {
     u32 map = 0;
     float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -4164,23 +4313,37 @@ std::atomic<s32> bbsc_relay_session_state{-1}; // GetSessionState() as of the la
 // "World state when warping together"; a neighbour block's snapshot was used for up to 2 minutes).
 void ClearBbscHostWorldSnapshots();
 
-// The host whose packets a guest takes: the locked one, else the only one hosting, else 0.
+// The host that rang our sign (2026-10-18). With many hosts on a public server the position lock
+// below can only be made once our character stands in the host's world - after the join load, so
+// that load got no world flags from anyone (fruit_punch_samuai 2026-10-17, 9 hosting: "no host flags
+// for map 0x18010000" at the load, the opening cutscene played in Iosefka's clinic and the guest
+// fell off the map). The aimed placement (0.0.1 hotfix, bbsc_http.cpp) says which host rang our
+// sign; until the lock is made, that host's packets are taken - when only one host rang it lately.
+std::mutex bbsc_rang_mutex;
+std::map<u32, s64> bbsc_rang_hosts; // sender -> when it rang our sign
+constexpr s64 BbscRangHostFreshMs = 90'000;
+
+u32 BbscRangHost() {
+    std::scoped_lock lock{bbsc_rang_mutex};
+    const s64 now = SteadyNowMs();
+    std::erase_if(bbsc_rang_hosts,
+                  [now](const auto& entry) { return now - entry.second > BbscRangHostFreshMs; });
+    return bbsc_rang_hosts.size() == 1 ? bbsc_rang_hosts.begin()->first : 0;
+}
+
+// The host whose packets a guest takes: the locked one, else (while joining or a guest) the one
+// host that rang our sign, else 0.
+// 2026-10-19: no more "the only one hosting on the server" - when our host was not on the relay
+// (an emulator build before 2026-10-19), the only one hosting was a stranger, and its world flags,
+// scaling and PvP state were taken (test-logs\2026-10-19-boss-session, guest-kotori).
 u32 BbscRelayHostForPackets() {
     if (const u32 locked = bbsc_relay_locked_host.load(); locked != 0) {
         return locked;
     }
-    std::scoped_lock lock{bbsc_relay_mutex};
-    const s64 now = SteadyNowMs();
-    u32 only = 0;
-    for (const auto& [sender, seen] : bbsc_relay_hosts) {
-        if (now - seen.ms <= BbscRelayHostFreshMs) {
-            if (only != 0) {
-                return 0; // more than one host on the server: wait for the position lock
-            }
-            only = sender;
-        }
+    if (const s32 state = bbsc_relay_session_state.load(); state == 4 || state == 6) {
+        return BbscRangHost();
     }
-    return only;
+    return 0;
 }
 
 void TickBbscRelayHostLock() {
@@ -4201,7 +4364,13 @@ void TickBbscRelayHostLock() {
         if (locked != 0 && now - not_guest_since_ms >= BbscRelayUnlockMs) {
             bbsc_relay_locked_host = 0;
             ClearBbscHostWorldSnapshots();
+            {
+                std::scoped_lock lock{bbsc_rang_mutex};
+                bbsc_rang_hosts.clear(); // the next session's host rings anew
+            }
             LOG_INFO(Debug, "BBSC relay: no longer a guest (session state {}) - host {:08x} let go",
+                     state, locked);
+            BBSC_TIMELINE("HOST", "relay: no longer a guest (session state {}) - host {:08x} let go",
                      state, locked);
         }
         return;
@@ -4222,35 +4391,79 @@ void TickBbscRelayHostLock() {
     if (hosts.empty()) {
         return;
     }
-    if (hosts.size() == 1) {
-        bbsc_relay_locked_host = hosts[0].first;
-        LOG_INFO(Debug, "BBSC relay: our host is player {:08x} (the only one hosting)",
-                 hosts[0].first);
+    // 2026-10-19: the host that rang our sign is our host - by who it is, not where it stands. Kotori
+    // (BBport + the mod) took a stranger 14.5 m away as his host while his real host (an emulator
+    // build) was not on the relay at all: 10 hosting, "the host that rang our sign: none known".
+    const u32 rang = BbscRangHost();
+    if (rang != 0 &&
+        std::ranges::any_of(hosts, [rang](const auto& entry) { return entry.first == rang; })) {
+        bbsc_relay_locked_host = rang;
+        LOG_INFO(Debug, "BBSC relay: our host is player {:08x} (it rang our sign; {} hosting on the "
+                        "server)",
+                 rang, hosts.size());
+        BBSC_TIMELINE("HOST", "relay: our host is player {:08x} (it rang our sign; {} hosting on the "
+                              "server)",
+                      rang, hosts.size());
         return;
     }
+    // Else by position, for hosts on a BBSC without the aimed placement - and only a clear match:
+    // one host within BbscRelayLockMetres of the host character in our world, nobody else that
+    // close, the same one on BbscRelayLockChecks checks in a row. Lamps put every player on the
+    // same spot, so two hosts there wait until one walks away.
+    static u32 candidate = 0;
+    static u32 candidate_checks = 0;
     const auto host = ReadCharacterTransform(FindRemoteHostCharacter());
     const u32 map = GetCurrentPackedMap();
     if (!host.has_value() || map == 0) {
+        candidate = 0;
         return;
     }
     u32 best = 0;
+    u32 close = 0;
     float best_d2 = BbscRelayLockMetres * BbscRelayLockMetres;
     for (const auto& [sender, seen] : hosts) {
         const float dx = seen.x - host->position[0];
         const float dy = seen.y - host->position[1];
         const float dz = seen.z - host->position[2];
         const float d2 = dx * dx + dy * dy + dz * dz;
-        if (seen.map == map && d2 < best_d2) {
-            best = sender;
-            best_d2 = d2;
+        if (seen.map == map && d2 < BbscRelayLockMetres * BbscRelayLockMetres) {
+            ++close;
+            if (d2 < best_d2) {
+                best = sender;
+                best_d2 = d2;
+            }
         }
     }
-    if (best != 0) {
-        bbsc_relay_locked_host = best;
-        LOG_INFO(Debug, "BBSC relay: our host is player {:08x} ({} hosting on the server, it stands "
-                        "{:.1f} m from the host in our world)",
-                 best, hosts.size(), std::sqrt(best_d2));
+    if (best == 0 || close != 1) {
+        static s64 logged_ms = 0;
+        if (close > 1 && now - logged_ms > 30'000) {
+            logged_ms = now;
+            LOG_INFO(Debug, "BBSC relay: {} hosts stand where our host stands - no host chosen yet",
+                     close);
+        }
+        candidate = 0;
+        return;
     }
+    if (best != candidate) {
+        candidate = best;
+        candidate_checks = 0;
+    }
+    if (++candidate_checks < BbscRelayLockChecks) {
+        return;
+    }
+    candidate = 0;
+    bbsc_relay_locked_host = best;
+    if (rang != 0 && rang != best) {
+        ClearBbscHostWorldSnapshots(); // taken from the host that rang our sign - not ours
+    }
+    LOG_INFO(Debug, "BBSC relay: our host is player {:08x} ({} hosting on the server, it stands "
+                    "{:.1f} m from the host in our world; the host that rang our sign: {})",
+             best, hosts.size(), std::sqrt(best_d2),
+             rang == 0 ? std::string("none known") : fmt::format("{:08x}", rang));
+    BBSC_TIMELINE("HOST", "relay: our host is player {:08x} ({} hosting on the server, it stands "
+                          "{:.1f} m from the host in our world; the host that rang our sign: {})",
+                  best, hosts.size(), std::sqrt(best_d2),
+                  rang == 0 ? std::string("none known") : fmt::format("{:08x}", rang));
 }
 
 // Guest joins: teleport next to the host once, so a guest summoned from elsewhere starts beside
@@ -4297,7 +4510,7 @@ bool BbscWarpJoinEnabled() {
 // Code review 2026-09-23 A2 had removed the +0x14F0/+0x1520 writes, taking +0x14F0 for the guest's
 // home map. That was wrong: they are the forced placement the game spawns a summoned player from,
 // and without them the reload used the map's default spawn - the guest appeared in Iosefka's
-// Clinic for a moment before the join teleport moved her (a tester, 2026-09-23, build 732ABF1E).
+// Clinic for a moment before the join teleport moved her (Eryk, 2026-09-23, build 732ABF1E).
 bool RequestBbscSessionWarp(u64 global, const SummonPlacementDescriptor& to, std::string_view why) {
     if (!ReadablePointer(global, 0x1598) || !IsUsablePackedMap(to.packed_region)) {
         return false;
@@ -4368,7 +4581,7 @@ void TickBbscJoinTeleport() {
         return;
     }
     const u64 player = GetLocalPlayerCharacter();
-    // Test 2026-10-08 (a tester invading): "the invader got 2 loading screens". An invader is in
+    // Test 2026-10-08 (kukar3x invading): "the invader got 2 loading screens". An invader is in
     // session state 6 too; the join warp/teleport to the host is for co-op guests only (player
     // type 1) - an invader arrives where the game puts it.
     if (GetLocalPlayerType() == 2) {
@@ -4409,7 +4622,7 @@ void TickBbscJoinTeleport() {
     // Only after a cross-map join: the one summon load into the host's map left the lighting
     // flickering (lights switching on and off, 2026-09-24) and this second reload fixed it. A
     // same-map join does not need it, and the reload after every summon was what turned the guest
-    // into "Beckoner" (a tester, 2026-09-23).
+    // into "Beckoner" (Eryk, 2026-09-23).
     if (BbscWarpJoinEnabled() && bbsc_cross_map_join.load(std::memory_order_acquire) &&
         !warp_requested) {
         SummonPlacementDescriptor to{};
@@ -4455,6 +4668,10 @@ void TickBbscJoinTeleport() {
     WriteValue<u8>(player, 0x1E1, static_cast<u8>(ReadValue<u8>(player, 0x1E1) | 0x02));
     LOG_INFO(Debug,
              "BBSC join teleport: guest moved from ({:.2f}, {:.2f}, {:.2f}) to the host at "
+             "({:.2f}, {:.2f}, {:.2f})",
+             own ? own->position[0] : 0.0f, own ? own->position[1] : 0.0f,
+             own ? own->position[2] : 0.0f, position[0], position[1], position[2]);
+    BBSC_TIMELINE("JOIN", "join teleport: guest moved from ({:.2f}, {:.2f}, {:.2f}) to the host at "
              "({:.2f}, {:.2f}, {:.2f})",
              own ? own->position[0] : 0.0f, own ? own->position[1] : 0.0f,
              own ? own->position[2] : 0.0f, position[0], position[1], position[2]);
@@ -4585,7 +4802,7 @@ constexpr s64 BbscFollowMismatchMs = 2'500;
 
 // True when that map is loaded in this game (the list TickBbscMapTrace walks): the host walked into a
 // neighbouring area the guest's game streams too, so the guest can simply walk there.
-// Fixed 2026-10-06 (a tester test: a loading screen at every crossing between Cathedral Ward 0x18000000
+// Fixed 2026-10-06 (Hardwater test: a loading screen at every crossing between Cathedral Ward 0x18000000
 // and the next area 0x17000000, the guest pulled back and forth): +0x20 of the array object is a
 // POINTER to the entries, as TickBbscMapTrace reads it. This read the entries inline at +0x20, found
 // nothing and answered "not loaded" every time, so every cross-area walk became a follow load.
@@ -4733,7 +4950,7 @@ void TickBbscFollowHost() {
             return;
         }
         if (host.packed_map != target_map) {
-            // 2026-10-12 (a tester, guest, 21:16:42): the host loaded again (into the next block,
+            // 2026-10-12 (Weronika, guest, 21:16:42): the host loaded again (into the next block,
             // 0x18010000) while our load into 0x18000000 ran; its position, in the other block's
             // coordinates, put us under the ground and we fell through the map. Positions are per
             // map block: stay where the load put us (the host's spot when it was asked for).
@@ -4753,6 +4970,9 @@ void TickBbscFollowHost() {
         WriteValue<u8>(player, 0x1E1, static_cast<u8>(ReadValue<u8>(player, 0x1E1) | 0x02));
         LOG_INFO(Debug,
                  "BBSC warp together: guest arrived in map {:#x} at the host's {} ({:.2f}, "
+                 "{:.2f}, {:.2f})",
+                 target_map, spot.what, position[0], position[1], position[2]);
+        BBSC_TIMELINE("FOLLOW", "warp together: guest arrived in map {:#x} at the host's {} ({:.2f}, "
                  "{:.2f}, {:.2f})",
                  target_map, spot.what, position[0], position[1], position[2]);
         // The game's own summon line after the rejoin says so ("You have caught up with ..."),
@@ -4809,6 +5029,8 @@ void TickBbscFollowHost() {
             LOG_INFO(Debug,
                      "BBSC warp together: host walked into map {:#x} (loaded here too) - no reload",
                      host.packed_map);
+            BBSC_TIMELINE("FOLLOW", "warp together: host walked into map {:#x} (loaded here too) - no reload",
+                     host.packed_map);
         }
         mismatch_since_ms = 0;
         return;
@@ -4851,9 +5073,13 @@ void TickBbscFollowHost() {
                     "BBSC world state: no flags from the host for map {:#x} after {} s (older "
                     "build?) - following with our own",
                     host.packed_map, BbscWorldFlagsWaitMs / 1000);
+        BBSC_TIMELINE("WORLD", "world state: no flags from the host for map {:#x} after {} s (older "
+                    "build?) - following with our own",
+                    host.packed_map, BbscWorldFlagsWaitMs / 1000);
     } else {
         ApplyBbscHostWorldFlags(host.packed_map, "before the follow load");
     }
+    ApplyBbscHostTime("before the follow load");
     ApplyBbscGuestLootView(host.packed_map, "before the follow load");
     if (host.packed_map == BbscDreamStateMap) {
         ApplyBbscHostDreamState("before the follow load");
@@ -4864,6 +5090,10 @@ void TickBbscFollowHost() {
     ++attempts;
     LOG_INFO(Debug,
              "BBSC warp together: host moved to map {:#x} (we are in {:#x}), following "
+             "(attempt {} of {}; {}; maps loaded here: {})",
+             host.packed_map, here, attempts, BbscFollowMaxAttempts,
+             host_loaded_there ? "host arrived by a load" : "host walked", BbscResidentMapsText());
+    BBSC_TIMELINE("FOLLOW", "warp together: host moved to map {:#x} (we are in {:#x}), following "
              "(attempt {} of {}; {}; maps loaded here: {})",
              host.packed_map, here, attempts, BbscFollowMaxAttempts,
              host_loaded_there ? "host arrived by a load" : "host walked", BbscResidentMapsText());
@@ -4955,6 +5185,35 @@ bool BbscWorldSyncEnabled() {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_WORLD_SYNC");
     return enabled;
 }
+
+// ---- Every area, not just the host's (2026-10-18) -------------------------------------------------
+// Reports: "Paarl marked as defeated without being fought" (valriv55, guest + host), "all bosses
+// dead when he joins me despite this being a fresh save" (vitex009, host), "Prey Slaughtered before
+// entering the boss fight", lamps neither player reached (bettercallsamm's guest). The game keeps
+// most of Yharnam loaded at once (follow logs list m21_00 m21_01 m22_00 m23_00 m24_00 m24_01 ... as
+// loaded while the guest stands in Hemwick), and every loaded block runs its events. BBSC wrote the
+// host's flags only for the host's own area, so the guest's copies of every other area ran on the
+// GUEST's own flags. STRONGLY INDICATED (valriv55 guest log, 2026-10-17): the host walked into Old
+// Yharnam (m23_00, "loaded here too - no reload"), where the host's Blood-starved Beast was dead and
+// the guest's alive; the host's state killed the guest's copy, whose event 12301800 then ran its
+// kill path - BlockClear2 paid the guest 6600 echoes and BBSC gave it the Pthumerian Chalice for a
+// boss it never fought. The other way round (the guest's own "already dead" branch killing a boss
+// that is alive for the host) is a HYPOTHESIS that fits the host-side reports.
+// Now the host sends the blocks of every area in turn (four a second for 20 s after a new member
+// joins or the host changes map, then one a second), and a guest's load writes all of them, so
+// every loaded block starts on the host's flags. The Hunter's Dream keeps its own rules (written
+// only when the load goes into the Dream) and the Chalice Dungeons (area 29) are left out - their
+// map ids are shared by every dungeon.
+bool BbscWorldSyncAllEnabled() {
+    static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_WORLD_SYNC_ALL");
+    return enabled;
+}
+
+// Area of a packed map (0x18010000 -> 24).
+constexpr u32 BbscMapArea(u32 packed_map) {
+    return (packed_map >> 24) & 0xFF;
+}
+constexpr u32 BbscChaliceArea = 29;
 
 // Flag group key of entry `index` of map `packed_map`'s snapshot; 0 for maps outside the scheme.
 u32 BbscWorldGroupKey(u32 packed_map, size_t index) {
@@ -5106,24 +5365,65 @@ void TickBbscWorldFlagsBroadcast() {
     if (!IsUsablePackedMap(map) || BbscWorldGroupKey(map, 0) == 0) {
         return;
     }
-    // Every other second: another block of this area (one that exists in our flag table), so the
-    // guest has them all before it loads in or walks across.
+    // The other blocks (ones that exist in our flag table) in turn, so the guest has them all before
+    // it loads in or walks across: this area's first, then (2026-10-18, "Every area") all the
+    // others but the Chalice Dungeons. Without WORLD_SYNC_ALL: this area only, every other second.
     static u32 turn = 0;
-    static u32 other_block = 0;
+    static std::vector<u32> other_blocks;
+    static u32 other_blocks_map = 0;
+    static size_t next_other = 0;
+    static s32 last_members = 0;
+    static s64 burst_until_ms = 0;
+    static u32 burst_logged_map = 0;
     ++turn;
-    if ((turn & 1) == 0) {
-        for (u32 k = 1; k <= 10; ++k) {
-            const u32 b = (other_block + k) % 10;
-            const u32 candidate = (map & 0xFF000000u) | (b << 16);
-            if (candidate != map && BbscFlagGroupStorage(BbscWorldGroupKey(candidate, 0)) != 0) {
-                other_block = b;
-                ++snapshot;
-                u64 other_present = 0;
-                SendBbscFlagSnapshot(1, candidate, snapshot, BbscWorldGroupCount, BbscWorldGroupKey,
-                                     other_present);
-                break;
+    const bool all_areas = BbscWorldSyncAllEnabled();
+    if (other_blocks_map != map) {
+        other_blocks_map = map;
+        other_blocks.clear();
+        next_other = 0;
+        const auto add_area = [&](u32 area) {
+            for (u32 b = 0; b < 10; ++b) {
+                const u32 candidate = (area << 24) | (b << 16);
+                if (candidate != map && BbscFlagGroupStorage(BbscWorldGroupKey(candidate, 0)) != 0) {
+                    other_blocks.push_back(candidate);
+                }
+            }
+        };
+        add_area(BbscMapArea(map));
+        if (all_areas) {
+            for (u32 area = 20; area <= 40; ++area) {
+                if (area != BbscMapArea(map) && area != BbscChaliceArea) {
+                    add_area(area);
+                }
             }
         }
+        burst_until_ms = now + 20'000;
+    }
+    const s32 members = GetBbscSessionMemberCount(global);
+    if (members > last_members) {
+        burst_until_ms = now + 20'000; // a new member: it needs every block before its load
+    }
+    last_members = members;
+    size_t per_tick = 0;
+    if (!all_areas) {
+        per_tick = (turn & 1) == 0 ? 1 : 0;
+    } else {
+        per_tick = now < burst_until_ms ? 4 : 1;
+    }
+    per_tick = std::min(per_tick, other_blocks.size());
+    for (size_t k = 0; k < per_tick; ++k) {
+        const u32 candidate = other_blocks[next_other++ % other_blocks.size()];
+        ++snapshot;
+        u64 other_present = 0;
+        SendBbscFlagSnapshot(1, candidate, snapshot, BbscWorldGroupCount, BbscWorldGroupKey,
+                             other_present);
+    }
+    if (all_areas && per_tick > 1 && burst_logged_map != (map ^ static_cast<u32>(members))) {
+        burst_logged_map = map ^ static_cast<u32>(members);
+        LOG_INFO(Debug,
+                 "BBSC world state: sending the other {} block(s) of every area, {} a second for "
+                 "20 s ({} member(s))",
+                 other_blocks.size(), per_tick, members);
     }
     ++snapshot;
     u64 present = 0;
@@ -5177,9 +5477,10 @@ bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why) {
     BbscWorldSnapshot host;
     if (!BbscHostBlockSnapshot(packed_map, host)) {
         LOG_WARNING(Debug, "BBSC world state ({}): no host flags for map {:#x}", why, packed_map);
+        BBSC_TIMELINE("WORLD", "world state ({}): no host flags for map {:#x}", why, packed_map);
         return false;
     }
-    // The Dream's messengers (2026-10-08, 3-player test in a tester's Dream: "the guest cannot take
+    // The Dream's messengers (2026-10-08, 3-player test in kalee's Dream: "the guest cannot take
     // the weapons if the host did"). Events 12101020-12101028 hold out the starter trick weapon /
     // firearm, the Notebook, the Beckoning Bell, the Old Hunter Bell and the Eye of a Blood-drunk
     // Hunter; they end on their own done flags (group 12101, bits 20-29), play through 12105050-
@@ -5235,26 +5536,59 @@ bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why) {
              "differed, {} groups missing here, snapshot {} is {} ms old)",
              why, packed_map, written, changed_bytes, missing, host.snapshot,
              SteadyNowMs() - host.complete_ms);
-    // The rest of the area: the blocks the guest can walk into without a load.
+    BBSC_TIMELINE("WORLD", "world state ({}): host's flags for map {:#x} written ({} groups, {} bytes "
+             "differed, {} groups missing here, snapshot {} is {} ms old)",
+             why, packed_map, written, changed_bytes, missing, host.snapshot,
+             SteadyNowMs() - host.complete_ms);
+    // The rest of the area: the blocks the guest can walk into without a load - and (2026-10-18,
+    // "Every area") every other area the game keeps loaded, but the Dream (its own rules, written
+    // only when the load goes there) and the Chalice Dungeons.
+    const bool all_areas = BbscWorldSyncAllEnabled();
     std::vector<BbscWorldSnapshot> others;
     {
         std::scoped_lock lock{bbsc_world_mutex};
         const s64 now = SteadyNowMs();
         for (const auto& [map, snap] : bbsc_world_blocks) {
-            if (map != packed_map && (map >> 24) == (packed_map >> 24) && snap.complete_ms != 0 &&
+            const bool same_area = BbscMapArea(map) == BbscMapArea(packed_map);
+            const bool other_area = all_areas && !same_area &&
+                                    BbscMapArea(map) != BbscMapArea(BbscDreamStateMap) &&
+                                    BbscMapArea(map) != BbscChaliceArea;
+            if (map != packed_map && (same_area || other_area) && snap.complete_ms != 0 &&
                 now - snap.complete_ms < BbscWorldBlockFreshMs) {
                 others.push_back(snap);
             }
         }
     }
+    size_t far_blocks = 0;
+    size_t far_changed = 0;
+    std::string far_maps;
     for (const BbscWorldSnapshot& snap : others) {
         size_t other_changed = 0;
         size_t other_missing = 0;
         const size_t n = write_block(snap, other_changed, other_missing);
+        if (BbscMapArea(snap.map) == BbscMapArea(packed_map)) {
+            LOG_INFO(Debug,
+                     "BBSC world state ({}): host's flags for the neighbouring block {:#x} written "
+                     "({} groups, {} bytes differed, {} groups missing here)",
+                     why, snap.map, n, other_changed, other_missing);
+        } else {
+            ++far_blocks;
+            far_changed += other_changed;
+            far_maps += fmt::format("{}m{:02}_{:02}", far_maps.empty() ? "" : " ",
+                                    BbscMapArea(snap.map), (snap.map >> 16) & 0xFF);
+        }
+    }
+    if (far_blocks != 0) {
         LOG_INFO(Debug,
-                 "BBSC world state ({}): host's flags for the neighbouring block {:#x} written ({} "
-                 "groups, {} bytes differed, {} groups missing here)",
-                 why, snap.map, n, other_changed, other_missing);
+                 "BBSC world state ({}): host's flags for {} block(s) of other areas written ({} "
+                 "bytes differed): {}",
+                 why, far_blocks, far_changed, far_maps);
+        BBSC_TIMELINE("WORLD", "world state ({}): host's flags for {} block(s) of other areas written ({} "
+                 "bytes differed): {}",
+                 why, far_blocks, far_changed, far_maps);
+    } else if (all_areas) {
+        LOG_INFO(Debug, "BBSC world state ({}): no fresh host flags for other areas yet", why);
+        BBSC_TIMELINE("WORLD", "world state ({}): no fresh host flags for other areas yet", why);
     }
     WriteBbscOwnWorldFile();
     return written != 0;
@@ -5323,7 +5657,7 @@ BbscDreamOwnState bbsc_dream_own; // game thread only
 // these are the unlock flags in groups 5 and 6 (tools/gamedata, ShopLineupParam qwcId/eventFlag
 // of those rows). The rest of the Dream still looks like the host's.
 constexpr u32 BbscDreamSoldGroup = 70009;
-// Plus the Dream NPCs' "already met" flags (2026-10-08, a tester's guest: "bath messengers keep
+// Plus the Dream NPCs' "already met" flags (2026-10-08, Eryk's guest: "bath messengers keep
 // resetting and laughing"): the talk scripts play the first meeting while their flag is off and set
 // it after (t210691 6710, t210692 6702-6704/6719, t210693 6701, t210694 6713, t210695 6714, t210698
 // 6711, t210720 6716/6722). From a host who never met them the guest got the intro every visit.
@@ -5390,6 +5724,7 @@ void ApplyBbscHostDreamState(std::string_view why) {
         LOG_WARNING(Debug, "BBSC Dream state ({}): nothing from the host yet (older build?)", why);
         return;
     }
+    KeepBbscOwnTimeBits(); // group 9 holds the night: ours goes home, whatever the Dream does
     size_t written = 0;
     size_t changed_bytes = 0;
     size_t shop_bits = 0;
@@ -5420,6 +5755,10 @@ void ApplyBbscHostDreamState(std::string_view why) {
     WriteBbscOwnWorldFile();
     LOG_INFO(Debug,
              "BBSC Dream state ({}): the host's Hunter's Dream - {} groups written, {} bytes "
+             "differed from ours (snapshot {} ms old); shops keep our own unlocks and stock ({} "
+             "flags differed from the host's)",
+             why, written, changed_bytes, SteadyNowMs() - host.complete_ms, shop_bits);
+    BBSC_TIMELINE("WORLD", "Dream state ({}): the host's Hunter's Dream - {} groups written, {} bytes "
              "differed from ours (snapshot {} ms old); shops keep our own unlocks and stock ({} "
              "flags differed from the host's)",
              why, written, changed_bytes, SteadyNowMs() - host.complete_ms, shop_bits);
@@ -5461,6 +5800,9 @@ void RestoreBbscOwnDreamState(std::string_view why) {
              "BBSC Dream state ({}): our own Dream flags are back ({} groups, {} flags the game "
              "changed meanwhile kept)",
              why, restored, kept_bits);
+    BBSC_TIMELINE("WORLD", "Dream state ({}): our own Dream flags are back ({} groups, {} flags the game "
+             "changed meanwhile kept)",
+             why, restored, kept_bits);
 }
 
 // Guest side: puts our own Dream state back once we are out of the host's Dream for good.
@@ -5499,6 +5841,7 @@ void ApplyBbscHostWorldFlagsAtLoad() {
     }
     LogBbscHostWorldFlagsDiff(map, "load created the character, before writing");
     ApplyBbscHostWorldFlags(map, "load created the character");
+    ApplyBbscHostTime("load created the character");
     if (map == BbscDreamStateMap) {
         ApplyBbscHostDreamState("load created the character");
     }
@@ -5636,7 +5979,7 @@ std::optional<BbscSaveSlot> BbscActiveSaveSlotUnchecked() {
 
 
 // ---- Own world journal (2026-10-08) --------------------------------------------------------------
-// Test 2026-10-08 (cls_amg guest in a tester's world): the guest's game crashed during a follow load
+// Test 2026-10-08 (cls_amg guest in abood's world): the guest's game crashed during a follow load
 // and came back stuck in a Hunter's Dream that was the HOST's (a new save: hardly any headstones).
 // The save writes the event flags from the LIVE table (0x01399DE0, see "Shared progress on disk"),
 // and while a guest that table holds what BBSC wrote in: the host's map flags (world sync, kinds
@@ -5673,7 +6016,62 @@ void KeepBbscOwnWorldGroup(u32 key, const u8* live) {
     bbsc_own_world_dirty = true;
 }
 
-// 2026-10-12 (a tester, guest, 21:11:20): the summon load resets the item flags of the map it
+// ---- Time of night in the host's world (2026-10-19) ---------------------------------------------
+// The user: "fully sync the world - connect to someone ahead of you and you get the progress but not
+// the time; go to someone behind you and your time gets reset". A guest in a host's world now has the
+// host's night (flags 9800-9802, see BbscProgressFlagsMore; the host sends them every 5 s with its
+// progress), written before a load's map events read it. Our own night is kept in the own world
+// journal - a pseudo group (BbscOwnTimeKey: byte 0 = the three bits, byte 1 = 1 when kept) - and put
+// back at home AFTER the journal's real groups, so no copy of group 9 kept at the wrong moment (the
+// Dream's own restore keeps whatever changed meanwhile) can carry the host's night home. Shared
+// progress then ORs the host's night in, which only ever moves it forward. Group 9, byte 100 holds
+// them: 9800 = 0x80, 9801 = 0x40, 9802 = 0x20 (flag % 1000 = 800..802, bits from the top).
+constexpr u32 BbscTimeGroupKey = 9;
+constexpr size_t BbscTimeByte = 100;
+constexpr u8 BbscTimeMask = 0xE0;
+constexpr u32 BbscOwnTimeKey = 0xFFFF9800;
+constexpr s64 BbscHostTimeFreshMs = 120'000;
+// Guest: the host's night from its last progress packet (-1 = not known yet).
+std::atomic<s32> bbsc_host_time_bits{-1};
+std::atomic<s64> bbsc_host_time_ms{0};
+
+const char* BbscTimeName(s32 bits) {
+    if (bits < 0) {
+        return "unknown";
+    }
+    if ((bits & 0x20) != 0) {
+        return "blood moon";
+    }
+    if ((bits & 0x40) != 0) {
+        return "night";
+    }
+    if ((bits & 0x80) != 0) {
+        return "evening";
+    }
+    return "none yet";
+}
+
+// Our own night into the journal, the first time it is about to change while away. Game thread.
+void KeepBbscOwnTimeBits() {
+    if (bbsc_own_world.contains(BbscOwnTimeKey)) {
+        return;
+    }
+    const u64 storage = BbscFlagGroupStorage(BbscTimeGroupKey);
+    if (storage == 0) {
+        return;
+    }
+    std::array<u8, BbscWorldGroupBytes> pseudo{};
+    pseudo[0] = static_cast<u8>(ReadValue<u8>(storage, BbscTimeByte) & BbscTimeMask);
+    pseudo[1] = 1;
+    bbsc_own_world[BbscOwnTimeKey] = pseudo;
+    bbsc_own_world_dirty = true;
+    LOG_INFO(Debug, "BBSC time: our own time of night ({}) kept for the trip home",
+             BbscTimeName(pseudo[0]));
+    BBSC_TIMELINE("TIME", "our own time of night ({}) kept for the trip home",
+                  BbscTimeName(pseudo[0]));
+}
+
+// 2026-10-12 (Weronika, guest, 21:11:20): the summon load resets the item flags of the map it
 // loads, and the journal kept its first copy at "load created the character" - after the reset:
 // "0 taken in our own world", every item she had taken at home could be taken again in the host's
 // world, and the empty copy went back into her own world at home (taken items back there too).
@@ -5738,6 +6136,7 @@ void CaptureBbscOwnWorldBeforeJoin() {
              "BBSC own world: kept before the join load - {} map flag group(s) of {} in the table, "
              "{} item(s) taken in our own world",
              kept, visited, items);
+    KeepBbscOwnTimeBits();
     WriteBbscOwnWorldFile();
 }
 
@@ -5834,6 +6233,9 @@ size_t RestoreBbscOwnWorld(std::string_view why) {
     size_t bits = 0;
     size_t missing = 0;
     for (const auto& [key, own] : bbsc_own_world) {
+        if (key == BbscOwnTimeKey) {
+            continue; // our own night: put back below, after every real group
+        }
         const u64 storage = BbscFlagGroupStorage(key);
         if (storage == 0) {
             ++missing;
@@ -5862,6 +6264,24 @@ size_t RestoreBbscOwnWorld(std::string_view why) {
              "BBSC own world ({}): {} flag group(s) of our own world put back ({} flags differed "
              "from the host's, {} groups not in the table)",
              why, restored, bits, missing);
+    BBSC_TIMELINE("WORLD", "own world ({}): {} flag group(s) of our own world put back ({} flags differed "
+             "from the host's, {} groups not in the table)",
+             why, restored, bits, missing);
+    if (const auto own_time = bbsc_own_world.find(BbscOwnTimeKey);
+        own_time != bbsc_own_world.end() && own_time->second[1] == 1) {
+        if (const u64 storage = BbscFlagGroupStorage(BbscTimeGroupKey); storage != 0) {
+            const u8 live = ReadValue<u8>(storage, BbscTimeByte);
+            const u8 own = static_cast<u8>(own_time->second[0] & BbscTimeMask);
+            if ((live & BbscTimeMask) != own) {
+                WriteValue<u8>(storage, BbscTimeByte,
+                               static_cast<u8>((live & ~BbscTimeMask) | own));
+            }
+            LOG_INFO(Debug, "BBSC time ({}): our own time of night is back - {} (it was {} here)",
+                     why, BbscTimeName(own), BbscTimeName(live & BbscTimeMask));
+            BBSC_TIMELINE("TIME", "our own time of night is back - {} (it was {} here)",
+                          BbscTimeName(own), BbscTimeName(live & BbscTimeMask));
+        }
+    }
     bbsc_own_world.clear();
     bbsc_own_world_dirty = false;
     if (bbsc_own_world_slot.has_value()) {
@@ -5871,6 +6291,51 @@ size_t RestoreBbscOwnWorld(std::string_view why) {
     }
     bbsc_own_world_slot.reset();
     return restored;
+}
+
+// Guest in a host's world: the host's night into our live table (see "Time of night in the
+// host's world"). Before a load's map events run, and every 2 s for whatever starts later.
+void ApplyBbscHostTime(std::string_view why) {
+    if (!BbscWorldSyncEnabled() || image_base == 0 || GetSessionState() != 6) {
+        return;
+    }
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x1598) || ReadValue<u8>(global, 0x1592) != 0) {
+        return; // not in the host's world
+    }
+    const s32 host = bbsc_host_time_bits.load();
+    if (host < 0 || SteadyNowMs() - bbsc_host_time_ms.load() > BbscHostTimeFreshMs) {
+        return; // nothing from the host yet (or an older BBSC that does not send it)
+    }
+    const u64 storage = BbscFlagGroupStorage(BbscTimeGroupKey);
+    if (storage == 0) {
+        return;
+    }
+    const u8 live = ReadValue<u8>(storage, BbscTimeByte);
+    if ((live & BbscTimeMask) == host) {
+        return;
+    }
+    KeepBbscOwnTimeBits();
+    WriteValue<u8>(storage, BbscTimeByte, static_cast<u8>((live & ~BbscTimeMask) | host));
+    WriteBbscOwnWorldFile();
+    LOG_INFO(Debug, "BBSC time ({}): the host's time of night in its world - {} (was {} here)", why,
+             BbscTimeName(host), BbscTimeName(live & BbscTimeMask));
+    BBSC_TIMELINE("TIME", "the host's time of night in its world - {} (was {} here; {})",
+                  BbscTimeName(host), BbscTimeName(live & BbscTimeMask), why);
+}
+
+void TickBbscHostTime() {
+    static s64 last_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (now - last_ms < 2'000) {
+        return;
+    }
+    last_ms = now;
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0) {
+        return; // a load: its own hooks do it
+    }
+    ApplyBbscHostTime("tick");
 }
 
 // A file an earlier run left (the game crashed or was closed while a guest): put back now.
@@ -6172,6 +6637,9 @@ void CaptureBbscGuestLoot() {
         LOG_INFO(Debug, "BBSC guest items: {} item(s) picked up in the host's world - saved, they stay "
                         "gone for this character",
                  picked_total);
+        BBSC_TIMELINE("ITEMS", "guest items: {} item(s) picked up in the host's world - saved, they stay "
+                        "gone for this character",
+                 picked_total);
     }
 }
 
@@ -6325,6 +6793,26 @@ std::optional<BbscTransform> ResolveLampPoint(s32 point_id) {
 // ([[0x0553B120]+0xC70]+0x30, std::list, entry +8 = lamp entity id, registered by 0x0146DA20),
 // and a lamp's respawn point is its entity id + 1000 (the lamp update compares
 // global+0x1528 - 1000 against its own id).
+//
+// Only lamps we have lit (2026-10-18, bettercallsamm host 17:58:21: died in Old Yharnam and "got
+// spawned directly into the Paarl boss fight" - the nearest lamp was point 2302952, the Graveyard
+// of the Darkbeast lamp in Paarl's arena, which nobody had lit). Every lamp is common event 7000
+// (asset, object, needed flag, lit flag); in all 44 of them (read off the event files with
+// tools/gamedata/emevd.py, CONFIRMED) the object is AAB1950+k, its point object + 1000 and its lit
+// flag 1AAB7800 + 20*k.
+bool BbscEventFlag(u32 flag); // SprjEventFlagMan read, see the Hunter's Dream section
+
+std::optional<u32> BbscLampLitFlag(s32 point) {
+    if (point < 1'000'000) {
+        return std::nullopt;
+    }
+    const s32 k = point % 10'000 - 2950;
+    if (k < 0 || k > 9) {
+        return std::nullopt;
+    }
+    return static_cast<u32>(10'000'000 + (point - point % 10'000) + 7800 + 20 * k);
+}
+
 std::optional<BbscTransform> ResolveNearestLoadedLamp(const std::array<float, 4>& near,
                                                       s32* chosen_point) {
     const u64 net_man = ReadValue<u64>(image_base + 0x0553B120, 0);
@@ -6341,12 +6829,16 @@ std::optional<BbscTransform> ResolveNearestLoadedLamp(const std::array<float, 4>
     }
     std::optional<BbscTransform> best;
     float best_distance = 0.0f;
+    std::string unlit;
     u64 node = ReadValue<u64>(head, 0);
     for (int guard = 0; node != head && guard < 512 && ReadablePointer(node, 0x18); ++guard) {
         const u64 entry = ReadValue<u64>(node, 0x10);
         if (ReadablePointer(entry, 0x0C)) {
             const s32 point = ReadValue<s32>(entry, 0x08) + 1000;
-            if (const auto lamp = ResolveLampPoint(point)) {
+            const auto lit_flag = BbscLampLitFlag(point);
+            if (lit_flag.has_value() && !BbscEventFlag(*lit_flag)) {
+                unlit += fmt::format("{}{}", unlit.empty() ? "" : " ", point);
+            } else if (const auto lamp = ResolveLampPoint(point)) {
                 float distance = 0.0f;
                 for (size_t i = 0; i < 3; ++i) {
                     const float d = lamp->position[i] - near[i];
@@ -6362,6 +6854,10 @@ std::optional<BbscTransform> ResolveNearestLoadedLamp(const std::array<float, 4>
             }
         }
         node = ReadValue<u64>(node, 0);
+    }
+    if (!unlit.empty()) {
+        LOG_INFO(Debug, "BBSC respawn: lamps of this map not lit by us, not used: {}", unlit);
+        BBSC_TIMELINE("RESPAWN", "respawn: lamps of this map not lit by us, not used: {}", unlit);
     }
     return best;
 }
@@ -6514,6 +7010,66 @@ void BbscCurtainStepTo(BbscCurtainStep step, s64 now) {
     bbsc_curtain.step_ms = now;
 }
 
+// 2026-10-19 (host log, Gascoigne kill while dead): MenuMan+0x804 is a handshake with the
+// NowLoading menu script (0 idle, 1 asked, 2 shown, 3 close asked, 4 closing; the script reads and
+// writes it through the menu values 0x3EF / 0x3F1, 0x01762DB0 / 0x01762730). The close call
+// 0x0176D3C0 clears the "loading wanted" byte [0x0556286B] and asks for 3; only the script takes a
+// shown screen back to 0. That run's curtain was the only one whose screen showed: the game's main
+// thread then stalled 18 s (the far lamp warp streamed its area in), the time limit fired first and
+// wrote 0 straight away - no close call, wanted byte left 1 - and the loading screen stayed up
+// until the host closed the game (CONFIRMED: "fading in after 20730 ms (time limit)", game running
+// a minute longer; STRONGLY INDICATED that 0 while shown is what kept it).
+// So a screen BBSC opened is closed with 0x0176D3C0 until it reports 0, every tick, also after the
+// curtain is over; 0 is only written when the screen never showed (state 1, as before).
+s64 bbsc_loading_close_ms = 0; // BBSC still closing its loading screen since then (0 = no)
+std::string bbsc_loading_close_why;
+
+s32 BbscLoadingScreenState() {
+    const u64 menu = ReadValue<u64>(image_base + MenuManPointerOffset, 0);
+    return ReadablePointer(menu, 0x810) ? ReadValue<s32>(menu, 0x804) : 0;
+}
+
+void KeepClosingBbscLoadingScreen(std::string_view why) {
+    if (BbscLoadingScreen(false)) {
+        return; // already down
+    }
+    if (bbsc_loading_close_ms == 0) {
+        bbsc_loading_close_ms = SteadyNowMs();
+        bbsc_loading_close_why = std::string{why};
+        LOG_INFO(Debug, "BBSC loading screen: still up (state {}) - closing it with the game's own "
+                        "close call until it is down ({})",
+                 BbscLoadingScreenState(), why);
+    }
+}
+
+void TickBbscLoadingScreenClose() {
+    if (bbsc_loading_close_ms == 0) {
+        return;
+    }
+    const s64 now = SteadyNowMs();
+    if (const u64 g = GetGlobalState(); ReadablePointer(g, 0x10) && ReadValue<u8>(g, 0x08) != 0) {
+        LOG_INFO(Debug, "BBSC loading screen: a load started - its own loading screen takes over ({})",
+                 bbsc_loading_close_why);
+        bbsc_loading_close_ms = 0;
+        return;
+    }
+    if (BbscLoadingScreen(false)) {
+        LOG_INFO(Debug, "BBSC loading screen: closed {} ms after the curtain ({})",
+                 now - bbsc_loading_close_ms, bbsc_loading_close_why);
+        BBSC_TIMELINE("LOAD", "loading screen closed {} ms late ({})", now - bbsc_loading_close_ms,
+                      bbsc_loading_close_why);
+        bbsc_loading_close_ms = 0;
+        return;
+    }
+    if (now - bbsc_loading_close_ms > 30'000) {
+        LOG_WARNING(Debug, "BBSC loading screen: still up 30 s after the close call (state {}, {})",
+                    BbscLoadingScreenState(), bbsc_loading_close_why);
+        BBSC_TIMELINE("LOAD", "loading screen still up 30 s after the close call (state {}, {})",
+                      BbscLoadingScreenState(), bbsc_loading_close_why);
+        bbsc_loading_close_ms = 0;
+    }
+}
+
 // ---- Load cover (2026-09-26) ------------------------------------------------------------------
 // The guest's own loads - the summon load, the second reload after a cross-map join, every follow
 // load - showed a bare black screen with the new map flashing up before the guest was placed
@@ -6555,6 +7111,7 @@ void StartBbscLoadCover(std::string_view why) {
     bbsc_load_cover.started_ms = SteadyNowMs();
     bbsc_load_cover.why = std::string{why};
     LOG_INFO(Debug, "BBSC load cover: fading out ({})", why);
+    BBSC_TIMELINE("LOAD", "load cover: fading out ({})", why);
 }
 
 void EndBbscLoadCover(std::string_view how) {
@@ -6567,14 +7124,15 @@ void EndBbscLoadCover(std::string_view how) {
     }
     if (bbsc_load_cover.own_screen) {
         bbsc_load_cover.own_screen = false;
-        if (!BbscLoadingScreen(false)) {
-            reinterpret_cast<void PS4_SYSV_ABI (*)(u32)>(image_base + NowLoadingSetStateOffset)(0);
-        }
+        // own_screen = the screen showed: never 0 while shown (see KeepClosingBbscLoadingScreen).
+        KeepClosingBbscLoadingScreen("load cover");
     }
     if (!BbscCurtainActive()) { // a death curtain brings the screen back itself
         BbscFadeTo(0.0f, BbscCurtainFadeInS);
     }
     LOG_INFO(Debug, "BBSC load cover: fading in after {} ms ({}; {})",
+             SteadyNowMs() - bbsc_load_cover.started_ms, bbsc_load_cover.why, how);
+    BBSC_TIMELINE("LOAD", "load cover: fading in after {} ms ({}; {})",
              SteadyNowMs() - bbsc_load_cover.started_ms, bbsc_load_cover.why, how);
 }
 
@@ -6646,6 +7204,7 @@ void TickBbscLoadCover() {
             // The game's loading screen closed with its load, so BBSC opens it again (the death
             // curtain's kind) and keeps it up until EndBbscLoadCover; a load in between runs its
             // own on top. HYPOTHESIS until a test shows no pop-in.
+            bbsc_loading_close_ms = 0; // the cover owns the loading screen now
             if (BbscLoadingScreen(true)) {
                 if (!bbsc_load_cover.own_screen) {
                     LOG_INFO(Debug, "BBSC load cover: loading screen kept up until the guest is "
@@ -6680,6 +7239,7 @@ bool StartBbscDeathCurtain(std::string_view why) {
         return false;
     }
     const s64 now = SteadyNowMs();
+    bbsc_loading_close_ms = 0; // this curtain owns the loading screen now
     bbsc_curtain = {};
     bbsc_curtain.why = std::string{why};
     bbsc_curtain.started_ms = now;
@@ -6693,6 +7253,8 @@ void EndBbscDeathCurtain(s64 now, std::string_view how) {
     BbscCurtainStepTo(BbscCurtainStep::FadingIn, now);
     LOG_INFO(Debug, "BBSC death curtain: fading in after {} ms ({})", now - bbsc_curtain.started_ms,
              how);
+    BBSC_TIMELINE("RESPAWN", "death curtain: fading in after {} ms ({})",
+                  now - bbsc_curtain.started_ms, how);
 }
 
 void TickBbscDeathCurtain() {
@@ -6702,13 +7264,18 @@ void TickBbscDeathCurtain() {
     const s64 now = SteadyNowMs();
     const s64 in_step = now - bbsc_curtain.step_ms;
     if (now - bbsc_curtain.started_ms > BbscCurtainLimitMs &&
-        bbsc_curtain.step != BbscCurtainStep::FadingIn) {
-        // 0x0176D320 writes [MenuMan]+0x804 with no null check (review 2026-10-08): a quit to the
-        // title can leave MenuMan gone when this limit fires.
-        if (ReadValue<u64>(image_base + MenuManPointerOffset, 0) != 0) {
-            reinterpret_cast<void PS4_SYSV_ABI (*)(u32)>(image_base + NowLoadingSetStateOffset)(0);
+        bbsc_curtain.step != BbscCurtainStep::FadingIn &&
+        bbsc_curtain.step != BbscCurtainStep::Closing) {
+        if (bbsc_curtain.step == BbscCurtainStep::Loading) {
+            // The screen may be up: close it the game's way (2026-10-19, see
+            // KeepClosingBbscLoadingScreen) - the Closing step has its own limits.
+            LOG_INFO(Debug, "BBSC death curtain: time limit after {} ms - closing the loading "
+                            "screen (state {}, shown {})",
+                     now - bbsc_curtain.started_ms, BbscLoadingScreenState(), bbsc_curtain.shown);
+            BbscCurtainStepTo(BbscCurtainStep::Closing, now);
+            return;
         }
-        EndBbscDeathCurtain(now, "time limit");
+        EndBbscDeathCurtain(now, "time limit"); // still fading out: no loading screen opened
         return;
     }
     switch (bbsc_curtain.step) {
@@ -6746,8 +7313,20 @@ void TickBbscDeathCurtain() {
         if (BbscLoadingScreen(false)) {
             EndBbscDeathCurtain(now, "loading screen closed");
         } else if (in_step > BbscCurtainCloseWaitMs) {
-            reinterpret_cast<void PS4_SYSV_ABI (*)(u32)>(image_base + NowLoadingSetStateOffset)(0);
-            EndBbscDeathCurtain(now, "loading screen forced closed");
+            if (bbsc_curtain.shown || BbscLoadingScreenState() == 4) {
+                // Shown (4 = the script is taking it down): only the menu script closes it - keep
+                // asking after the fade-in.
+                KeepClosingBbscLoadingScreen("death curtain");
+                EndBbscDeathCurtain(now, "loading screen still closing");
+            } else {
+                // Never shown (state 1, the usual case): nothing of the menu to undo.
+                // 0x0176D320 writes [MenuMan]+0x804 with no null check (review 2026-10-08).
+                if (ReadValue<u64>(image_base + MenuManPointerOffset, 0) != 0) {
+                    reinterpret_cast<void PS4_SYSV_ABI (*)(u32)>(image_base +
+                                                                 NowLoadingSetStateOffset)(0);
+                }
+                EndBbscDeathCurtain(now, "loading screen forced closed");
+            }
         }
         return;
     case BbscCurtainStep::FadingIn:
@@ -6765,6 +7344,45 @@ void TickBbscDeathCurtain() {
 }
 
 // Revive the local player and teleport it, without any load.
+// A lamp's respawn point id carries its map: 2412951 = area 24, block 1 -> 0x18010000.
+u32 BbscLampPointMap(s32 point) {
+    if (point < 1'000'000) {
+        return 0;
+    }
+    const u32 area = static_cast<u32>(point / 100'000);
+    const u32 block = static_cast<u32>((point / 10'000) % 10);
+    return area > 0xFF ? 0 : (area << 24) | (block << 16);
+}
+
+// True when the lamp's block is the current or a resident map (or its id says no map).
+bool BbscLampBlockLoaded(s32 point) {
+    const u32 map = BbscLampPointMap(point);
+    if (map == 0 || !IsUsablePackedMap(map)) {
+        return true;
+    }
+    return map == GetCurrentPackedMap() || BbscMapResident(map);
+}
+
+// a4_ns 2026-10-14: revived at the host's lamp, died again 36 ms later (the game's kill reward
+// still held the old death), the next death step respawned in place again - a loop. A death this
+// soon after a respawn in place gets the game's real reload instead.
+constexpr s64 BbscRespawnLoopMs = 10'000;
+bool BbscDiedRightAfterRespawn(std::string_view why) {
+    if (bbsc_inplace_respawn_ms == 0) {
+        return false;
+    }
+    const s64 since = SteadyNowMs() - bbsc_inplace_respawn_ms;
+    if (since > BbscRespawnLoopMs) {
+        return false;
+    }
+    LOG_INFO(Debug, "BBSC death: repeat death {} ms after a respawn in place ({}) -> real reload",
+             since, why);
+    BBSC_TIMELINE("DEATH", "death: repeat death {} ms after a respawn in place ({}) -> real reload",
+             since, why);
+    bbsc_inplace_respawn_ms = 0;
+    return true;
+}
+
 bool BbscRespawnInPlace(std::string_view why) {
     // Replicates the local-player branch of the game's event revive 0x013CBAD0(10000, ...)
     // (CONFIRMED statically), in the same order, WITHOUT its final CSMultiPlayMan::Stop call:
@@ -6828,9 +7446,18 @@ bool BbscRespawnInPlace(std::string_view why) {
         }
         partner_here = IsUsablePackedMap(host_map) &&
                        (host_map == GetCurrentPackedMap() || BbscMapResident(host_map));
-        target = ResolveLampPoint(host_lamp);
+        if (host_lamp != -1 && !BbscLampBlockLoaded(host_lamp)) {
+            LOG_INFO(Debug, "BBSC respawn: host's lamp {} is in map {:#x}, not loaded here - "
+                            "skipped",
+                     host_lamp, BbscLampPointMap(host_lamp));
+        } else {
+            target = ResolveLampPoint(host_lamp);
+        }
         where = "host's last lamp";
         LOG_INFO(Debug, "BBSC respawn: host's last lamp is point {} ({}); host in map {:#x} ({})",
+                 host_lamp, target.has_value() ? "in this map" : "not in this map", host_map,
+                 partner_here ? "loaded here" : "NOT loaded here - not going beside the host");
+        BBSC_TIMELINE("RESPAWN", "respawn: host's last lamp is point {} ({}); host in map {:#x} ({})",
                  host_lamp, target.has_value() ? "in this map" : "not in this map", host_map,
                  partner_here ? "loaded here" : "NOT loaded here - not going beside the host");
         if (!target.has_value() && partner_here) {
@@ -6954,6 +7581,10 @@ bool BbscRespawnInPlace(std::string_view why) {
              "{:.2f})",
              why, GetCharacterHp(player), ReadValue<s32>(player, 0x78), where, position[0],
              position[1], position[2]);
+    BBSC_TIMELINE("RESPAWN", "respawn in place ({}): revived (hp {}, type {}), warped to {} ({:.2f}, {:.2f}, "
+             "{:.2f})",
+             why, GetCharacterHp(player), ReadValue<s32>(player, 0x78), where, position[0],
+             position[1], position[2]);
     bbsc_inplace_respawn_ms = SteadyNowMs();
     BbscRestockFromStorage(why);
     if (where == "host's last lamp") {
@@ -7044,8 +7675,17 @@ void TickBbscStageWatch() {
 
 // The guest's notice when the host dies. The game's own one ("Your beckoner has died") belongs to
 // HostDead 0x01381870, which BBSC skips so that the guest can stay.
+// 2026-10-20 (Weronika's guest log, 0.0.2 test3): "host died" 31 times in an evening with 7 host
+// deaths, in bursts of 4-7 half a second apart a few seconds after the host's big kills (21:43:09,
+// 21:49:40, 21:52:07) - the host's copy read HP 0 for a moment and back (the player list held only
+// the 2 players, so no NPC was taken for the host). A death now counts when the copy's dead flag
+// ([chr+0x58]+0x114 bit 0, set by the death handler on every copy) is on, or when its HP stays at 0
+// for 1.5 s; and one notice at most every 30 s.
 void TickBbscHostDeathNotice() {
     static std::array<u64, 4> announced{}; // host characters whose death was already announced
+    static u64 zero_chr = 0;               // the copy whose HP reads 0, and since when
+    static s64 zero_since_ms = 0;
+    static s64 last_notice_ms = -60'000;
     static s64 last_check_ms = 0;
     const s64 now = SteadyNowMs();
     if (now - last_check_ms < 250) {
@@ -7055,6 +7695,7 @@ void TickBbscHostDeathNotice() {
     const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
     if (GetSessionState() != 6 || !ReadablePointer(world_chr, 0x70)) {
         announced = {};
+        zero_chr = 0;
         return;
     }
     const u64 local = ReadValue<u64>(world_chr, 0x60);
@@ -7070,18 +7711,43 @@ void TickBbscHostDeathNotice() {
             continue; // not the host's character (type 0)
         }
         auto it = std::ranges::find(announced, chr);
-        if (GetCharacterHp(chr) > 0) {
+        const s32 hp = GetCharacterHp(chr);
+        const u64 control = ReadablePointer(chr, 0x60) ? ReadValue<u64>(chr, 0x58) : 0;
+        const bool dead_flag =
+            ReadablePointer(control, 0x118) && (ReadValue<u16>(control, 0x114) & 1) != 0;
+        if (hp > 0 && !dead_flag) {
             if (it != announced.end()) {
-                *it = 0;
+                *it = 0; // alive again: the next death is announced
+            }
+            if (zero_chr == chr) {
+                zero_chr = 0;
             }
             continue;
         }
         if (it != announced.end()) {
             continue;
         }
+        if (!dead_flag) {
+            if (zero_chr != chr) {
+                zero_chr = chr;
+                zero_since_ms = now;
+            }
+            if (now - zero_since_ms < 1'500) {
+                continue; // HP 0 for a moment only: not a death yet
+            }
+        }
+        zero_chr = 0;
         if (const auto free = std::ranges::find(announced, 0); free != announced.end()) {
             *free = chr;
         }
+        if (now - last_notice_ms < 30'000) {
+            LOG_INFO(Debug, "BBSC host death notice: not shown again so soon ({} ms after the last)",
+                     now - last_notice_ms);
+            continue;
+        }
+        last_notice_ms = now;
+        LOG_INFO(Debug, "BBSC host death notice: host copy {:#x} - hp {}, dead flag {}", chr, hp,
+                 dead_flag);
         BbscAnnounce(u"The host died.\nThey will respawn at the lamp.",
                      "host died");
     }
@@ -7581,9 +8247,39 @@ bool BbscApplyDeathPenalty(std::string_view why) {
     }
     const s32 before = bbsc_echoes_at_death;
     bbsc_echoes_at_death = -1;
-    const s32 now = GetBloodEchoes();
+    s32 now = GetBloodEchoes();
     if (before < 0 || now < 0) {
         return false; // no snapshot, or the slot data went away with the world
+    }
+    if (now == 0 && before > 0) {
+        // Bug report 2026-10-14 (bettercallsamm, host): echoes "lost" after a respawn in place -
+        // every such death logged only "nothing to drop". Check that the game's drop really left
+        // a stain holding them; if not, give them back and drop them here.
+        const u64 slots = ReadValue<u64>(image_base + PlayerSlotManagerPointerOffset, 0);
+        const u64 record = ReadablePointer(slots, 0x38) ? ReadValue<u64>(slots, 0x30) : 0;
+        const s32 held = ReadablePointer(record, 0x3C) ? ReadValue<s32>(record, 0x38) : -1;
+        const u8 exists = ReadablePointer(slots, 0x30) ? ReadValue<u8>(slots, 0x28) : 0xFF;
+        const u64 local = GetPlayerSlotData();
+        if (held >= before && exists != 0) {
+            LOG_INFO(Debug, "BBSC death penalty ({}): game's drop - stain holds {} (had {} at the "
+                            "death step, exists {})",
+                     why, held, before, exists);
+            BBSC_TIMELINE("DEATH", "death penalty ({}): game's drop - stain holds {} (had {} at the "
+                            "death step, exists {})",
+                     why, held, before, exists);
+            return false;
+        }
+        if (local == 0) {
+            return false;
+        }
+        LOG_WARNING(Debug, "BBSC death penalty ({}): {} echoes gone but the stain holds {} (exists "
+                           "{}) - given back and dropped by BBSC",
+                    why, before, held, exists);
+        BBSC_TIMELINE("DEATH", "death penalty ({}): {} echoes gone but the stain holds {} (exists "
+                           "{}) - given back and dropped by BBSC",
+                    why, before, held, exists);
+        WriteValue<s32>(local, PlayerEchoesOffset, before);
+        now = before;
     }
     if (now == 0 || before == 0) {
         // The game's own drop ends with the count at zero, so this is both "it already happened"
@@ -7592,17 +8288,22 @@ bool BbscApplyDeathPenalty(std::string_view why) {
         LOG_INFO(Debug, "BBSC death penalty ({}): nothing to drop ({} echoes at the death step, {} "
                         "now)",
                  why, before, now);
+        BBSC_TIMELINE("DEATH", "death penalty ({}): nothing to drop ({} echoes at the death step, {} "
+                        "now)",
+                 why, before, now);
         return false;
     }
     const u64 player = GetLocalPlayerCharacter();
     const u64 event_man = ReadValue<u64>(image_base + SprjEventManPointerOffset, 0);
     if (player == 0 || !ReadablePointer(event_man, 0x88)) {
         LOG_WARNING(Debug, "BBSC death penalty ({}): SprjEventMan or the player is gone", why);
+        BBSC_TIMELINE("DEATH", "death penalty ({}): SprjEventMan or the player is gone", why);
         return false;
     }
     const u64 stain_root = ReadValue<u64>(event_man, 0x80);
     if (!ReadablePointer(stain_root, 0x10)) {
         LOG_WARNING(Debug, "BBSC death penalty ({}): no stain root at SprjEventMan+0x80", why);
+        BBSC_TIMELINE("DEATH", "death penalty ({}): no stain root at SprjEventMan+0x80", why);
         return false;
     }
     // 0x013D2910 does nothing at all when global+0x1770 is zero, so log it: a run where the
@@ -7641,15 +8342,20 @@ bool BbscApplyDeathPenalty(std::string_view why) {
             LOG_INFO(Debug, "BBSC death penalty ({}): {} echoes earned while dead (a boss died "
                             "meanwhile) given back - only the {} held at the death are in the stain",
                      why, earned_while_dead, before);
+            BBSC_TIMELINE("DEATH", "death penalty ({}): {} echoes earned while dead (a boss died "
+                            "meanwhile) given back - only the {} held at the death are in the stain",
+                     why, earned_while_dead, before);
         }
     }
     LOG_INFO(Debug,
              "BBSC death penalty ({}): dropped {} echoes (now {}, stain holds {}, type {}, gate {})",
              why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
+    BBSC_TIMELINE("DEATH", "death penalty ({}): dropped {} echoes (now {}, stain holds {}, type {}, gate {})",
+             why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
     return true;
 }
 
-// Late death steps (2026-10-13, host log 22:14:05-15): the watchdog revived the host in
+// Late death steps (2026-10-13, onesadeye host log 22:14:05-15): the watchdog revived the host in
 // place, then the game's own death script still ran 7 s later (SoloPlayDeath, then
 // SoloPlayDeath_2) for that same death - a second curtain, a second respawn, a second stain, and a
 // grey void on the host's screen. A step that starts while the player is alive in a session within
@@ -7688,6 +8394,8 @@ bool BbscLateDeathStep(std::string_view name) {
     ClearBbscStaleDeathRequest(name);
     ArmBbscDeathLockClear();
     LOG_INFO(Debug, "BBSC death: late {} {} ms after a BBSC respawn (player alive, hp {}) - skipped",
+             name, SteadyNowMs() - bbsc_inplace_respawn_ms, hp);
+    BBSC_TIMELINE("DEATH", "death: late {} {} ms after a BBSC respawn (player alive, hp {}) - skipped",
              name, SteadyNowMs() - bbsc_inplace_respawn_ms, hp);
     return true;
 }
@@ -7833,6 +8541,20 @@ void TickBbscSpectate() {
                 respawn_why = "boss killed";
             }
         }
+        if (!respawn_why.empty() && BbscDiedRightAfterRespawn(respawn_why)) {
+            if (session_state == 6 && !bbsc_spectate_wipe_warped) {
+                // Guest: the wipe path - a full reload beside the host (RequestBbscSessionWarp);
+                // the new character is revived by "a load ended the boss fight".
+                bbsc_death_mode = BbscDeathMode::Spectate;
+                bbsc_spectate_saw_wipe = true;
+                bbsc_spectate_host_back_ms = now - BbscWipeHostSettleMs;
+                LOG_INFO(Debug, "BBSC death: guest reloads beside the host instead");
+                return;
+            }
+            BbscApplyDeathPenalty(respawn_why);
+            reason = "repeat death right after a respawn in place";
+            respawn_why = {};
+        }
         if (!respawn_why.empty()) {
             BbscApplyDeathPenalty(respawn_why);
             if (StartBbscDeathCurtain(respawn_why) || BbscRespawnInPlace(respawn_why)) {
@@ -7902,6 +8624,7 @@ u8 bbsc_boss_home_skip = 0;
 // After a guest skipped BlockClear2_3: clear its locks for this long, see TickBbscBossUnlock.
 constexpr s64 BbscBossUnlockMs = 20'000;
 s64 bbsc_boss_unlock_until_ms = 0;
+s64 bbsc_gate_watch_since_ms = 0; // the guest's last boss clear, see TickBbscGateWatch
 
 bool BbscSessionAlive() {
     const s32 state = GetSessionState();
@@ -7913,14 +8636,77 @@ s32 LocalPlayerType() {
     return ReadablePointer(player, 0x80) ? ReadValue<s32>(player, 0x78) : -1;
 }
 
+// The host's boss clear decides on the game's co-op count (2026-10-20, CONFIRMED in test5, host
+// 19:07:06): BlockClear2_1 (0x01385470) takes the co-op branch only while the local type is 0/1/8 AND
+// [[global+0x16F8]+0x08] (co-op hunters) is above 0; at 0 a host runs SoloBlockClear (0x013859F0),
+// whose CSMultiPlayMan::Stop (caller 0x01385A9A) ends the session for everyone. The count had been 0
+// since the guest came back from the Dream as type 0 (see ArmBbscRejoin), while the guest was in
+// the session all along. With co-op members in the session the count is set for this one call and
+// put back on the next game tick (TickBbscCoopCountFix); the game's own count is left alone otherwise.
+struct BbscCoopCountFix {
+    u64 population = 0;
+    s32 old_value = 0;
+    s32 set_value = 0;
+};
+BbscCoopCountFix bbsc_coop_count_fix;
+
+void GuardBbscBossClearCoopCount() {
+    if (GetSessionState() != 3 || LocalPlayerType() != 0) {
+        return;
+    }
+    const u64 global = GetGlobalState();
+    const u64 population = ReadablePointer(global, 0x1700) ? ReadValue<u64>(global, 0x16F8) : 0;
+    if (!ReadablePointer(population, 0x20) ||
+        !HasMemoryAccess(population + 0x08, 4, MemoryProt::CpuWrite)) {
+        return;
+    }
+    const s32 coop = ReadValue<s32>(population, 0x08);
+    const s32 invaders = std::max(ReadValue<s32>(population, 0x0C), 0);
+    const s32 guests = GetBbscSessionMemberCount(global) - 1 - invaders;
+    if (coop > 0 || guests <= 0) {
+        return;
+    }
+    WriteValue<s32>(population, 0x08, guests);
+    bbsc_coop_count_fix = {population, coop, guests};
+    LOG_WARNING(Debug,
+                "BBSC boss clear: the game counts {} co-op hunter(s) with {} in the session - set to "
+                "{} for the boss clear (at 0 it runs the solo clear, which ends the session)",
+                coop, guests, guests);
+    BBSC_TIMELINE("BOSS", "boss clear: the game counts {} co-op hunter(s) with {} in the session - "
+                          "set to {} for the boss clear (at 0 it runs the solo clear, which ends the "
+                          "session)",
+                  coop, guests, guests);
+}
+
+void TickBbscCoopCountFix() {
+    if (bbsc_coop_count_fix.population == 0) {
+        return;
+    }
+    const BbscCoopCountFix fix = bbsc_coop_count_fix;
+    bbsc_coop_count_fix = {};
+    if (ReadablePointer(fix.population, 0x20) &&
+        HasMemoryAccess(fix.population + 0x08, 4, MemoryProt::CpuWrite) &&
+        ReadValue<s32>(fix.population, 0x08) == fix.set_value) {
+        WriteValue<s32>(fix.population, 0x08, fix.old_value);
+        LOG_INFO(Debug, "BBSC boss clear: co-op count put back to {}", fix.old_value);
+    }
+}
+
 void PS4_SYSV_ABI BbscBossClearHook(u64 tag, const GuestRegisterSnapshot* registers) {
     if (registers == nullptr || !BbscSessionAlive()) {
         return;
     }
     if (tag == 0) {
+        GuardBbscBossClearCoopCount();
         bbsc_boss_killed_ms = SteadyNowMs();
+        if (LocalPlayerType() == 1) {
+            bbsc_gate_watch_since_ms = bbsc_boss_killed_ms;
+        }
         ArmBbscDeathLockClear();
         LOG_INFO(Debug, "BBSC boss clear: BlockClear2_1 (player type {}), session kept{}",
+                 LocalPlayerType(),
+                 bbsc_spectate_active ? " - the spectating player respawns" : "");
+        BBSC_TIMELINE("BOSS", "boss clear: BlockClear2_1 (player type {}), session kept{}",
                  LocalPlayerType(),
                  bbsc_spectate_active ? " - the spectating player respawns" : "");
     } else if (tag == 1) {
@@ -7977,13 +8763,26 @@ void TickBbscBossUnlock() {
     set(0, 0xFCF, 0); // 4047
     set(0, 0xFA0, 0); // 4000
     set(0, 0xFFC, 0); // 4092
+    // 2026-10-20 (tester: "nothing works when you kill a boss" as a guest): the Lua load wait
+    // (Lua event object +0x8D, SetLoadWait) stops the player acting until a load (host Blank,
+    // TickBbscHostBlank); the guest skips the boss clear's load home, so it is lifted here too.
+    // HYPOTHESIS that the boss clear sets it - TickBbscGateWatch logs it either way.
+    bool load_wait = false;
+    if (const u64 lua_man = ReadValue<u64>(image_base + SprjLuaEventManPointerOffset, 0);
+        ReadablePointer(lua_man, 0x10)) {
+        const u64 lua = ReadValue<u64>(lua_man, 8);
+        if (ReadablePointer(lua, 0x90) && ReadValue<u8>(lua, 0x8D) != 0) {
+            WriteValue<u8>(lua, 0x8D, 0);
+            load_wait = true;
+        }
+    }
     static s64 logged_window = 0;
-    if (logged_window != bbsc_boss_unlock_until_ms || menu) {
+    if (logged_window != bbsc_boss_unlock_until_ms || menu || load_wait) {
         logged_window = bbsc_boss_unlock_until_ms;
         LOG_INFO(Debug,
                  "BBSC boss clear: guest unlocked (event flags 4047/4000/4092 cleared, mission-clear "
-                 "menu state {})",
-                 menu ? "cleared" : "was already clear");
+                 "menu state {}, Lua load wait {})",
+                 menu ? "cleared" : "was already clear", load_wait ? "lifted" : "was off");
     }
 }
 
@@ -8034,6 +8833,7 @@ void SuspendBbscPersistence(std::string_view why) {
     bbsc_persistence_restore_at_ms = SteadyNowMs() + BbscQuitTeardownMs;
     Core::Bbsc::SetPersistentSessionPatches(false);
     LOG_INFO(Debug, "BBSC persistence suspended for {} ms ({})", BbscQuitTeardownMs, why);
+    BBSC_TIMELINE("SESSION", "persistence suspended for {} ms ({})", BbscQuitTeardownMs, why);
 }
 
 void SuspendBbscPersistenceOnce(std::string_view why) {
@@ -8069,6 +8869,7 @@ void BbscLeaveItemUsed(std::string_view event) {
     const u64 player = GetLocalPlayerCharacter();
     if (player == 0 || GetCharacterHp(player) <= 0 || bbsc_spectate_active) {
         LOG_INFO(Debug, "BBSC leave: {} while dead - left to the game", event);
+        BBSC_TIMELINE("LEAVE", "leave: {} while dead - left to the game", event);
         return;
     }
     const bool flag = BbscEventFlag(4047);
@@ -8078,6 +8879,8 @@ void BbscLeaveItemUsed(std::string_view event) {
         reinterpret_cast<SetEventFlag>(image_base + 0x0132E5A0)(0, 4047, 0);
     }
     LOG_INFO(Debug, "BBSC leave: {} by the {} (event flag 4047 was {}) - the co-op ends", event,
+             state == 3 ? "host" : "guest", flag ? "set, cleared" : "clear");
+    BBSC_TIMELINE("LEAVE", "leave: {} by the {} (event flag 4047 was {}) - the co-op ends", event,
              state == 3 ? "host" : "guest", flag ? "set, cleared" : "clear");
     if (bbsc_persistence_restore_at_ms == 0) {
         SuspendBbscPersistence(state == 3 ? "Silencing Blank: host ends the co-op"
@@ -8139,6 +8942,78 @@ void PS4_SYSV_ABI BbscQuitToTitleHook(u64, const GuestRegisterSnapshot* register
 // it up. A player in its own world that is not a guest never needs it: BBSC takes it off again
 // (tick, once nothing is loading for a while) and, as the last stop, at the map choice itself when
 // +0x14F0 holds no map. The callers are logged so the next log names the handler.
+// ---- Back home where we were (2026-10-19) ---------------------------------------------------------
+// Request list (2026-10-18) and testers: leaving co-op should put a guest back where it was before
+// joining, not in an area it has not reached. The trip home (Silencing Blank, the host leaving, the
+// session ending, BBSC's own send-home) is a forced load from the "back home" block - map
+// global+0x14F0, position +0x1500, rotation +0x1510 (0x01332BC0 reads +0x14F0 while +0x1520 is set,
+// 0x01332C24). BBSC's join and follow warps (RequestBbscSessionWarp) fill that same block with the
+// HOST's spot, so a guest that had followed the host went "home" into the host's last area of its
+// own world (STRONGLY INDICATED from the code). Now the spot where we accepted the summon is kept
+// (Lua JoinSession_*, own world) and written back into the block at the map choice of the trip
+// home (0x01332C1B: forced warp on, no longer a guest, still in the other world).
+struct BbscHomeSpot {
+    u32 map = 0;
+    std::array<float, 4> position{};
+    std::array<float, 4> rotation{};
+    bool valid = false;
+    bool left = false; // we have been in another world since it was kept
+};
+BbscHomeSpot bbsc_home_spot; // game thread
+
+void KeepBbscHomeSpot() {
+    const u64 global = GetGlobalState();
+    if (image_base == 0 || !ReadablePointer(global, 0x1598) || ReadValue<u8>(global, 0x1592) == 0) {
+        return; // not in our own world: the spot kept when we left it stays
+    }
+    const u32 map = GetCurrentPackedMap();
+    const auto here = ReadCharacterTransform(GetLocalPlayerCharacter());
+    if (!IsUsablePackedMap(map) || !here.has_value()) {
+        return;
+    }
+    bbsc_home_spot = {map, {here->position[0], here->position[1], here->position[2], 1.0f},
+                      {0.0f, here->rotation[1], 0.0f, 0.0f}, true, false};
+    LOG_INFO(Debug, "BBSC return home: kept our spot {:#x} ({:.2f}, {:.2f}, {:.2f}) for the trip home",
+             map, here->position[0], here->position[1], here->position[2]);
+    BBSC_TIMELINE("HOME", "kept our spot in {} for the trip home", BbscAreaName(map));
+}
+
+// Game tick: forget the spot once we are home again after having been away.
+void TickBbscHomeSpot() {
+    if (!bbsc_home_spot.valid) {
+        return;
+    }
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x1598) || ReadValue<u8>(global, 0x08) != 0) {
+        return;
+    }
+    const bool own_world = ReadValue<u8>(global, 0x1592) != 0;
+    if (!own_world) {
+        bbsc_home_spot.left = true;
+    } else if (bbsc_home_spot.left && GetSessionState() != 4 && GetSessionState() != 6) {
+        bbsc_home_spot.valid = false;
+    }
+}
+
+bool PutBbscHomeSpot(u64 global) {
+    if (!bbsc_home_spot.valid || !bbsc_home_spot.left) {
+        return false;
+    }
+    const u32 before = ReadValue<u32>(global, 0x14F0);
+    if (!WriteValue(global, 0x14F0, bbsc_home_spot.map) ||
+        !WriteValue(global, 0x1500, bbsc_home_spot.position) ||
+        !WriteValue(global, 0x1510, bbsc_home_spot.rotation)) {
+        return false;
+    }
+    LOG_INFO(Debug, "BBSC return home: the trip home goes to our own spot {:#x} ({:.2f}, {:.2f}, "
+                    "{:.2f}), not {:#x} (the last warp's)",
+             bbsc_home_spot.map, bbsc_home_spot.position[0], bbsc_home_spot.position[1],
+             bbsc_home_spot.position[2], before);
+    BBSC_TIMELINE("HOME", "trip home goes back to where we joined from ({}), not to {}",
+                  BbscAreaName(bbsc_home_spot.map), BbscAreaName(before));
+    return true;
+}
+
 bool BbscOwnWorldNonGuest(u64 global) {
     const s32 state = GetSessionState();
     return state != 4 && state != 6 && ReadablePointer(global, 0x1598) &&
@@ -8166,6 +9041,9 @@ void GuardBbscStrayForcedWarp(const GuestRegisterSnapshot& registers) {
     const bool clear = BbscOwnWorldNonGuest(global);
     if (clear) {
         WriteValue<u8>(global, 0x1520, 0);
+    } else if (ReadValue<u8>(global, 0x1592) == 0 && GetSessionState() != 4 &&
+               GetSessionState() != 6) {
+        PutBbscHomeSpot(global); // the trip home from another world: back where we joined from
     }
     LOG_INFO(Debug,
              "BBSC forced warp at a map choice (session state {}, own world {}, forced map {:#x}, "
@@ -8234,9 +9112,50 @@ void TickBbscSessionEnd() {
     // CSMultiPlayMan::Stop - the session drops to state 0 and the "sent home" path above runs.
     // HYPOTHESIS until a log shows "BBSC invasion won".
     static s64 host_dead_since_ms = 0;
+    // An invader whose host left (2026-10-18, aau2 / javierfp99: the host warped out of the Hunter's
+    // Dream and the invader stayed there for good, "can't travel"). Vanilla ends an invasion at the
+    // host's stage change; BBSC's kept session did not. Once the host's character has been in our
+    // world and has been gone for BbscInvaderHostGoneMs (no load running), the invader leaves the
+    // way it does after a win. HYPOTHESIS until a log shows "BBSC invasion over".
+    constexpr s64 BbscInvaderHostGoneMs = 10'000;
+    static bool invader_saw_host = false;
+    static s64 host_gone_since_ms = 0;
+    if (session_state != 6) {
+        invader_saw_host = false;
+        host_gone_since_ms = 0;
+    }
     if (session_state == 6 && IsInvaderType(GetLocalCharacterType()) &&
         GetCharacterHp(GetLocalPlayerCharacter()) > 0) {
         const u64 host = FindRemoteHostCharacter();
+        const bool loading_now =
+            !ReadablePointer(end_global, 0x10) || ReadValue<u8>(end_global, 0x08) != 0;
+        if (host != 0) {
+            invader_saw_host = true;
+            host_gone_since_ms = 0;
+        } else if (invader_saw_host && !loading_now) {
+            if (host_gone_since_ms == 0) {
+                host_gone_since_ms = now;
+            } else if (now - host_gone_since_ms >= BbscInvaderHostGoneMs) {
+                host_gone_since_ms = 0;
+                invader_saw_host = false;
+                SuspendBbscPersistenceOnce("invasion over: the host left the area");
+                const u64 session_manager =
+                    ReadValue<u64>(image_base + MatchingStatePointerOffset, 0);
+                if (ReadablePointer(session_manager, 0x128)) {
+                    using Stop = u8 PS4_SYSV_ABI (*)(u64 session_manager);
+                    const u8 stopped =
+                        reinterpret_cast<Stop>(image_base + MultiPlayStopRequestOffset)(
+                            session_manager);
+                    LOG_INFO(Debug,
+                             "BBSC invasion over: the host has been gone from our world for {} s - "
+                             "leaving (Stop -> {})",
+                             BbscInvaderHostGoneMs / 1000, stopped);
+                    BBSC_TIMELINE("INVASION", "invasion over: the host has been gone from our world for {} s - "
+                             "leaving (Stop -> {})",
+                             BbscInvaderHostGoneMs / 1000, stopped);
+                }
+            }
+        }
         if (host != 0 && GetCharacterHp(host) <= 0) {
             if (host_dead_since_ms == 0) {
                 host_dead_since_ms = now;
@@ -8251,6 +9170,8 @@ void TickBbscSessionEnd() {
                         reinterpret_cast<Stop>(image_base + MultiPlayStopRequestOffset)(
                             session_manager);
                     LOG_INFO(Debug, "BBSC invasion won: the host is dead - leaving (Stop -> {})",
+                             stopped);
+                    BBSC_TIMELINE("INVASION", "invasion won: the host is dead - leaving (Stop -> {})",
                              stopped);
                 }
             }
@@ -8349,7 +9270,7 @@ bool bbsc_release_leave_locks = false;
 // The leave scripts (OnLeavePlayer, OnLeaveMenu_Yes, OnRoomDisappeared, OnP2PTimeOut) set event
 // flag 4047 ("leaving") and SetLoadWait (Lua event object +0x8D) right before they schedule this
 // send-home step, and the load home normally clears both. Where BBSC skips the step, nothing clears
-// them. Test 2026-10-08 (host, 3 guests): when two guests left, the host's game took one
+// them. Test 2026-10-08 (host hardwater, 3 guests): when two guests left, the host's game took one
 // leave for its own (OnLeavePlayer: leaver == local id) and ran the step on the host at 22:36:42;
 // skipped, the locks stayed - and nobody got the boss fog prompt after that ("no prompt to enter
 // the fog", host and guest). Same lock as the host's Blank (mod 36).
@@ -8377,6 +9298,9 @@ void PS4_SYSV_ABI BbscSendPhantomHomeHook(u64, const GuestRegisterSnapshot* regi
     const u64 global = GetGlobalState();
     if (!BbscOwnWorldNonGuest(global)) {
         LOG_INFO(Debug, "BBSC leave: the game's send-home step runs (session state {}, own world {})",
+                 GetSessionState(),
+                 ReadablePointer(global, 0x1598) ? ReadValue<u8>(global, 0x1592) : 0xFF);
+        BBSC_TIMELINE("LEAVE", "leave: the game's send-home step runs (session state {}, own world {})",
                  GetSessionState(),
                  ReadablePointer(global, 0x1598) ? ReadValue<u8>(global, 0x1592) : 0xFF);
         return;
@@ -8409,7 +9333,7 @@ void TickBbscLeaveLocks() {
     }
 }
 
-// Safety net (test 2026-10-12 5p, host 23:13:13-19): the send-home skip released the locks,
+// Safety net (test 2026-10-12 5p, abood host 23:13:13-19): the send-home skip released the locks,
 // then OnRoomTimeOut (caller 0x1789F6B) set flag 4047 + the load wait again and no send-home step
 // followed -> the host stood in its Dream with every menu/bell locked (soft lock). Within 60 s after
 // a session ended, while we are home, alive and not loading: locks held 8 s -> released.
@@ -8466,7 +9390,7 @@ void TickBbscStuckLeaveLocks() {
 }
 
 // A guest left in someone else's world after its session ended (test 2026-10-08: the host's game
-// closed at 22:38:39; a tester's game saw the room disappear and stayed in the host's world - no load
+// closed at 22:38:39; abood's game saw the room disappear and stayed in the host's world - no load
 // home, nothing to do there). After BbscStrandedMs in session state 0 outside our own world with
 // no load running, BBSC sends us home the way the game does it after a boss (BlockClear2_3,
 // 0x01385930): event state 2, forced warp global+0x1520 = 1, home respawn point 0x01332BC0(-1),
@@ -8506,6 +9430,9 @@ void TickBbscStrandedGuest() {
     LOG_WARNING(Debug, "BBSC leave: still in another player's world {} s after the session ended - "
                        "BBSC sends us home",
                 BbscStrandedMs / 1000);
+    BBSC_TIMELINE("LEAVE", "leave: still in another player's world {} s after the session ended - "
+                       "BBSC sends us home",
+                BbscStrandedMs / 1000);
     WriteValue<s32>(event_state, 0, 2);
     WriteValue<u8>(global, 0x1520, 1);
     using HomePoint = void PS4_SYSV_ABI (*)(u64 lua, s32 point);
@@ -8523,6 +9450,97 @@ void TickBbscStrandedGuest() {
 constexpr u64 ShopListBuildOffset = 0x01C76870;
 constexpr u64 ShopLineupGetOffset = 0x01F27450;
 constexpr u64 ShopLineupUnlockedOffset = 0x01F27570;
+constexpr u64 ShopLineupGetResultOffset = 0x01F2755E;
+constexpr u64 ShopListGetReturnOffset = 0x01C769BF;
+constexpr u64 ShopItemPriceGetReturnOffset = 0x01C6176E;
+
+// The regular Bath Messenger asks for one broad lineup range in 100000..149999. Its exact block
+// varies with the active shop/progression state (seen in game: 100000..109999 and 130000..139900).
+// The final four IDs of those broad blocks are absent from the shipped ShopLineupParam (each real
+// block ends at x01146), so they are safe BBSC-owned slots: no vanilla merchandise is replaced.
+// The getter-result hook below reads the active list's end from its caller frame and supplies rows
+// only for those final four IDs at the shop-list builder's exact call site. Other users of
+// ShopLineupParam still see the IDs as absent.
+struct BbscShopLineupRow {
+    s32 equip_id;
+    s32 value;
+    s32 material_id;
+    s32 event_flag;
+    s32 unlock_flag;
+    s16 sell_quantity;
+    u8 shop_type;
+    u8 equip_type;
+    s16 insight_value;
+    std::array<u8, 6> padding{};
+};
+static_assert(sizeof(BbscShopLineupRow) == 0x20);
+static_assert(offsetof(BbscShopLineupRow, sell_quantity) == 0x14);
+static_assert(offsetof(BbscShopLineupRow, equip_type) == 0x17);
+
+constexpr std::array<BbscShopLineupRow, 4> BbscShopRows{{
+    {4016, 0, -1, -1, -1, -1, 0, 3, -1},  // Hunt Bell
+    {4121, 0, -1, -1, -1, -1, 0, 3, -1},  // Kin Bell
+    {11201, 0, -1, -1, -1, -1, 0, 3, -1}, // Bloodlust Bell
+    {4313, 0, -1, -1, -1, -1, 0, 3, -1},  // Duel Bell
+}};
+
+// The list builder looks each lineup row up once to decide whether to include it, then the item
+// constructor at 0x01C61590 looks the same row up again to copy its explicit price. Originally the
+// injector answered only the first call. The second call therefore saw a missing row and the shop
+// UI fell back to a generated price (40,000 / 50,000 / 100,000 echoes in the reported save) even
+// though BbscShopLineupRow::value is zero. Remember the four IDs selected by the active Bath
+// Messenger range and expose them at that one price-construction call site too. No other
+// ShopLineupParam user can see these synthetic rows.
+std::array<s32, BbscShopRows.size()> bbsc_shop_row_ids{-1, -1, -1, -1}; // game thread only
+bool BbscKitParamsReady();
+
+void PS4_SYSV_ABI BbscShopLineupResultHook(u64, const GuestRegisterSnapshot* registers) {
+    // These IDs are unused vanilla goods until PrepareBbscDuelBell has copied and corrected their
+    // EquipParamGoods rows.  Exposing the synthetic shop rows before then lets the shop cache the
+    // original key/unused definitions, after which the bells may stay invisible or appear in the
+    // wrong inventory tab for the rest of the run.  Once ready, reopening the Bath Messenger builds
+    // the list again and all four rows are safe to expose.
+    if (!BbscKitParamsReady() || registers == nullptr || image_base == 0 ||
+        !ReadablePointer(registers->rbp + 8, sizeof(u64))) {
+        return;
+    }
+    const u64 return_address = ReadValue<u64>(registers->rbp, 8);
+    const s32 id = static_cast<s32>(registers->r12);
+    if (return_address == image_base + ShopItemPriceGetReturnOffset) {
+        const auto found = std::find(bbsc_shop_row_ids.begin(), bbsc_shop_row_ids.end(), id);
+        if (found == bbsc_shop_row_ids.end()) {
+            return;
+        }
+        auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
+        changed->rcx = reinterpret_cast<u64>(
+            &BbscShopRows[static_cast<size_t>(found - bbsc_shop_row_ids.begin())]);
+        return;
+    }
+    if (return_address != image_base + ShopListGetReturnOffset) {
+        return;
+    }
+    const u64 caller_rbp = ReadValue<u64>(registers->rbp, 0);
+    if (caller_rbp < 0x10000 || !ReadablePointer(caller_rbp - 0x1AC, sizeof(s32))) {
+        return;
+    }
+    const s32 last = ReadValue<s32>(caller_rbp - 0x1AC, 0);
+    const s32 first_injected = last - static_cast<s32>(BbscShopRows.size()) + 1;
+    // The Bath Messengers can initially ask for their small always-available block (2000..2019)
+    // instead of the broad progression block.  Supplying the four unused tail rows there as well
+    // makes the recovery shop available to a brand-new character and to saves whose broad tab has
+    // not been unlocked yet.  Both ranges end in absent rows, so vanilla stock remains untouched.
+    const bool starter_bath_range = last == 2019;
+    const bool regular_bath_range = last >= 109900 && last <= 149999;
+    if ((!starter_bath_range && !regular_bath_range) || id < first_injected || id > last) {
+        return;
+    }
+    // The copied instructions immediately after this callback write RCX into RowRef::row. Hooks
+    // restore the (possibly changed) snapshot before running those instructions.
+    auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
+    const size_t index = static_cast<size_t>(id - first_injected);
+    bbsc_shop_row_ids[index] = id;
+    changed->rcx = reinterpret_cast<u64>(&BbscShopRows[index]);
+}
 
 void PS4_SYSV_ABI BbscShopListHook(u64, const GuestRegisterSnapshot* registers) {
     if (registers == nullptr || image_base == 0) {
@@ -8568,10 +9586,14 @@ void PS4_SYSV_ABI BbscShopListHook(u64, const GuestRegisterSnapshot* registers) 
     const u64 global = GetGlobalState();
     LOG_INFO(Debug,
              "BBSC shop: rows {}-{} - {} rows, {} for sale, {} of them unlocked by a flag (session "
-             "state {}, own world {}, Dream state held {:#x}); unlocked row:flag{}",
+             "state {}, own world {}, Dream state held {:#x}); unlocked row:flag{}{}",
              first, last, rows, open, gated_open, GetSessionState(),
              ReadablePointer(global, 0x1598) ? ReadValue<u8>(global, 0x1592) : 0xFF,
-             bbsc_dream_own.held, shown.empty() ? std::string(" none") : shown);
+             bbsc_dream_own.held, shown.empty() ? std::string(" none") : shown,
+             (last == 2019 ||
+              (first >= 100000 && first <= 149999 && last >= 109900 && last <= 149999))
+                 ? "; BBSC adds 4 free bells at the end of this range"
+                 : "");
 }
 
 // Kin Bell trace (report 2026-10-12: "can't use Kin in the Dream"). In the item check 0x0157F200
@@ -8605,17 +9627,38 @@ void InstallBbscQuitHook() {
         return;
     }
     {
+        // The seamless bell patch rewrites these bytes (B1 01 E9 ..: 205/225 always usable); the
+        // trace only applies to vanilla bytes. The kit bells (4016/4121/11201) never reach here.
         static constexpr std::array<u8, 5> BellCheck{0x88, 0xC3, 0x4C, 0x89, 0xF7};
-        if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + BellCheckTraceOffset),
+        if (std::memcmp(reinterpret_cast<const void*>(image_base + BellCheckTraceOffset),
+                        BellCheck.data(), BellCheck.size()) != 0) {
+            LOG_INFO(Debug, "BBSC bell check: {:#x} already patched (seamless bells) - no trace",
+                     BellCheckTraceOffset);
+        } else if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + BellCheckTraceOffset),
                                   std::span<const u8>{BellCheck}, 0, BbscBellCheckHook)) {
             LOG_ERROR(Debug, "BBSC bell check: failed to hook {:#x}", BellCheckTraceOffset);
         }
     }
     {
         static constexpr std::array<u8, 6> ShopPrologue{0x55, 0x48, 0x89, 0xE5, 0x41, 0x57};
-        if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + ShopListBuildOffset),
-                                  std::span<const u8>{ShopPrologue}, 0, BbscShopListHook)) {
+        static constexpr std::array<u8, 7> ShopResult{0x45, 0x89, 0x26, 0x49,
+                                                      0x89, 0x4E, 0x08};
+        const bool list_ok =
+            InstallGuestCodeHook(reinterpret_cast<void*>(image_base + ShopListBuildOffset),
+                                 std::span<const u8>{ShopPrologue}, 0, BbscShopListHook);
+        const bool rows_ok =
+            InstallGuestCodeHook(reinterpret_cast<void*>(image_base + ShopLineupGetResultOffset),
+                                 std::span<const u8>{ShopResult}, 0, BbscShopLineupResultHook);
+        if (!list_ok) {
             LOG_ERROR(Debug, "BBSC shop: failed to hook the shop list at {:#x}", ShopListBuildOffset);
+        }
+        if (!rows_ok) {
+            LOG_ERROR(Debug, "BBSC shop: failed to inject free bell rows at {:#x}",
+                      ShopLineupGetResultOffset);
+        } else {
+            LOG_INFO(Debug,
+                     "BBSC shop: regular Bath Messenger adds Hunt, Kin, Bloodlust and Duel Bells "
+                     "for free (starter and regular Bath ranges; vanilla stock unchanged)");
         }
     }
     static constexpr std::array<u8, 6> Prologue{0x55, 0x48, 0x89, 0xE5, 0x53, 0x50};
@@ -9215,14 +10258,19 @@ s64 BbscEventIdOf(u64 instance) {
 // gives the guest the lot the event would have given, as the event chooses it: the first-kill lot,
 // or the repeat lot when the guest's own flag says the item was already taken (1003[01] skip).
 // Table generated from every event file: {event, flag (0 none), first lot, repeat lot (0 none)}.
+// 2026-10-20 (tester: no drop for the guest after Micolash): two events award their lot BEFORE the
+// host-type wait (Micolash 12601850, m22's 12201800), so the first generator missed them; a new scan
+// (a scan of every event file for: multiplayer jump, award on the host path, type 1 wait after label
+// 1) finds all 19 - the guest's copy reaches the type 1 wait the same way, so the hook queues them.
 struct BbscBossReward {
     s64 event;
     u32 flag;
     s32 first_lot;
     s32 repeat_lot;
 };
-constexpr std::array<BbscBossReward, 17> BbscBossRewards{{
+constexpr std::array<BbscBossReward, 19> BbscBossRewards{{
     {12101800, 6642, 15000, 15005},       // m21_00
+    {12201800, 0, 21002950, 0},           // m22_00 (added 2026-10-20)
     {12301800, 0, 80000000, 0},           // m23_00
     {12301700, 6644, 50800000, 50800005}, // m23_00
     {12401800, 0, 50000001, 0},           // m24_00
@@ -9230,7 +10278,8 @@ constexpr std::array<BbscBossReward, 17> BbscBossRewards{{
     {12411800, 0, 31000, 0},              // m24_01
     {12421800, 0, 80000300, 0},           // m24_02
     {12421700, 6332, 25700000, 25700005}, // m24_02
-    {12601800, 0, 55100000, 0},           // m26_00
+    {12601800, 0, 55100000, 0},           // m26_00 (Mergo's Wet Nurse: One Third of Umbilical Cord)
+    {12601850, 0, 21000, 0},              // m26_00 (Micolash: Mensis Cage; added 2026-10-20)
     {12701800, 6321, 2700990, 2700995},   // m27_00
     {12801800, 0, 50700000, 0},           // m28_00
     {13201800, 0, 51001900, 0},           // m32_00
@@ -9245,6 +10294,7 @@ constexpr u64 AwardItemLotOffset = 0x017DDC50; // (item man, lot, 0) as the 2003
 std::mutex bbsc_boss_reward_mutex;
 std::vector<s64> bbsc_boss_reward_queue; // events whose reward is due (filled in the hook)
 std::vector<s64> bbsc_boss_reward_given; // events already rewarded in this game run
+std::vector<u32> bbsc_boss_goods_check;   // boss goods given in a session, checked once home
 
 void NoteBbscBossRewardEvent(s64 event) {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_GUEST_ITEMS");
@@ -9257,6 +10307,9 @@ void NoteBbscBossRewardEvent(s64 event) {
         std::ranges::find(bbsc_boss_reward_queue, event) == bbsc_boss_reward_queue.end()) {
         bbsc_boss_reward_queue.push_back(event);
         LOG_INFO(Debug, "BBSC boss drop: event {} reached its player-type wait on the guest - "
+                        "reward queued",
+                 event);
+        BBSC_TIMELINE("BOSS", "boss drop: event {} reached its player-type wait on the guest - "
                         "reward queued",
                  event);
     }
@@ -9274,13 +10327,14 @@ struct BbscBossGoodsLot {
     s32 count;
     u32 flag;
 };
-constexpr std::array<BbscBossGoodsLot, 18> BbscBossGoodsLots{{
+constexpr std::array<BbscBossGoodsLot, 19> BbscBossGoodsLots{{
     {15000, 4113, 1, 0},           {15005, 1400, 1, 0},     {80000000, 6109, 1, 5000},
     {50800000, 4118, 1, 0},        {50800005, 1400, 1, 0},  {50000001, 4001, 1, 0},
     {50000010, 4114, 1, 0},        {31000, 4000, 1, 0},     {80000300, 6539, 1, 5009},
     {25700005, 1500, 1, 0},        {55100000, 4323, 1, 50000305}, {2700995, 1500, 1, 52700955},
     {50700000, 7131, 3, 0},        {51001900, 1591, 1, 0},  {80000200, 6429, 1, 5006},
     {3401802, 1500, 1, 0},         {3401852, 1500, 1, 0},   {3501850, 4020, 1, 53501850},
+    {21002950, 7150, 4, 0}, // m22_00 boss (2026-10-20)
 }};
 u64 BbscCarriedInventory();                   // see "Kit"
 bool BbscInventoryHas(u64 inventory, u32 code); // see "Kit"
@@ -9310,7 +10364,52 @@ bool GiveBbscBossGoods(const BbscBossGoodsLot& lot) {
     LOG_INFO(Debug, "BBSC boss drop: goods {} x{} put into the carried items (fits {}, slot {}, there "
                     "now: {}, get flag {})",
              lot.goods, lot.count, fits, slot, there, lot.flag);
+    if (there) {
+        std::scoped_lock lock{bbsc_boss_reward_mutex};
+        bbsc_boss_goods_check.push_back(lot.goods);
+    }
     return there;
+}
+
+// 2026-10-20 (test5: "the guest didn't get the Sword Hunter Badge", while the log says it was put in
+// at 19:07:07, 8 s before the session ended): once home after the session, check the boss goods
+// given in it are still carried, so the next log says whether the trip home took them.
+void TickBbscBossGoodsCheck() {
+    static s64 home_since_ms = 0;
+    std::vector<u32> goods;
+    {
+        std::scoped_lock lock{bbsc_boss_reward_mutex};
+        if (bbsc_boss_goods_check.empty()) {
+            home_since_ms = 0;
+            return;
+        }
+    }
+    const u64 global = GetGlobalState();
+    const s64 now = SteadyNowMs();
+    if (GetSessionState() != 0 || !ReadablePointer(global, 0x1593) ||
+        ReadValue<u8>(global, 0x08) != 0 || ReadValue<u8>(global, 0x1592) == 0 ||
+        GetCharacterHp(GetLocalPlayerCharacter()) <= 0) {
+        home_since_ms = 0;
+        return;
+    }
+    if (home_since_ms == 0) {
+        home_since_ms = now;
+    }
+    if (now - home_since_ms < 5'000) {
+        return;
+    }
+    {
+        std::scoped_lock lock{bbsc_boss_reward_mutex};
+        goods.swap(bbsc_boss_goods_check);
+    }
+    const u64 carried = BbscCarriedInventory();
+    for (const u32 id : goods) {
+        const bool kept = carried != 0 && BbscInventoryHas(carried, 0x40000000u | id);
+        LOG_INFO(Debug, "BBSC boss drop: goods {} after the trip home - {}", id,
+                 kept ? "still in the carried items" : "NOT in the carried items any more");
+        BBSC_TIMELINE("BOSS", "boss drop: goods {} after the trip home - {}", id,
+                      kept ? "still in the carried items" : "NOT in the carried items any more");
+    }
 }
 
 // Game tick: award the queued boss lots, once each.
@@ -9328,6 +10427,27 @@ void TickBbscBossRewards() {
             ReadValue<u64>(image_base + EventFlagManPointerOffset, 0) == 0) {
             continue;
         }
+        // Only for a fight the guest was in (2026-10-18, valriv55: the Blood-starved Beast's reward
+        // came while the guest stood in another area - the host's world state had killed the
+        // guest's copy of the boss, see "Every area"). The event's block is 1AAB.... -> mAA_0B; the
+        // test is on the area, so an arena on a block border still counts.
+        const u32 boss_map = (static_cast<u32>((event / 100'000) % 100) << 24) |
+                             (static_cast<u32>((event / 10'000) % 10) << 16);
+        const u32 here = GetCurrentPackedMap();
+        if (BbscMapArea(here) != BbscMapArea(boss_map)) {
+            {
+                std::scoped_lock lock{bbsc_boss_reward_mutex};
+                bbsc_boss_reward_given.push_back(event);
+            }
+            LOG_WARNING(Debug,
+                        "BBSC boss drop: event {} - not given: the boss is in map {:#x}, we are in "
+                        "{:#x} (our copy of a boss we did not fight died - the host's world state)",
+                        event, boss_map, here);
+            BBSC_TIMELINE("BOSS", "boss drop: event {} - not given: the boss is in map {:#x}, we are in "
+                        "{:#x} (our copy of a boss we did not fight died - the host's world state)",
+                        event, boss_map, here);
+            continue;
+        }
         const bool taken = it->flag != 0 && BbscEventFlag(it->flag);
         const s32 lot = taken ? it->repeat_lot : it->first_lot;
         {
@@ -9338,6 +10458,9 @@ void TickBbscBossRewards() {
             LOG_INFO(Debug, "BBSC boss drop: event {} - the guest already has it (flag {}), nothing "
                             "to give",
                      event, it->flag);
+            BBSC_TIMELINE("BOSS", "boss drop: event {} - the guest already has it (flag {}), nothing "
+                            "to give",
+                     event, it->flag);
             continue;
         }
         const auto goods = std::ranges::find_if(BbscBossGoodsLots,
@@ -9346,11 +10469,15 @@ void TickBbscBossRewards() {
             BbscAnnounce(u"Boss reward added to your items.", "boss reward");
             LOG_INFO(Debug, "BBSC boss drop: event {} - item lot {} given to the guest directly ({})",
                      event, lot, taken ? "repeat lot, flag already set" : "first kill");
+            BBSC_TIMELINE("BOSS", "boss drop: event {} - item lot {} given to the guest directly ({})",
+                     event, lot, taken ? "repeat lot, flag already set" : "first kill");
             continue;
         }
         using AwardItemLot = void PS4_SYSV_ABI (*)(u64 item_man, s32 lot, u32 forced);
         reinterpret_cast<AwardItemLot>(image_base + AwardItemLotOffset)(item_man, lot, 0);
         LOG_INFO(Debug, "BBSC boss drop: event {} - item lot {} given to the guest ({})", event, lot,
+                 taken ? "repeat lot, flag already set" : "first kill");
+        BBSC_TIMELINE("BOSS", "boss drop: event {} - item lot {} given to the guest ({})", event, lot,
                  taken ? "repeat lot, flag already set" : "first kill");
     }
 }
@@ -9397,12 +10524,15 @@ void TickBbscSendBacklog() {
                     "BBSC send backlog: {} reliable packets waiting for a member that does not "
                     "answer (session state {}; vanilla ends the session at 1001, BBSC at 30000)",
                     total, GetSessionState());
+        BBSC_TIMELINE("NET", "send backlog: {} reliable packets waiting for a member that does not "
+                    "answer (session state {}; vanilla ends the session at 1001, BBSC at 30000)",
+                    total, GetSessionState());
     }
 }
 
 
 // ---- Starter weapons in the Dream, both directions (2026-10-08) ----------------------------------
-// Test 2026-10-08 (host, cls_amg guest, both on mod 35): "if I take the weapons in the Dream
+// Test 2026-10-08 (abood host, cls_amg guest, both on mod 35): "if I take the weapons in the Dream
 // they disappear for him, and if he takes them they disappear for me". The messengers' free shop
 // (c1_84, ShopLineupParam 2000-2011) counts its sales in flags 72101000-72101002 (trick weapons)
 // and 72101010/72101011 (firearms), group 72101. BBSC no longer copies the host's group into the
@@ -9506,6 +10636,115 @@ void NoteBbscGuestEnemyDeath(u64 dead) {
     }
 }
 
+// 2026-10-20 (user, test of 2026-10-19: "the items were piling up so they couldn't press OK"): the
+// award 0x017DDC50 shows the game's item popup, and a guest's popup is never closed (seen with the
+// boss lots 2026-10-11, the reason those go straight into the items) - every enemy drop added one.
+// STRONGLY INDICATED. BBSC now rolls the lot itself, as the award does without Discovery: the game's
+// own ItemLotParam row (BbscGameParamTable), one entry picked by lotItemBasePoint01-08 (an entry with
+// no item is "nothing"), a one-time drop (get flag on) is not given twice. Goods (category 4) go
+// straight into the carried items - no popup. Blood gems (8), weapons (0), attire (1) and category 15
+// would need the award and its popup, so a guest does not get them for now (logged, timeline ITEMS).
+u64 BbscGameParamTable(std::string_view type);       // see "The BBSC hunter's kit"
+u64 BbscParamRow(u64 table, u32 id, size_t size);   // see "The BBSC hunter's kit"
+constexpr size_t ItemLotRowSize = 0x94;
+
+// Puts goods into the carried items as the kit and the boss goods do; the slot, or -1.
+s32 AddBbscCarriedGoods(u32 goods, s32 count) {
+    const u64 carried = BbscCarriedInventory();
+    if (carried == 0 || count <= 0) {
+        return -1;
+    }
+    using Fits = s32 PS4_SYSV_ABI (*)(u64 inventory, const u32* code, s32 count);
+    using Add = s32 PS4_SYSV_ABI (*)(u64 inventory, const u32* key, s32 count);
+    alignas(16) static u32 code = 0;
+    alignas(16) static u32 key = 0;
+    code = 0x40000000u | goods;
+    key = 0x80000000u | (3u << 28) | goods;
+    const s32 fits = reinterpret_cast<Fits>(image_base + 0x014D9A80)(carried, &code, count);
+    if (fits <= 0) {
+        return -1;
+    }
+    const s32 slot =
+        reinterpret_cast<Add>(image_base + 0x014DA0A0)(carried, &key, std::min(fits, count));
+    return slot >= 0 && BbscInventoryHas(carried, code) ? slot : -1;
+}
+
+void GiveBbscGuestDrop(s32 lot, u32 name) {
+    static std::mt19937 rng{static_cast<u32>(SteadyNowMs())};
+    const u64 table = BbscGameParamTable("ITEMLOT_PARAM_ST");
+    const u64 row = table != 0 ? BbscParamRow(table, static_cast<u32>(lot), ItemLotRowSize) : 0;
+    if (row == 0) {
+        LOG_WARNING(Debug, "BBSC guest drop: enemy (name id {}) died - item lot {} not found in the "
+                           "game's table, nothing given",
+                    name, lot);
+        return;
+    }
+    u32 total = 0;
+    for (u32 i = 0; i < 8; ++i) {
+        total += ReadValue<u16>(row, 0x40 + i * 2);
+    }
+    if (total == 0) {
+        return;
+    }
+    u32 roll = std::uniform_int_distribution<u32>{0, total - 1}(rng);
+    u32 pick = 0;
+    for (; pick < 8; ++pick) {
+        const u32 weight = ReadValue<u16>(row, 0x40 + pick * 2);
+        if (roll < weight) {
+            break;
+        }
+        roll -= weight;
+    }
+    if (pick >= 8) {
+        return;
+    }
+    const s32 item = ReadValue<s32>(row, pick * 4);
+    const u32 category = ReadValue<u32>(row, 0x20 + pick * 4);
+    const s32 count = std::max<s32>(ReadValue<u8>(row, 0x8A + pick), 1);
+    if (item <= 0 || category == 0xFFFFFFFFu) {
+        return; // the roll was "nothing", like most kills
+    }
+    const s32 entry_flag = ReadValue<s32>(row, 0x60 + pick * 4);
+    const s32 lot_flag = ReadValue<s32>(row, 0x80);
+    const s32 flag = entry_flag > 0 ? entry_flag : lot_flag;
+    if (flag > 0 && BbscEventFlag(static_cast<u32>(flag))) {
+        LOG_INFO(Debug, "BBSC guest drop: lot {} entry {} is a one-time drop already taken (flag {})",
+                 lot, pick + 1, flag);
+        return;
+    }
+    if (category != 4) {
+        static const std::array<std::string_view, 5> kinds{"weapon", "attire", "", "", "goods"};
+        const std::string_view kind = category == 8    ? "blood gem"
+                                      : category == 15 ? "category 15 item"
+                                      : category < kinds.size() && !kinds[category].empty()
+                                          ? kinds[category]
+                                          : "item";
+        LOG_INFO(Debug, "BBSC guest drop: enemy (name id {}) dropped a {} (id {}, lot {}) - not given "
+                        "to a guest (the game's item popup would stay on screen)",
+                 name, kind, item, lot);
+        BBSC_TIMELINE("ITEMS", "guest drop: a {} (id {}, lot {}) not given - the game's item popup "
+                               "would stay on screen",
+                      kind, item, lot);
+        return;
+    }
+    const s32 slot = AddBbscCarriedGoods(static_cast<u32>(item), count);
+    if (slot >= 0 && flag > 0) {
+        using SetEventFlag = u64 PS4_SYSV_ABI (*)(u64 unused, u32 flag, u8 value);
+        reinterpret_cast<SetEventFlag>(image_base + 0x0132E5A0)(0, static_cast<u32>(flag), 1);
+    }
+    LOG_INFO(Debug, "BBSC guest drop: enemy (name id {}) died - goods {} x{} from lot {} {}", name,
+             item, count, lot,
+             slot >= 0 ? fmt::format("put into the carried items (slot {})", slot)
+                       : std::string{"did not fit (carried items full)"});
+    BBSC_TIMELINE("ITEMS", "guest drop: goods {} x{} from lot {} {}", item, count, lot,
+                  slot >= 0 ? "added" : "did not fit");
+    static s64 notice_ms = 0;
+    if (slot >= 0 && SteadyNowMs() - notice_ms > 15'000) {
+        notice_ms = SteadyNowMs();
+        BbscAnnounce(u"An item was added to your items.", "enemy drop");
+    }
+}
+
 void TickBbscGuestDrops() {
     std::vector<std::pair<s32, u32>> due;
     {
@@ -9515,19 +10754,13 @@ void TickBbscGuestDrops() {
     if (due.empty()) {
         return;
     }
-    const u64 item_man = ReadValue<u64>(image_base + ItemManPointerOffset, 0);
     const u64 global = GetGlobalState();
-    if (!ReadablePointer(item_man, 0x10) || !BbscGuestInHostWorld() ||
-        !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0 ||
-        GetCharacterHp(GetLocalPlayerCharacter()) <= 0) {
-        return; // dropped: no item manager, no longer a guest, loading or dead
+    if (!BbscGuestInHostWorld() || !ReadablePointer(global, 0x10) ||
+        ReadValue<u8>(global, 0x08) != 0 || GetCharacterHp(GetLocalPlayerCharacter()) <= 0) {
+        return; // dropped: no longer a guest, loading or dead
     }
-    using AwardItemLot = void PS4_SYSV_ABI (*)(u64 item_man, s32 lot, u32 forced);
     for (const auto& [lot, name] : due) {
-        reinterpret_cast<AwardItemLot>(image_base + AwardItemLotOffset)(item_man, lot, 0);
-        LOG_INFO(Debug, "BBSC guest drop: enemy (name id {}) died - the guest's own roll of item "
-                        "lot {}",
-                 name, lot);
+        GiveBbscGuestDrop(lot, name);
     }
 }
 
@@ -9556,7 +10789,12 @@ constexpr std::array<u32, 49> BbscProgressFlags{
     3600, 5910, 5911, 5912, 5913, 5914, 9180, 9450, 9451, 9452, 9453, 9454, 9455,
     9456, 9457, 9458, 9459, 9460, 9461, 9462, 9463, 9464, 9465,
 };
-constexpr std::array<u32, 5> BbscProgressFlagsMore{9466, 9467, 9468, 9469, 9471};
+// The time of night (2026-10-19, user: "connect to someone ahead of you: you get the progress but
+// not the time"). CONFIRMED statically: the game reads 9800/9801/9802 as one 3-bit value (0x014EBB90
+// and 8 more readers, 0x013CFD80(man, 9800, 3)): 9800 = evening, +9801 = night, +9802 = blood moon -
+// they only ever add up, so OR-ing the host's into ours moves our night forward and never back.
+// Every map's lighting event branches on them (e.g. m24_00 12400300); no event sets them.
+constexpr std::array<u32, 8> BbscProgressFlagsMore{9466, 9467, 9468, 9469, 9471, 9800, 9801, 9802};
 constexpr s64 BbscProgressSendMs = 5'000;
 constexpr s64 BbscProgressSettleMs = 4'000;    // home, loaded and alive this long before merging
 constexpr s64 BbscProgressHomeLimitMs = 180'000; // a session that ended longer ago is dropped
@@ -9631,11 +10869,13 @@ void ForEachProgressFlag(const std::array<u32, N>& list, auto&& fn) {
     }
 }
 
-// Host: tell the guests which boss flags we have on.
+// Host: tell the guests which boss flags we have on - and our time of night. Sent whatever our own
+// Shared Progress switch says (2026-10-19): a guest needs our night to see our world as it is, and
+// whether it merges our progress at home is its own switch.
 void TickBbscProgressBroadcast() {
     static s64 last_ms = 0;
     const s64 now = SteadyNowMs();
-    if (!BbscSharedProgressEnabled() || image_base == 0 || now - last_ms < BbscProgressSendMs ||
+    if (image_base == 0 || now - last_ms < BbscProgressSendMs ||
         GetSessionState() != 3 || ReadValue<u64>(image_base + EventFlagManPointerOffset, 0) == 0) {
         return;
     }
@@ -9766,6 +11006,9 @@ bool LoadBbscPendingProgress(const BbscSaveSlot& slot) {
     LOG_INFO(Debug, "BBSC shared progress: {} boss flag(s) and {} world group(s) from the file of "
                     "user {} slot {} (an earlier session that did not get home)",
              flags.size(), groups.size(), slot.user, slot.slot);
+    BBSC_TIMELINE("WORLD", "shared progress: {} boss flag(s) and {} world group(s) from the file of "
+                    "user {} slot {} (an earlier session that did not get home)",
+             flags.size(), groups.size(), slot.user, slot.slot);
     return true;
 }
 
@@ -9794,7 +11037,7 @@ void TickBbscSharedProgress() {
     const bool own_world = ReadablePointer(global, 0x1598) && ReadValue<u8>(global, 0x1592) != 0;
     static s64 file_written_ms = 0;
     static s64 recover_checked_ms = 0;
-    // Test 2026-10-08 (cls_amg invaded a tester's world): an invader is in session state 6 too,
+    // Test 2026-10-08 (cls_amg invaded hardwater's world): an invader is in session state 6 too,
     // and went home with the host's progress merged into its world. Only a co-op guest (player
     // type 1) collects; an invader (2) or a character not built yet (-1) does not.
     if (state == 6 && GetLocalPlayerType() != 1) {
@@ -9802,6 +11045,7 @@ void TickBbscSharedProgress() {
         if (!logged && GetLocalPlayerType() == 2) {
             logged = true;
             LOG_INFO(Debug, "BBSC shared progress: we are an invader here - nothing is collected");
+            BBSC_TIMELINE("WORLD", "shared progress: we are an invader here - nothing is collected");
         }
         return;
     }
@@ -9884,6 +11128,11 @@ void TickBbscSharedProgress() {
                            "merged the next time this character is home",
                     BbscProgressHomeLimitMs / 1000, bbsc_progress_host_flags.size(),
                     bbsc_progress_groups.size());
+        BBSC_TIMELINE("WORLD", "shared progress: not home within {} s of the session end (quit to "
+                           "the title?) - {} boss flag(s) and {} world group(s) kept in the file, "
+                           "merged the next time this character is home",
+                    BbscProgressHomeLimitMs / 1000, bbsc_progress_host_flags.size(),
+                    bbsc_progress_groups.size());
         bbsc_progress_host_flags.clear();
         bbsc_progress_groups.clear();
         bbsc_progress_was_guest = false;
@@ -9919,10 +11168,12 @@ void TickBbscSharedProgress() {
     bbsc_progress_slot.reset();
     if (bosses < 0) {
         LOG_INFO(Debug, "BBSC shared progress: home again, nothing from the host to merge");
+        BBSC_TIMELINE("WORLD", "shared progress: home again, nothing from the host to merge");
         return;
     }
     if (at_load && bosses == 0 && bits == 0) {
         LOG_INFO(Debug, "BBSC shared progress: the merge made during the home load is all there");
+        BBSC_TIMELINE("WORLD", "shared progress: the merge made during the home load is all there");
         BbscAnnounce(u"Shared progress saved:\nthe host's progress is now in your world.",
                      "shared progress merged at the home load");
         return;
@@ -10258,7 +11509,255 @@ void BbscCineBasis(float yaw, float pitch, float roll, std::array<float, 3>& r,
     }
 }
 
+// ---- Frame rate (2026-10-20) -----------------------------------------------------------------------
+// Tester report (Eryk host, Weronika guest, 0.0.2 test3): elevators skip, even for the host, and
+// players "fly" (float or fall through the floor), mostly right after such an elevator. Both ran the
+// game uncapped ("Uncap FPS++" patch, vblank 100 Hz on the host, 120 Hz on the guest) - Bloodborne's
+// moving platforms and physics are made for 30 fps, and the two ran at different rates. HYPOTHESIS
+// that this is the cause; the log and the timeline now say how many frames the game draws a second
+// (the camera director runs once a frame, see the cinematic camera), when it settles in a new band.
+std::atomic<u32> bbsc_frames{0};
+
+void TickBbscFrameRate() {
+    static s64 window_start = 0;
+    static int reported_band = -1;
+    static int candidate_band = -1;
+    const s64 now = SteadyNowMs();
+    if (window_start == 0) {
+        window_start = now;
+        bbsc_frames = 0;
+        return;
+    }
+    const s64 span = now - window_start;
+    if (span < 5'000) {
+        return;
+    }
+    const u32 frames = bbsc_frames.exchange(0);
+    window_start = now;
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0 || frames == 0) {
+        candidate_band = -1; // loading: not counted
+        return;
+    }
+    const int fps = static_cast<int>(std::lround(static_cast<double>(frames) * 1000.0 /
+                                                 static_cast<double>(span)));
+    const int band = fps <= 34 ? 30 : (fps <= 64 ? 60 : (fps <= 95 ? 90 : 120));
+    if (band != candidate_band) {
+        candidate_band = band; // a new band counts once it holds for two windows in a row
+        return;
+    }
+    if (band == reported_band) {
+        return;
+    }
+    reported_band = band;
+    const std::string_view note =
+        fps > 64 ? " - above 60: elevators and moving platforms can skip and players can float or "
+                   "fall through (uncapped FPS patches); players in one session should use the "
+                   "same rate"
+                 : "";
+    LOG_INFO(Debug, "BBSC frame rate: {} frames a second{}", fps, note);
+    BBSC_TIMELINE("GAME", "frame rate: {} frames a second{}", fps, note);
+}
+
+// Writes a camera (position, yaw / pitch / roll, field of view) into the director's debug camera and
+// switches the director to it for this frame (see the section comment above).
+bool BbscCineWrite(u64 director, u64 render, const std::array<float, 3>& pos, float yaw,
+                   float pitch, float roll, float fov) {
+    const u64 debug_camera = ReadValue<u64>(director, 0xD0);
+    if (!ReadablePointer(debug_camera, 0x60) ||
+        !HasMemoryAccess(debug_camera + 0x10, 64, MemoryProt::CpuWrite)) {
+        return false;
+    }
+    std::array<float, 3> r{}, u{}, f{};
+    BbscCineBasis(yaw, pitch, roll, r, u, f);
+    alignas(16) std::array<float, 16> m{r[0], r[1], r[2], 0.0f, u[0], u[1], u[2], 0.0f,
+                                       f[0], f[1], f[2], 0.0f, pos[0], pos[1], pos[2], 1.0f};
+    std::memcpy(reinterpret_cast<void*>(debug_camera + 0x10), m.data(), sizeof(m));
+    // Projection: the game's current values (aspect, near, far), our field of view.
+    WriteValue<float>(debug_camera, 0x50, fov);
+    for (const size_t off : {0x54, 0x58, 0x5C}) {
+        WriteValue<u32>(debug_camera, off, ReadValue<u32>(render, off));
+    }
+    WriteValue<s32>(director, 0xC4, 1);
+    return true;
+}
+
+// ---- Watching a living hunter while dead (2026-10-20) --------------------------------------------
+// The user: "when someone dies he spectates the living player and can switch between players".
+// Dead in co-op (spectating, see TickBbscSpectate), the camera that comes on by itself orbits a
+// living co-op player instead of flying freely: mouse / arrow keys / A D / right stick turn around
+// them, the wheel, W S and the left stick go closer or farther; Tab, E, left click or R1 watch the
+// next hunter, Shift+Tab, Q or L1 the previous one; F flies freely from there (F again: back to
+// watching). Hunters = WorldChrMan's players that are not us, not invaders, alive (HP above 0, the
+// dead flag [chr+0x58]+0x114 bit 0 clear). No collision: the camera can pass through walls.
+// Nobody alive to watch: the free camera, as before.
+struct BbscWatchState {
+    bool on = false;   // following someone
+    bool free = false; // F: flying freely instead, for the rest of this death
+    u64 target = 0;
+    float yaw = 0.0f, pitch = -0.3f, distance = 4.5f;
+    std::array<float, 3> look{}; // the point looked at (glides after the hunter)
+    s64 switched_ms = 0;
+    s64 notice_ms = 0;
+    bool told = false; // the how-to notice was shown in this death
+    int index = 0;     // the hunter watched now (1-based) and how many there are - Discord status
+    int count = 0;
+};
+BbscWatchState bbsc_watch;
+constexpr float BbscWatchHeadHeight = 1.4f; // metres above the feet
+std::array<char16_t, 160> bbsc_watch_notice{}; // stays valid while the banner shows it
+
+std::vector<u64> BbscWatchTargets() {
+    std::vector<u64> out;
+    const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
+    if (!ReadablePointer(world_chr, 0x68)) {
+        return out;
+    }
+    const u64 local = ReadValue<u64>(world_chr, 0x60);
+    const s32 count = ReadValue<s32>(world_chr, 0x30);
+    const u64 entries = ReadValue<u64>(world_chr, 0x38);
+    if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
+        return out;
+    }
+    for (s32 i = 0; i < count; ++i) {
+        const u64 chr = ReadValue<u64>(entries, static_cast<size_t>(i) * 0x38);
+        // A remote copy can read HP 0 for a moment (see TickBbscHostDeathNotice): the hunter being
+        // watched stays until its dead flag says it is down.
+        if (chr == 0 || chr == local || (GetCharacterHp(chr) <= 0 && chr != bbsc_watch.target) ||
+            IsInvaderType(GetCharacterType(chr))) {
+            continue;
+        }
+        const u64 control = ReadablePointer(chr, 0x60) ? ReadValue<u64>(chr, 0x58) : 0;
+        if (ReadablePointer(control, 0x118) && (ReadValue<u16>(control, 0x114) & 1) != 0) {
+            continue;
+        }
+        if (ReadCharacterTransform(chr).has_value()) {
+            out.push_back(chr);
+        }
+    }
+    return out;
+}
+
+// The co-op banner, at most every 1.5 s (switching fast would queue one banner per press).
+void BbscWatchNotice(std::string_view text, std::string_view what, s64 now) {
+    if (now - bbsc_watch.notice_ms < 1'500) {
+        return;
+    }
+    bbsc_watch.notice_ms = now;
+    const size_t n = std::min(text.size(), bbsc_watch_notice.size() - 1);
+    for (size_t i = 0; i < n; ++i) {
+        bbsc_watch_notice[i] = static_cast<char16_t>(static_cast<unsigned char>(text[i]));
+    }
+    bbsc_watch_notice[n] = u'\0';
+    BbscAnnounce(bbsc_watch_notice.data(), what);
+}
+
+// Camera director update (game thread). True when this frame's camera was written here.
+bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s64 now) {
+    const std::vector<u64> targets = BbscWatchTargets();
+    if (targets.empty()) {
+        if (bbsc_watch.on) {
+            bbsc_watch.on = false;
+            LOG_INFO(Debug, "BBSC watch camera: nobody alive to watch - free camera");
+            BBSC_TIMELINE("CAMERA", "watch camera: nobody alive to watch - free camera");
+        }
+        return false;
+    }
+    const s64 size = static_cast<s64>(targets.size());
+    bbsc_watch.count = static_cast<int>(size);
+    const auto it = std::find(targets.begin(), targets.end(), bbsc_watch.target);
+    const bool lost = bbsc_watch.target != 0 && it == targets.end(); // down, or gone
+    s64 index = it == targets.end() ? 0 : it - targets.begin();
+    if (in.switch_target != 0) {
+        index = ((index + in.switch_target) % size + size) % size;
+    }
+    const u64 target = targets[static_cast<size_t>(index)];
+    bbsc_watch.index = static_cast<int>(index) + 1;
+    const auto transform = ReadCharacterTransform(target);
+    if (!transform.has_value()) {
+        return false;
+    }
+    const std::array<float, 3> head{transform->position[0],
+                                    transform->position[1] + BbscWatchHeadHeight,
+                                    transform->position[2]};
+    const float dt = std::clamp(static_cast<float>(now - bbsc_cine.last_ms) / 1000.0f, 0.0f, 0.1f);
+    bbsc_cine.last_ms = now;
+    if (!bbsc_watch.on) {
+        // From the way the camera looks now, a little from above.
+        bbsc_watch.on = true;
+        bbsc_watch.yaw = bbsc_cine.glide_yaw;
+        bbsc_watch.pitch = std::clamp(bbsc_cine.glide_pitch, -0.9f, -0.2f);
+        bbsc_watch.distance = 4.5f;
+        bbsc_watch.look = head;
+    }
+    if (target != bbsc_watch.target) {
+        bbsc_watch.target = target;
+        bbsc_watch.switched_ms = now;
+        const std::string line = fmt::format("watching hunter {} of {}{}", index + 1, size,
+                                             lost ? " (the one watched before is down or gone)"
+                                                  : (in.switch_target != 0 ? " (switched)" : ""));
+        LOG_INFO(Debug, "BBSC watch camera: {} (chr {:#x})", line, target);
+        BBSC_TIMELINE("CAMERA", "watch camera: {}", line);
+        if (!bbsc_watch.told) {
+            bbsc_watch.told = true;
+            bbsc_watch.notice_ms = 0;
+            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}.\nTab / R1: next "
+                                                   "hunter.\nF: free camera.",
+                                                   index + 1, size)
+                                     : std::string{"Watching the living hunter.\nF: free camera."},
+                            "watch camera", now);
+        } else {
+            BbscWatchNotice(fmt::format("Watching hunter {} of {}.", index + 1, size),
+                            "watch camera switch", now);
+        }
+    }
+
+    // Turn around the hunter: mouse, arrow keys, A / D, right stick (and the mod's left stick x).
+    constexpr float MouseRadPerPixel = 0.0022f;
+    constexpr float TurnRadPerSecond = 1.6f;
+    bbsc_watch.yaw += in.mouse_dx * MouseRadPerPixel * bbsc_cine.right_sign;
+    bbsc_watch.pitch -= in.mouse_dy * MouseRadPerPixel;
+    const float turn_x = (in.look_right ? 1.0f : 0.0f) - (in.look_left ? 1.0f : 0.0f) +
+                         (in.right ? 1.0f : 0.0f) - (in.left ? 1.0f : 0.0f) + in.pad_look_x +
+                         in.pad_move_x;
+    const float turn_y = (in.look_up ? 1.0f : 0.0f) - (in.look_down ? 1.0f : 0.0f) + in.pad_look_y;
+    bbsc_watch.yaw +=
+        std::clamp(turn_x, -1.0f, 1.0f) * TurnRadPerSecond * dt * bbsc_cine.right_sign;
+    bbsc_watch.pitch += std::clamp(turn_y, -1.0f, 1.0f) * TurnRadPerSecond * dt;
+    bbsc_watch.pitch = std::clamp(bbsc_watch.pitch, -1.35f, 0.6f);
+    // Closer / farther: wheel (PageUp / PageDown, d-pad up / down in the mod), W / S, left stick.
+    for (int i = 0; i < std::abs(in.wheel); ++i) {
+        bbsc_watch.distance *= in.wheel > 0 ? 0.85f : 1.0f / 0.85f;
+    }
+    const float closer = std::clamp(
+        (in.forward ? 1.0f : 0.0f) - (in.back ? 1.0f : 0.0f) + in.pad_move_y, -1.0f, 1.0f);
+    bbsc_watch.distance = std::clamp(bbsc_watch.distance - closer * 4.0f * dt, 1.2f, 20.0f);
+
+    // The look point follows the hunter quickly; right after a switch it glides over.
+    const float glide = now - bbsc_watch.switched_ms < 1'200 ? 0.35f : 0.08f;
+    const float k = 1.0f - std::exp(-dt / glide);
+    for (int i = 0; i < 3; ++i) {
+        bbsc_watch.look[i] += (head[i] - bbsc_watch.look[i]) * k;
+    }
+    std::array<float, 3> r{}, u{}, f{};
+    BbscCineBasis(bbsc_watch.yaw, bbsc_watch.pitch, 0.0f, r, u, f);
+    std::array<float, 3> cam{};
+    for (int i = 0; i < 3; ++i) {
+        cam[i] = bbsc_watch.look[i] - f[i] * bbsc_watch.distance;
+    }
+    const float fov =
+        bbsc_cine.base_fov > 0.0f ? bbsc_cine.base_fov : ReadValue<float>(render, 0x50);
+    // F hands over to the free camera from exactly here.
+    bbsc_cine.pos = bbsc_cine.glide_pos = cam;
+    bbsc_cine.yaw = bbsc_cine.glide_yaw = bbsc_watch.yaw;
+    bbsc_cine.pitch = bbsc_cine.glide_pitch = bbsc_watch.pitch;
+    bbsc_cine.roll = bbsc_cine.glide_roll = 0.0f;
+    bbsc_cine.fov = bbsc_cine.glide_fov = fov;
+    return BbscCineWrite(director, render, cam, bbsc_watch.yaw, bbsc_watch.pitch, 0.0f, fov);
+}
+
 void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapshot* registers) {
+    bbsc_frames.fetch_add(1, std::memory_order_relaxed);
     if (registers == nullptr) {
         return;
     }
@@ -10286,7 +11785,7 @@ void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapsh
                 Bbsc::CinematicForceOn();
                 in.enabled = true;
                 LOG_INFO(Debug, "BBSC cinematic camera: on by itself - dead, the partner fights on "
-                                "(F1 / L3 + R3 turns it off)");
+                                "(watching a living hunter; F1 / L3 + R3 turns it off)");
             }
         }
         if (bbsc_spectate_active || hp == 0) {
@@ -10298,6 +11797,10 @@ void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapsh
                 LOG_INFO(Debug, "BBSC cinematic camera: off - respawned");
             }
             was_dead = false;
+        }
+        if (!bbsc_spectate_active && (bbsc_watch.on || bbsc_watch.free || bbsc_watch.told)) {
+            bbsc_watch = BbscWatchState{}; // the next death starts watching afresh
+            Bbsc::CinematicSetWatching(false);
         }
     }
     if (!ReadablePointer(director, 0xD8)) {
@@ -10364,6 +11867,22 @@ void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapsh
                  bbsc_cine.yaw * 57.2958f, bbsc_cine.pitch * 57.2958f, bbsc_cine.fov, director,
                  bbsc_cine.fake_camera == debug_camera ? "BBSC's own" : "the game's",
                  bbsc_cine.right_sign, bbsc_cine.up_sign);
+    }
+    // Dead in co-op: watch a living hunter (BbscWatchCamera); F flies freely instead, and back.
+    if (bbsc_spectate_active) {
+        if (in.toggle_free) {
+            bbsc_watch.free = !bbsc_watch.free;
+            bbsc_watch.on = false;
+            LOG_INFO(Debug, "BBSC watch camera: F - {}",
+                     bbsc_watch.free ? "flying freely" : "watching again");
+            BBSC_TIMELINE("CAMERA", "watch camera: F - {}",
+                          bbsc_watch.free ? "flying freely" : "watching again");
+        }
+        const bool watching = !bbsc_watch.free && BbscWatchCamera(director, render, in, now);
+        Bbsc::CinematicSetWatching(watching);
+        if (watching) {
+            return;
+        }
     }
     const float dt = std::clamp(static_cast<float>(now - bbsc_cine.last_ms) / 1000.0f, 0.0f, 0.1f);
     bbsc_cine.last_ms = now;
@@ -10439,22 +11958,8 @@ void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapsh
     bbsc_cine.glide_roll += (bbsc_cine.roll - bbsc_cine.glide_roll) * k;
     bbsc_cine.glide_fov += (bbsc_cine.fov - bbsc_cine.glide_fov) * k;
 
-    const u64 debug_camera = ReadValue<u64>(director, 0xD0);
-    if (!ReadablePointer(debug_camera, 0x60) ||
-        !HasMemoryAccess(debug_camera + 0x10, 64, MemoryProt::CpuWrite)) {
-        return;
-    }
-    BbscCineBasis(bbsc_cine.glide_yaw, bbsc_cine.glide_pitch, bbsc_cine.glide_roll, r, u, f);
-    alignas(16) std::array<float, 16> m{r[0], r[1], r[2], 0.0f, u[0], u[1], u[2], 0.0f,
-                                       f[0], f[1], f[2], 0.0f, bbsc_cine.glide_pos[0],
-                                       bbsc_cine.glide_pos[1], bbsc_cine.glide_pos[2], 1.0f};
-    std::memcpy(reinterpret_cast<void*>(debug_camera + 0x10), m.data(), sizeof(m));
-    // Projection: the game's current values (aspect, near, far), our field of view.
-    WriteValue<float>(debug_camera, 0x50, bbsc_cine.glide_fov);
-    for (const size_t off : {0x54, 0x58, 0x5C}) {
-        WriteValue<u32>(debug_camera, off, ReadValue<u32>(render, off));
-    }
-    WriteValue<s32>(director, 0xC4, 1);
+    BbscCineWrite(director, render, bbsc_cine.glide_pos, bbsc_cine.glide_yaw, bbsc_cine.glide_pitch,
+                  bbsc_cine.glide_roll, bbsc_cine.glide_fov);
 }
 
 void InstallBbscCinematicHook() {
@@ -10840,11 +12345,286 @@ void TickBbscGuestItemsPickable() {
     }
 }
 
+// 2026-10-19 (logs test-logs\2026-10-19-boss-session, both guests): after the Cleric Beast kill a
+// guest could take nothing for the rest of the session ("in reach" lines, never "button accepted"
+// / "take"), also after a load to the Dream and back; pickups worked again at home. The host took
+// items after the same kill. CONFIRMED: the guest stops between the reach search and the action
+// button. Which rule stops it is not known yet; these are the gates on that path (CONFIRMED
+// statically): the pickup action asks the menu-busy mask 0x0176B7E0 (any bit = no button) and the
+// "ride" check [[[[[chr+0x3B0]+0x58]+8]+0x3B0]+0x30]+0x384 / [..+8]+0x10 bit 2 (0x012FD964); the
+// button registration 0x01CD91F0 refuses on MenuMan+0xC0, MenuMan+0x118, player +0x1E1 bit 0x400 and
+// [[player+0x58]+0x248] > 0. One line per item that stays in reach 1.5 s, again when a gate changes.
+// Every known gate on the action buttons (items, talk, doors, levers) for the local player, as text;
+// empty when it cannot be read. Used by the probe below and by TickBbscGateWatch.
+std::string BbscActionGateReport(u64 action_chr, bool with_extras) {
+    const u64 menu = ReadValue<u64>(image_base + MenuManPointerOffset, 0);
+    const u64 player = GetLocalPlayerCharacter();
+    if (!ReadablePointer(menu, 0x2F8) || !ReadablePointer(player, 0x3B8)) {
+        return {};
+    }
+    std::string gates;
+    const u32 mask = reinterpret_cast<u32 PS4_SYSV_ABI (*)()>(image_base + 0x0176B7E0)();
+    if (mask != 0) {
+        gates += fmt::format(" menu-busy mask {:#x} (MenuMan", mask);
+        static constexpr std::array<u32, 31> MaskFields{
+            0x3C,  0x40,  0x54,  0x58,  0x60,  0x64,  0x68,  0x78,  0x7C,  0x80,  0x88,
+            0x90,  0x98,  0x9C,  0xA0,  0xB0,  0xB4,  0xB8,  0xC4,  0xD4,  0xDC,  0xF0,
+            0x100, 0x104, 0x114, 0x120, 0x134, 0x138, 0x2DC, 0x2F4, 0x2F8};
+        for (const u32 field : MaskFields) {
+            if (const s32 value = ReadValue<s32>(menu, field); value != 0) {
+                gates += fmt::format(" +{:#x}={}", field, value);
+            }
+        }
+        gates += ")";
+    }
+    if (const s32 value = ReadValue<s32>(menu, 0xC0); value != 0) {
+        gates += fmt::format(" MenuMan+0xC0={}", value);
+    }
+    if (const s32 value = ReadValue<s32>(menu, 0x118); value != 0) {
+        gates += fmt::format(" MenuMan+0x118={}", value);
+    }
+    if (const u32 flags = ReadValue<u32>(player, 0x1E1); (flags & 0x400) != 0) {
+        gates += fmt::format(" player+0x1E1 bit 0x400 ({:#x})", flags);
+    }
+    if (const u64 control = ReadValue<u64>(player, 0x58); ReadablePointer(control, 0x250)) {
+        if (const u64 locks = ReadValue<u64>(control, 0x248); ReadablePointer(locks, 4) &&
+                                                              ReadValue<s32>(locks, 0) > 0) {
+            gates += fmt::format(" action lock count {}", ReadValue<s32>(locks, 0));
+        }
+    }
+    // 2026-10-20: Weronika's log had "ride check on (state bit 2 false)" one second before the same
+    // item was taken - that byte is ON for a character that may act (0x01CD9370 refuses when it is
+    // 0), so it was no gate. Read off the code: the pickup (0x012FD983) refuses only when that byte
+    // is on AND state bit 2 is set; the button registration 0x01CD91F0 (0x01CD933D-0x01CD93A7)
+    // refuses when, through [[[[[chr+0x3B0]+0x58]+8]+0x58]+0x38] = R and [[[R+8]+8]+0x3B0] = M,
+    // [M+0x30] is null, its byte +0x384 is 0, or neither [[M+8]+0x10] bit 0 nor [R+0x5D] bit 2 is
+    // set; and when the button manager [0x05540048] has +0x55 = 0.
+    u64 link = action_chr != 0 ? action_chr : player;
+    for (const u32 step : {0x3B0u, 0x58u, 0x08u, 0x3B0u}) {
+        link = ReadablePointer(link, step + 8) ? ReadValue<u64>(link, step) : 0;
+    }
+    if (const u64 ride = ReadablePointer(link, 0x38) ? ReadValue<u64>(link, 0x30) : 0;
+        ReadablePointer(ride, 0x388) && ReadValue<u8>(ride, 0x384) != 0) {
+        const u64 state = ReadValue<u64>(link, 0x08);
+        if (ReadablePointer(state, 0x14) && (ReadValue<u8>(state, 0x10) & 2) != 0) {
+            gates += " pickup ride gate (state bit 2 set)";
+        }
+    }
+    {
+        u64 r = player;
+        for (const u32 step : {0x3B0u, 0x58u, 0x08u, 0x58u, 0x38u}) {
+            r = ReadablePointer(r, step + 8) ? ReadValue<u64>(r, step) : 0;
+        }
+        u64 m = r;
+        for (const u32 step : {0x08u, 0x08u, 0x3B0u}) {
+            m = ReadablePointer(m, step + 8) ? ReadValue<u64>(m, step) : 0;
+        }
+        const u64 able = ReadablePointer(m, 0x38) ? ReadValue<u64>(m, 0x30) : 0;
+        const u64 state = ReadablePointer(m, 0x10) ? ReadValue<u64>(m, 0x08) : 0;
+        if (r == 0 || m == 0) {
+            gates += " button chain unreadable";
+        } else if (!ReadablePointer(able, 0x388)) {
+            gates += " button gate: no action module";
+        } else if (ReadValue<u8>(able, 0x384) == 0) {
+            gates += " button gate: action byte off";
+        } else if (!(ReadablePointer(state, 0x14) && (ReadValue<u8>(state, 0x10) & 1) != 0) &&
+                   !(ReadablePointer(r, 0x60) && (ReadValue<u8>(r, 0x5D) & 4) != 0)) {
+            gates += " button gate: state bit 0 and R+0x5D bit 2 both off";
+        }
+        const u64 buttons = ReadValue<u64>(image_base + 0x05540048, 0);
+        if (ReadablePointer(buttons, 0x58) && ReadValue<u8>(buttons, 0x55) == 0) {
+            gates += " button manager +0x55 = 0";
+        }
+    }
+    if (with_extras) {
+        // Not gates of the button code itself, but what the death / leave / boss-clear steps set.
+        const u64 lua_man = ReadValue<u64>(image_base + SprjLuaEventManPointerOffset, 0);
+        const u64 lua = ReadablePointer(lua_man, 0x10) ? ReadValue<u64>(lua_man, 8) : 0;
+        if (ReadablePointer(lua, 0x90) && ReadValue<u8>(lua, 0x8D) != 0) {
+            gates += " Lua load wait";
+        }
+        for (const u32 flag : {4047u, 4000u, 4092u, 4200u}) {
+            if (BbscEventFlag(flag)) {
+                gates += fmt::format(" flag {}", flag);
+            }
+        }
+        if (const s32 value = ReadValue<s32>(menu, 0x2F0); value != 0) {
+            gates += fmt::format(" mission-clear menu {}", value);
+        }
+    }
+    if (gates.empty()) {
+        gates = " none of the known gates is closed";
+    }
+    return gates;
+}
+
+void ProbeBbscGuestActionGate(u32 id, u64 action_chr) {
+    static u32 probe_id = 0;
+    static s64 probe_since_ms = 0;
+    static s64 last_log_ms = 0;
+    static std::string last_gates;
+    const s64 now = SteadyNowMs();
+    if (id == 0 || id != probe_id) {
+        probe_id = id;
+        probe_since_ms = now;
+        return;
+    }
+    if (now - probe_since_ms < 1'500 || now - last_log_ms < 5'000) {
+        return;
+    }
+    const std::string gates = BbscActionGateReport(action_chr, true);
+    if (gates.empty()) {
+        return;
+    }
+    if (gates == last_gates && now - last_log_ms < 60'000) {
+        return;
+    }
+    last_gates = gates;
+    last_log_ms = now;
+    LOG_INFO(Debug, "BBSC guest action gate: item {:#x} in reach {} ms -{} (map {:#x})", id,
+             now - probe_since_ms, gates, GetCurrentPackedMap());
+    BBSC_TIMELINE("ITEMS", "guest action gate: item {:#x} in reach {} ms -{}", id,
+                  now - probe_since_ms, gates);
+}
+
+// 2026-10-20 (the user: "nothing works when you kill a boss", as before on 10-19): a guest log
+// near an item is luck. After the guest's boss clear the gates are logged at 1, 5, 20, 60 and 120 s
+// whether an item is near or not, and once as a baseline 30 s into each stay in a host's world.
+// 2026-10-20: a guest made as type 0 (a host) in the host's world is not a co-op hunter for either
+// game (see ArmBbscRejoin) - logged once per stay, so the next log shows when it happens.
+void TickBbscGuestTypeWatch() {
+    static bool told = false;
+    static s64 since_ms = 0;
+    const u64 global = GetGlobalState();
+    if (GetSessionState() != 6 || !ReadablePointer(global, 0x1593) ||
+        ReadValue<u8>(global, 0x1592) != 0 || ReadValue<u8>(global, 0x08) != 0) {
+        since_ms = 0;
+        if (GetSessionState() != 6) {
+            told = false;
+        }
+        return;
+    }
+    const s32 slot_type = GetLocalPlayerType();
+    const s32 chr_type = GetLocalCharacterType();
+    if (slot_type != 0 && chr_type != 0) {
+        since_ms = 0;
+        told = false;
+        return;
+    }
+    const s64 now = SteadyNowMs();
+    if (since_ms == 0) {
+        since_ms = now;
+    }
+    if (told || now - since_ms < 3'000) {
+        return;
+    }
+    told = true;
+    LOG_WARNING(Debug, "BBSC guest type: we are type {} (slot) / {} (character) in the host's world - "
+                       "a host's type; neither game counts us as a co-op hunter",
+                slot_type, chr_type);
+    BBSC_TIMELINE("SESSION", "guest type: we are type {} (slot) / {} (character) in the host's world - "
+                             "a host's type; neither game counts us as a co-op hunter",
+                  slot_type, chr_type);
+}
+
+// 2026-10-20 (test5, user: "when we both died in a boss fight we spawned in the Hunter's Dream"):
+// CONFIRMED from the host's captures - at the wipe the respawn point global+0x1528 was already the
+// Dream's lamp (2102961, aux 101200) when SoloPlayDeath_2 picked the map (0x01332BC0), while at the
+// 18:57 death it was Central Yharnam's (2412950) and that reload stayed there. Only lamp code writes
+// it (rest: lamp update 0x012F5C40 at 0x012F8259 once its rest timer +0xA0 runs out, travel
+// 0x019423A0, 0x0131E4A0/0x01312FF0/0x01321440/0x01338340); which one did is not known. Every change
+// is logged with the lamp being used ([0x05127ACC]), so the next log shows the moment.
+void TickBbscRespawnPointWatch() {
+    static s64 last_value = 0;
+    static bool have = false;
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x1598)) {
+        return;
+    }
+    const s64 value = ReadValue<s64>(global, 0x1528);
+    if (have && value == last_value) {
+        return;
+    }
+    const bool first = !have;
+    const s32 old_point = static_cast<s32>(last_value & 0xFFFFFFFF);
+    have = true;
+    last_value = value;
+    const s32 point = static_cast<s32>(value & 0xFFFFFFFF);
+    const s32 aux = static_cast<s32>(value >> 32);
+    const s32 using_lamp = ReadValue<s32>(image_base + 0x05127ACC, -1);
+    const u32 map = GetCurrentPackedMap();
+    const std::string where = point == -1 ? std::string{"none"}
+                                          : fmt::format("{} ({})", point,
+                                                        BbscAreaName(BbscLampPointMap(point)));
+    if (first) {
+        LOG_INFO(Debug, "BBSC respawn point: {} (aux {})", where, aux);
+        return;
+    }
+    LOG_INFO(Debug, "BBSC respawn point: {} -> {} (aux {}; lamp in use {}, session state {}, map "
+                    "{:#x}, loading {})",
+             old_point, where, aux, using_lamp, GetSessionState(), map,
+             ReadValue<u8>(global, 0x08));
+    BBSC_TIMELINE("RESPAWN", "respawn point: {} -> {} (aux {}; lamp in use {}, session state {}, "
+                             "loading {})",
+                  old_point, where, aux, using_lamp, GetSessionState(), ReadValue<u8>(global, 0x08));
+}
+
+void TickBbscGateWatch() {
+    static size_t next_point = 0;
+    static s64 watched_since_ms = 0;
+    static s64 guest_since_ms = 0;
+    static bool baseline_done = false;
+    const s64 now = SteadyNowMs();
+    const s32 state = GetSessionState();
+    if (state != 6) {
+        guest_since_ms = 0;
+        baseline_done = false;
+        return;
+    }
+    if (guest_since_ms == 0) {
+        guest_since_ms = now;
+    }
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0) {
+        return; // loading
+    }
+    if (!baseline_done && now - guest_since_ms >= 30'000) {
+        baseline_done = true;
+        const std::string gates = BbscActionGateReport(0, true);
+        LOG_INFO(Debug, "BBSC guest gates (baseline, 30 s in the host's world):{}", gates);
+        BBSC_TIMELINE("ITEMS", "guest gates (baseline, 30 s in the host's world):{}", gates);
+    }
+    if (bbsc_gate_watch_since_ms == 0) {
+        return;
+    }
+    if (watched_since_ms != bbsc_gate_watch_since_ms) {
+        watched_since_ms = bbsc_gate_watch_since_ms;
+        next_point = 0;
+    }
+    static constexpr std::array<s64, 5> Points{1'000, 5'000, 20'000, 60'000, 120'000};
+    if (next_point >= Points.size() || now - watched_since_ms < Points[next_point]) {
+        return;
+    }
+    const s64 at = Points[next_point++];
+    const std::string gates = BbscActionGateReport(0, true);
+    LOG_INFO(Debug, "BBSC guest gates ({} s after the boss clear):{}", at / 1000, gates);
+    BBSC_TIMELINE("ITEMS", "guest gates ({} s after the boss clear):{}", at / 1000, gates);
+}
+
 void PS4_SYSV_ABI BbscPickupHook(u64 tag, const GuestRegisterSnapshot* registers) {
     if (tag == 0) {
         bbsc_pickup_action_runs.fetch_add(1, std::memory_order_relaxed);
     }
     const s32 state = GetSessionState();
+    if (state == 6 && (tag == 0 || tag == 4)) {
+        const u32 id = ReadValue<u32>(registers->rbp - (tag == 0 ? 0x40 : 0x58), 0);
+        // One probe for both searches: an item from either keeps it alive.
+        static u32 last_item = 0;
+        static u32 last_treasure = 0;
+        (tag == 0 ? last_item : last_treasure) = id;
+        ProbeBbscGuestActionGate(last_item != 0 ? last_item : last_treasure,
+                                 tag == 0 ? registers->r13 : 0);
+    }
     switch (tag) {
     case 0: { // reach result: log only the guest, and only when the item in reach changes
         static std::atomic<u32> last_in_reach{0};
@@ -11089,6 +12869,7 @@ void TickBbscBossLine() {
         }
         if (name != nullptr) {
             LOG_INFO(Debug, "BBSC boss line: \"{}\" (boss {})", name, boss);
+            BBSC_TIMELINE("BOSS", "boss line: \"{}\" (boss {})", name, boss);
         }
     }
     for (const u32 id : BbscBossLineIds) {
@@ -11381,6 +13162,9 @@ void PS4_SYSV_ABI BbscDeathStepTraceHook(u64 tag, const GuestRegisterSnapshot* r
     LOG_INFO(Debug, "BBSC death step: {} (session state {}, chr type {}, own world {}, echoes {})",
              Names[tag], GetSessionState(), GetLocalPlayerType(),
              ReadValue<u8>(GetGlobalState(), 0x1592), GetBloodEchoes());
+    BBSC_TIMELINE("DEATH", "death step: {} (session state {}, chr type {}, own world {}, echoes {})",
+             Names[tag], GetSessionState(), GetLocalPlayerType(),
+             ReadValue<u8>(GetGlobalState(), 0x1592), GetBloodEchoes());
     if (tag == 0 || tag == 2) {
         bbsc_death_script_ms = SteadyNowMs();
     }
@@ -11555,13 +13339,19 @@ void TickBbscEchoTrace() {
     static s32 last = -1;
     const s32 session_state = GetSessionState();
     const s32 now = GetBloodEchoes();
-    if ((session_state != 3 && session_state != 6) || now < 0) {
+    if (now < 0) {
         last = now;
         return;
     }
     if (last >= 0 && now != last) {
-        LOG_INFO(Debug, "BBSC echoes: {:+} (total {} -> {}, player type {}, session state {})",
-                 now - last, last, now, GetLocalPlayerType(), session_state);
+        if (session_state == 3 || session_state == 6) {
+            LOG_INFO(Debug, "BBSC echoes: {:+} (total {} -> {}, player type {}, session state {})",
+                     now - last, last, now, GetLocalPlayerType(), session_state);
+        }
+        // Timeline: losses and big gains only (a kill's few dozen would bury everything else).
+        if (now < last || now - last >= 1000) {
+            BBSC_TIMELINE("ECHOES", "{:+} (total {} -> {})", now - last, last, now);
+        }
     }
     last = now;
 }
@@ -11624,11 +13414,17 @@ void TickBbscDeadWatchdog() {
         LOG_INFO(Debug, "BBSC death: repeat death in a boss fight (session state {}) -> spectate "
                         "until the boss dies or nobody is alive",
                  session_state);
+        BBSC_TIMELINE("DEATH", "death: repeat death in a boss fight (session state {}) -> spectate "
+                        "until the boss dies or nobody is alive",
+                 session_state);
         return;
     }
     if (repeat) {
         LOG_INFO(Debug,
                  "BBSC death: repeat death in the same load (the game's death script only runs "
+                 "once per load), handled by BBSC after {} ms (session state {}, echoes {})",
+                 limit, session_state, bbsc_echoes_at_death);
+        BBSC_TIMELINE("DEATH", "death: repeat death in the same load (the game's death script only runs "
                  "once per load), handled by BBSC after {} ms (session state {}, echoes {})",
                  limit, session_state, bbsc_echoes_at_death);
     } else {
@@ -11638,6 +13434,27 @@ void TickBbscDeadWatchdog() {
                     limit, session_state, bbsc_spectate_active);
     }
     bbsc_spectate_active = false;
+    if (BbscDiedRightAfterRespawn("watchdog")) {
+        if (session_state == 6 && LivingPartnerExists()) {
+            // Guest: hand over to TickBbscSpectate's wipe path (full reload beside the host).
+            bbsc_spectate_name = "repeat death";
+            bbsc_spectate_since_ms = now;
+            bbsc_spectate_chr = GetLocalPlayerCharacter();
+            bbsc_spectate_alone_since_ms = 0;
+            bbsc_boss_cleared_since_ms = 0;
+            bbsc_spectate_saw_wipe = true;
+            bbsc_spectate_wipe_warped = false;
+            bbsc_spectate_host_back_ms = now - BbscWipeHostSettleMs;
+            bbsc_spectate_revivals_at_death = bbsc_peer_revivals.load();
+            bbsc_death_mode = BbscDeathMode::Spectate;
+            bbsc_spectate_active = true;
+            LOG_INFO(Debug, "BBSC death: guest reloads beside the host instead");
+            return;
+        }
+        BbscApplyDeathPenalty("watchdog");
+        RequestBbscDeathReload("watchdog: repeat death right after a respawn in place");
+        return;
+    }
     BbscApplyDeathPenalty("watchdog");
     if (!StartBbscDeathCurtain("watchdog") && !BbscRespawnInPlace("watchdog")) {
         RequestBbscDeathReload("watchdog: respawn in place failed");
@@ -11793,6 +13610,20 @@ u64 BbscParamRow(u64 table, u32 id, size_t size = 8) {
 // min_rows / first_id: the table's row count must be above min_rows and its first row id first_id.
 std::vector<u64> FindBbscParamTables(std::string_view type, u16 min_rows = 1000,
                                      u32 first_id = 0) {
+    // Several BBSC features need the same very large guest-memory scan.  Running those searches in
+    // parallel made each one take about 75-95 seconds on BBport, delaying the kit until after users
+    // had already opened the shop.  Serialize scans and retain the two stable tables shared by the
+    // kit and scaling.  NPC tables are deliberately not cached because more copies can load later.
+    static std::mutex scan_mutex;
+    static std::map<std::string, std::vector<u64>> stable_cache;
+    const std::string key(type);
+    const bool stable = type == "EQUIP_PARAM_GOODS_ST" || type == "SP_EFFECT_PARAM_ST";
+    std::scoped_lock lock(scan_mutex);
+    if (stable) {
+        if (const auto found = stable_cache.find(key); found != stable_cache.end()) {
+            return found->second;
+        }
+    }
     std::vector<u8> needle(type.begin(), type.end());
     needle.push_back(0);
     std::vector<u64> tables;
@@ -11802,7 +13633,47 @@ std::vector<u64> FindBbscParamTables(std::string_view type, u16 min_rows = 1000,
             tables.push_back(table);
         }
     }
+    if (stable && !tables.empty()) {
+        stable_cache.emplace(key, tables);
+    }
     return tables;
+}
+
+// The table the game itself reads, from its param repository, or 0 - no memory scan (2026-10-19).
+// Report (BBport, 0.0.1 DLL of 10-17): no bells after 1 m 43 s in the game; the kit waits for
+// FindBbscParamTables, a walk of all memory that took 67 s for the scaling scan in that run and
+// 80-110 s for the kit in other BBport logs - the log ended before the kit was ready. CONFIRMED
+// statically: the goods lookup 0x01F1E3D0 reads [0x05540340] (repository), [+0x148] != 0 (loaded),
+// holder [+0x150], then [[holder+0x70]+0x70] = the PARAM data (row count +0x0A, type name +0x0C);
+// the weapon lookup 0x01F29AA0 the same through +0x70/+0x78, 0x01F23840 through +0xC0. Each
+// pointer slot of the repository is tried and the type name must match.
+u64 BbscGameParamTable(std::string_view type) {
+    const u64 repo = ReadValue<u64>(image_base + 0x05540340, 0);
+    if (!ReadablePointer(repo, 0x158) || ReadValue<s32>(repo, 0x148) == 0) {
+        return 0; // params not loaded yet
+    }
+    for (u64 off = 0x08; off < 0x1000; off += 8) {
+        if (!ReadablePointer(repo + off, 8)) {
+            break;
+        }
+        const u64 holder = ReadValue<u64>(repo, off);
+        if (!ReadablePointer(holder, 0x78)) {
+            continue;
+        }
+        const u64 res = ReadValue<u64>(holder, 0x70);
+        if (!ReadablePointer(res, 0x78)) {
+            continue;
+        }
+        const u64 table = ReadValue<u64>(res, 0x70);
+        if (!ReadablePointer(table, 0x40 + 0x18)) {
+            continue;
+        }
+        const auto* name = reinterpret_cast<const char*>(table + 0x0C);
+        if (std::memcmp(name, type.data(), type.size()) == 0 && name[type.size()] == '\0') {
+            return table;
+        }
+    }
+    return 0;
 }
 
 void PrepareBbscScaling() {
@@ -11841,7 +13712,7 @@ void PrepareBbscScaling() {
                 continue;
             }
             // isSoulGetByBoss is also on the 17 hostile NPC hunters (Henryk, Djura...: teamType 25 /
-            // 29, game data 2026-10-08); boss HP made Henryk "invincible" for a host (a tester's report),
+            // 29, game data 2026-10-08); boss HP made Henryk "invincible" for a host (Eryk's report),
             // so only teamType 23 rows count as bosses. The hunters stay unscaled like in vanilla
             // (2026-10-13: still "really high HP" with enemy scaling) unless BBSC_SCALE_NPC_HUNTERS=1.
             const u8 team = ReadValue<u8>(row, 303);
@@ -11939,6 +13810,11 @@ void TickBbscScaling() {
              extra, guests, GetBbscSessionMemberCount(GetGlobalState()), rate(enemy_hp),
              rate(boss_hp), rate(damage), enemy_stagger * extra, boss_stagger * extra,
              from_host ? "the host's" : "own");
+    BBSC_TIMELINE("SCALING", "scaling: {} guest(s) (game count {}, members {}) -> enemies HP x{:.2f}, bosses HP "
+             "x{:.2f}, damage x{:.2f}, stagger +{}% / +{}% (bosses) - {} settings",
+             extra, guests, GetBbscSessionMemberCount(GetGlobalState()), rate(enemy_hp),
+             rate(boss_hp), rate(damage), enemy_stagger * extra, boss_stagger * extra,
+             from_host ? "the host's" : "own");
 }
 
 // Boss bar (tester 2026-10-05): "the full boss hp bar shows 100% but because the boss health is
@@ -12010,7 +13886,7 @@ void TickBbscScaledMaxHp() {
     (void)fixed;
 }
 
-// Solid NPCs for a guest (2026-10-12, testers test: "all NPCs are phantoms except the Dream
+// Solid NPCs for a guest (2026-10-12, Weronika/Eryk test: "all NPCs are phantoms except the Dream
 // ones and the man in the red hood in the Cathedral Ward"). The constructor patch
 // SolidNpcs.NoWanderGhost (0x018E4FBF) did not keep them solid, while clearing the row's
 // isChangeWanderGhost bit (+0x145 bit 7) does - that is what the Doll and Gehrman get
@@ -12114,7 +13990,12 @@ constexpr u32 BbscPvpTeam = 21;
 constexpr u32 BbscInvadableEffectId = 9020;
 constexpr s64 BbscPvpSendMs = 1'000;
 
-std::atomic<bool> bbsc_duel_bell_ready{false};
+std::atomic<bool> bbsc_duel_bell_ready{false}; // every table copy done, effect rows published
+std::atomic<bool> bbsc_kit_rows_ready{false};  // kit goods rows ready in the game's own table
+bool BbscKitParamsReady() {
+    return bbsc_kit_rows_ready.load(std::memory_order_acquire) ||
+           bbsc_duel_bell_ready.load(std::memory_order_acquire);
+}
 std::vector<u64> bbsc_duel_bell_effect_rows; // SpEffect 7511 rows (every table copy)
 std::vector<u64> bbsc_blank_effect_rows;     // SpEffect 7 rows: the Silencing Blank (goods 111)
 std::vector<u64> bbsc_invadable_effect_rows; // SpEffect 9020 rows: "Bell Maiden" (invaders welcome)
@@ -12151,17 +14032,30 @@ constexpr BbscKitItem BbscKit[] = {
 constexpr u32 BbscHiddenVanilla[] = {200, 205, 225, 111};
 constexpr size_t GoodsRowSize = 108;
 
+// Enable bits (+68) of each vanilla source row as first seen. A kit row whose copy ran after its
+// source was already hidden (second table pass, param reload) would get +68 = 0: not usable
+// anywhere, i.e. "can't use the Kin Bell". Kept here so such a row is switched back on.
+std::array<std::atomic<u8>, std::size(BbscKit)> bbsc_kit_enable{};
+
 void PrepareBbscKitRows(u64 table) {
-    for (const BbscKitItem& item : BbscKit) {
+    for (size_t i = 0; i < std::size(BbscKit); ++i) {
+        const BbscKitItem& item = BbscKit[i];
         const u64 row = BbscParamRow(table, item.id, GoodsRowSize);
         const u64 source = item.copy_of != 0 ? BbscParamRow(table, item.copy_of, GoodsRowSize) : 0;
         if (row == 0 || (item.copy_of != 0 && source == 0)) {
             continue;
         }
         if (source != 0 && ReadValue<u8>(source, 68) != 0) { // not hidden yet: still the original
+            bbsc_kit_enable[i].store(ReadValue<u8>(source, 68));
             std::array<u8, GoodsRowSize> copy{};
             std::memcpy(copy.data(), reinterpret_cast<const void*>(source), copy.size());
             std::memcpy(reinterpret_cast<void*>(row), copy.data(), copy.size());
+        }
+        if (source != 0 && ReadValue<u8>(row, 68) == 0) {
+            const u8 enable = bbsc_kit_enable[i].load();
+            LOG_WARNING(Debug, "BBSC kit: goods {} row had no enable bits (source {} hidden first) - "
+                               "set to {:#x}", item.id, item.copy_of, enable != 0 ? enable : 0xFF);
+            WriteValue<u8>(row, 68, enable != 0 ? enable : 0xFF);
         }
         WriteValue<u8>(row, 56, 0);              // consumeHeroPoint: no Insight
         WriteValue<u16>(row, 44, item.icon);     // iconId
@@ -12178,9 +14072,15 @@ void PrepareBbscKitRows(u64 table) {
     }
 }
 
-void PrepareBbscDuelBell() {
-    const auto goods_tables = FindBbscParamTables("EQUIP_PARAM_GOODS_ST", 100, 1);
-    const auto speffect_tables = FindBbscParamTables("SP_EFFECT_PARAM_ST");
+// Kit rows, the Duel Bell's row and its SpEffect in the given tables. `publish`: also hand the
+// SpEffect rows to the game thread (the PvP / Blank / Bell Maiden checks) - only the full scan does
+// that, once, so those keep every table copy as before. True when the Duel Bell row and its effect
+// were found.
+std::mutex bbsc_kit_prepare_mutex;
+bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
+                           const std::vector<u64>& speffect_tables, std::string_view source,
+                           bool publish) {
+    std::scoped_lock prepare_lock{bbsc_kit_prepare_mutex};
     size_t goods = 0;
     std::vector<u64> effects;
     std::vector<u64> blanks;
@@ -12227,28 +14127,70 @@ void PrepareBbscDuelBell() {
         ++goods;
     }
     const bool ok = goods != 0 && !effects.empty();
-    LOG_INFO(Debug, "BBSC duel bell: goods {} in {} of {} table(s), SpEffect {} in {} table(s){}",
-             BbscDuelBellGoodsId, goods, goods_tables.size(), BbscDuelBellEffectId,
+    LOG_INFO(Debug, "BBSC duel bell ({}): goods {} in {} of {} table(s), SpEffect {} in {} "
+                    "table(s){}",
+             source, BbscDuelBellGoodsId, goods, goods_tables.size(), BbscDuelBellEffectId,
              effects.size(), ok ? "" : " - NOT READY, no PvP bell");
     // Review 2026-10-08: the game thread reads these vectors; they are filled only once, here, by
     // this (scan) thread, and published by the ready flag - never replaced while being read.
-    if (ok && !bbsc_duel_bell_ready) {
+    if (publish && ok && !bbsc_duel_bell_ready) {
         bbsc_duel_bell_effect_rows = std::move(effects);
         bbsc_blank_effect_rows = std::move(blanks);
         bbsc_invadable_effect_rows = std::move(maidens);
         bbsc_duel_bell_ready.store(true, std::memory_order_release);
     }
+    return ok;
 }
 
+bool PrepareBbscDuelBell() {
+    return PrepareBbscDuelBellIn(FindBbscParamTables("EQUIP_PARAM_GOODS_ST", 100, 1),
+                                 FindBbscParamTables("SP_EFFECT_PARAM_ST"), "every copy", true);
+}
+
+// Two threads: the game's own goods / SpEffect tables (BbscGameParamTable: ready seconds after the
+// params load), so the kit and the Bath Messenger's bells do not wait for the memory scan; and, as
+// before, every copy the scan finds (BBport keeps two), which also publishes the effect rows.
+// PrepareBbscDuelBellIn holds bbsc_kit_prepare_mutex, so the two never write the rows at once.
 void StartBbscDuelBell() {
     static std::atomic<bool> started{false};
     if (started.exchange(true)) {
         return;
     }
-    std::thread{[] {
+    const s64 started_ms = SteadyNowMs();
+    std::thread{[started_ms] {
+        for (int attempt = 0; attempt < 180 && !BbscKitParamsReady(); ++attempt) {
+            if (attempt != 0) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+            const u64 goods = BbscGameParamTable("EQUIP_PARAM_GOODS_ST");
+            const u64 effects = BbscGameParamTable("SP_EFFECT_PARAM_ST");
+            if (goods == 0 || effects == 0 || BbscKitParamsReady()) {
+                continue;
+            }
+            if (PrepareBbscDuelBellIn({goods}, {effects}, "game's own tables", false)) {
+                bbsc_kit_rows_ready.store(true, std::memory_order_release);
+                LOG_INFO(Debug, "BBSC kit: bells ready from the game's own tables after {} ms "
+                                "(goods {:#x}, SpEffect {:#x}) - every copy follows from the scan",
+                         SteadyNowMs() - started_ms, goods, effects);
+                BBSC_TIMELINE("KIT", "kit rows ready from the game's own tables after {} ms",
+                              SteadyNowMs() - started_ms);
+            }
+        }
+        if (!BbscKitParamsReady()) {
+            LOG_INFO(Debug, "BBSC kit: the game's own tables were not found in 3 minutes - the "
+                            "memory scan decides");
+        }
+    }}.detach();
+    std::thread{[started_ms] {
         for (int attempt = 0; attempt < 36 && !bbsc_duel_bell_ready; ++attempt) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            if (attempt != 0) {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+            }
             PrepareBbscDuelBell();
+        }
+        if (bbsc_duel_bell_ready) {
+            BBSC_TIMELINE("KIT", "every bell table copy ready after {} ms",
+                          SteadyNowMs() - started_ms);
         }
     }}.detach();
 }
@@ -12373,7 +14315,7 @@ s32 BbscInventoryCount(u64 inventory, u32 code) {
     return entry != 0 ? ReadValue<s32>(entry, 8) : 0;
 }
 
-// Restock after a respawn in place (2026-10-13, testers: "no vials after respawning").
+// Restock after a respawn in place (2026-10-13, lelial/onesadeye: "no vials after respawning").
 // A lamp rest or a death reload tops up Blood Vials (goods 1000) and Quicksilver Bullets (900) -
 // the two EquipParamGoods rows with isAutoReplenish (+0x47 bit 0) - from the storage box; the
 // in-place respawn skips that reload, so nothing came back. Same here: the inventory's own fit
@@ -12522,28 +14464,57 @@ bool BackupBbscSavesUnchecked() {
 // saves are backed up before anything is added.
 void TickBbscDuelBellGive() {
     static s64 last_ms = 0;
-    static u64 checked_player = 0;
     const s64 now = SteadyNowMs();
-    if (!bbsc_duel_bell_ready || now - last_ms < 5'000) {
+    if (!BbscKitParamsReady() || now - last_ms < 5'000) {
         return;
     }
     last_ms = now;
     const u64 player = GetLocalPlayerCharacter();
     const u64 global = GetGlobalState();
-    if (player == checked_player || !ReadablePointer(player, 0x410) ||
-        GetCharacterHp(player) <= 0 || !ReadablePointer(global, 0x1598) ||
+    if (!ReadablePointer(player, 0x410) || GetCharacterHp(player) <= 0 ||
+        !ReadablePointer(global, 0x1598) ||
         ReadValue<u8>(global, 0x08) != 0) {
-        return; // already checked, not in the game yet, dead, or loading
+        return; // not in the game yet, dead, or loading
     }
     const u64 carried = BbscCarriedInventory();
     const u64 storage = BbscStorageInventory();
     if (carried == 0 || storage == 0) {
         return;
     }
-    checked_player = player;
     const auto has = [&](u32 id) {
         const u32 code = 0x40000000u | id;
         return BbscInventoryHas(carried, code) || BbscInventoryHas(storage, code);
+    };
+    // Older builds could grant these unused goods IDs before their parameter rows were converted.
+    // Merely finding the ID then incorrectly accepted a bell that remained cached as a Key Item (or
+    // was invisible).  Reinsert every kit item once per loaded inventory after the corrected rows
+    // have been published, forcing the game to rebuild the saved item from its normal-goods key.
+    // Once per character, at home and alone (2026-10-18 bug reports: keyed on the player pointer,
+    // which is new at every load, it removed and re-added every bell at each load and join - the
+    // bells left their quick-item slots and "stopped working"). Done = a marker file per save slot
+    // (<mod>\kit-repaired\<user>-<slot>.done); without a known slot, once per run.
+    namespace fs = std::filesystem;
+    static bool repaired_this_run = false;
+    const auto slot = BbscActiveSaveSlot();
+    const fs::path marker =
+        slot.has_value()
+            ? Common::FS::GetUserPath(Common::FS::PathType::CapturesDir).parent_path() /
+                  "kit-repaired" / fmt::format("{}-{}.done", slot->user, slot->slot)
+            : fs::path{};
+    std::error_code marker_ec;
+    const bool repair_done =
+        repaired_this_run || (slot.has_value() && fs::exists(marker, marker_ec));
+    const bool repair_existing = !repair_done && GetSessionState() == 0 &&
+                                 ReadValue<u8>(global, 0x1592) != 0;
+    const auto mark_repaired = [&] {
+        repaired_this_run = true;
+        if (slot.has_value()) {
+            std::error_code ec;
+            fs::create_directories(marker.parent_path(), ec);
+            std::ofstream(marker) << "kit repaired\n";
+            LOG_INFO(Debug, "BBSC kit: repair marked done for user {} slot {}", slot->user,
+                     slot->slot);
+        }
     };
     std::vector<const BbscKitItem*> missing;
     for (const BbscKitItem& item : BbscKit) {
@@ -12569,13 +14540,15 @@ void TickBbscDuelBellGive() {
     for (const u32 id : Retired) {
         retire = retire || has(id);
     }
-    if (missing.empty() && !retire) {
-        LOG_INFO(Debug, "BBSC kit: all carried or in storage, no vanilla bells left");
+    if (missing.empty() && !retire && !repair_existing) {
         return;
     }
     if (!BackupBbscSaves()) {
-        LOG_WARNING(Debug, "BBSC kit: no save folder found to back up - nothing given or removed");
-        return;
+        // Portable shadPS4 and BBport layouts do not all expose their active save directory to the
+        // injected DLL.  A missing optional backup must not prevent the recovery kit from being
+        // delivered; otherwise exactly the users who need the Bath fallback receive no bells.
+        LOG_WARNING(Debug, "BBSC kit: no save folder found to back up - continuing with the "
+                           "idempotent item repair");
     }
     for (const u32 id : Retired) {
         for (const u64 inventory : {carried, storage}) {
@@ -12587,7 +14560,32 @@ void TickBbscDuelBellGive() {
             }
         }
     }
+    bool repair_ok = true;
+    if (repair_existing) {
+        for (const BbscKitItem& item : BbscKit) {
+            const u32 code = 0x40000000u | item.id;
+            for (const u64 inventory : {carried, storage}) {
+                if (BbscInventoryHas(inventory, code)) {
+                    const bool gone = BbscInventoryRemove(inventory, code);
+                    LOG_INFO(Debug,
+                             "BBSC kit: goods {} removed from the {} for normal-item repair ({})",
+                             item.id, inventory == carried ? "carried items" : "storage box",
+                             gone ? "gone" : "STILL THERE");
+                    repair_ok = repair_ok && gone;
+                }
+            }
+        }
+        missing.clear();
+        for (const BbscKitItem& item : BbscKit) {
+            if (!has(item.id)) {
+                missing.push_back(&item);
+            }
+        }
+    }
     if (missing.empty()) {
+        if (repair_existing) {
+            mark_repaired();
+        }
         return;
     }
     // 0x014D9A80(inventory, &code, count) is how many fit; 0x014DA0A0(inventory, &key, count) adds,
@@ -12602,13 +14600,22 @@ void TickBbscDuelBellGive() {
         alignas(16) static u32 key = 0;
         code = 0x40000000u | item->id;
         key = 0x80000000u | (3u << 28) | item->id;
-        const s32 fits = reinterpret_cast<Fits>(image_base + InventoryFitsOffset)(carried, &code, 1);
-        const s32 slot =
-            fits > 0 ? reinterpret_cast<Add>(image_base + InventoryAddOffset)(carried, &key, 1) : -1;
-        const bool now_there = BbscInventoryHas(carried, code);
-        LOG_INFO(Debug, "BBSC kit: goods {} added to the carried items (fits {}, slot {}, there now: "
-                        "{})",
-                 item->id, fits, slot, now_there);
+        u64 destination = carried;
+        s32 fits = reinterpret_cast<Fits>(image_base + InventoryFitsOffset)(carried, &code, 1);
+        if (fits <= 0) {
+            destination = storage;
+            fits = reinterpret_cast<Fits>(image_base + InventoryFitsOffset)(storage, &code, 1);
+        }
+        const s32 slot = fits > 0
+                             ? reinterpret_cast<Add>(image_base + InventoryAddOffset)(destination, &key, 1)
+                             : -1;
+        const bool now_there = has(item->id);
+        LOG_INFO(Debug, "BBSC kit: goods {} added to the {} (fits {}, slot {}, there now: {})",
+                 item->id, destination == carried ? "carried items" : "storage box", fits, slot,
+                 now_there);
+        BBSC_TIMELINE("KIT", "kit: goods {} added to the {} (fits {}, slot {}, there now: {})",
+                 item->id, destination == carried ? "carried items" : "storage box", fits, slot,
+                 now_there);
         if (now_there) {
             ++given;
             notice += given == 1 ? u"\n" : u", ";
@@ -12617,6 +14624,20 @@ void TickBbscDuelBellGive() {
     }
     if (given != 0) {
         BbscAnnounce(notice.c_str(), "kit given");
+    }
+    bool complete = true;
+    for (const BbscKitItem& item : BbscKit) {
+        complete = complete && has(item.id);
+    }
+    for (const u32 id : Retired) {
+        complete = complete && !has(id);
+    }
+    complete = complete && repair_ok;
+    if (!complete) {
+        LOG_WARNING(Debug, "BBSC kit: not all items could be placed yet - will retry");
+    } else if (repair_existing) {
+        mark_repaired();
+        LOG_INFO(Debug, "BBSC kit: inventory repair complete; custom goods are normal items");
     }
 }
 
@@ -12760,6 +14781,20 @@ void TickBbscInvadable() {
         BbscInAnotherWorld()) {
         return; // a guest / invader, dead, loading, or in someone else's world
     }
+    // Never in the Hunter's Dream (2026-10-18, aau2: invaded a player in his Dream, the host warped
+    // out, the invader was stuck in the Dream; vanilla never lets anyone invade the Dream).
+    if (BbscMapArea(GetCurrentPackedMap()) == BbscMapArea(BbscDreamStateMap)) {
+        if (has) {
+            const bool erased = BbscEraseLocalEffect(static_cast<s32>(BbscInvadableEffectId));
+            LOG_INFO(Debug, "BBSC invasions: in the Hunter's Dream - world closed to invaders "
+                            "(SpEffect {} taken off: {})",
+                     BbscInvadableEffectId, erased);
+            BBSC_TIMELINE("INVASION", "invasions: in the Hunter's Dream - world closed to invaders "
+                            "(SpEffect {} taken off: {})",
+                     BbscInvadableEffectId, erased);
+        }
+        return;
+    }
     if (has) {
         return;
     }
@@ -12774,6 +14809,9 @@ void TickBbscInvadable() {
                                        0, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0);
     if (added++ < 20) {
         LOG_INFO(Debug, "BBSC invasions: world open to invaders (SpEffect {} added, session state {}, "
+                        "now on: {})",
+                 BbscInvadableEffectId, state, BbscLocalEffectActive(bbsc_invadable_effect_rows));
+        BBSC_TIMELINE("INVASION", "invasions: world open to invaders (SpEffect {} added, session state {}, "
                         "now on: {})",
                  BbscInvadableEffectId, state, BbscLocalEffectActive(bbsc_invadable_effect_rows));
     }
@@ -12794,9 +14832,11 @@ void TickBbscHostBlank() {
         blank_ms = SteadyNowMs();
         LOG_INFO(Debug, "BBSC leave: host leave (Blank, guest leave or session end) - the guests go home, the "
                         "host's room closes on its own timeout (session patches stay on)");
+        BBSC_TIMELINE("LEAVE", "leave: host leave (Blank, guest leave or session end) - the guests go home, the "
+                        "host's room closes on its own timeout (session patches stay on)");
     }
     was = now;
-    // Test 2026-10-08 (host): after his Blank "he couldn't use anything until he exited, then
+    // Test 2026-10-08 (abood host): after his Blank "he couldn't use anything until he exited, then
     // it put him somewhere". The leave script (OnLeaveMagic -> OnLeaveMenu_Yes) calls SetLoadWait
     // (0x013358F0: Lua event object +0x8D = 1, "wait for the load") for everyone, then LeaveSession;
     // a guest's load home clears it, but the host stays in its world - no load - and everything
@@ -12815,6 +14855,8 @@ void TickBbscHostBlank() {
             WriteValue<u8>(lua, 0x8D, 0);
             blank_ms = 0;
             LOG_INFO(Debug, "BBSC leave: the host's Blank left the game waiting for a load that never "
+                            "comes (Lua +0x8D) - lifted, the host can act again");
+            BBSC_TIMELINE("LEAVE", "leave: the host's Blank left the game waiting for a load that never "
                             "comes (Lua +0x8D) - lifted, the host can act again");
         }
     }
@@ -12858,6 +14900,9 @@ void TickBbscGuestBlank() {
         LOG_INFO(Debug, "BBSC leave: the guest's Parting Blank is in use (use running {}, SpEffect 7 "
                         "on {}) - waiting for the game's own leave",
                  item, effect);
+        BBSC_TIMELINE("LEAVE", "leave: the guest's Parting Blank is in use (use running {}, SpEffect 7 "
+                        "on {}) - waiting for the game's own leave",
+                 item, effect);
     }
     was_using = using_blank;
     if (used_ms == 0) {
@@ -12883,6 +14928,13 @@ void TickBbscGuestBlank() {
                 ReadablePointer(param, 0x168) &&
                     (ReadValue<u64>(param, 0x15F) & 0x400000) != 0,
                 BbscEventFlag(4047), lua);
+    BBSC_TIMELINE("LEAVE", "leave: the guest's Parting Blank did not start the game's leave in {} s "
+                "(SpEffect 7 entry {:#x} flags {:#x}, leave bit {}, event flag 4047 {}, Lua {:#x}) - "
+                "BBSC raises OnLeaveMagic itself",
+                BbscGuestBlankWaitMs / 1000, node, node != 0 ? ReadValue<u32>(node, 0x1C) : 0,
+                ReadablePointer(param, 0x168) &&
+                    (ReadValue<u64>(param, 0x15F) & 0x400000) != 0,
+                BbscEventFlag(4047), lua);
     // Review 2026-10-08: not while a load runs, and only still a living guest (the game's own leave
     // may have started meanwhile without passing our trace).
     const u64 global_now = GetGlobalState();
@@ -12899,18 +14951,10 @@ void TickBbscGuestBlank() {
 
 void SendBbscPvpPacket(u8 kind, bool on) {
     static u32 sequence = 0;
-    struct {
-        u8 magic[4] = {'S', 'H', 'A', 'D'};
-        u8 type = 0x25;
-        u8 kind = 0;
-        u8 on = 0;
-        u8 sequence[4]{};
-    } packet;
-    static_assert(sizeof(packet) == 11);
+    Libraries::Np::NpSignaling::SignalingBbscPvp packet{};
     packet.kind = kind;
     packet.on = on ? 1 : 0;
-    ++sequence;
-    std::memcpy(packet.sequence, &sequence, 4);
+    packet.sequence = ++sequence;
     Libraries::Np::NpSignaling::Helpers::SendBbscWorldFlagsToPeers(&packet, sizeof(packet));
 }
 
@@ -13055,6 +15099,9 @@ void InstallBbscDeathTraceHooks() {
         LOG_ERROR(Debug, "BBSC boss fight: failed to hook Failed_BossAreaMission {:#x}",
                   FailedBossAreaMissionOffset);
     }
+    // The kit owns unused goods rows and must prepare them before the Bath Messenger can expose
+    // them.  Give that scan priority over the optional scaling / solid-NPC scans.
+    StartBbscDuelBell();
     StartBbscScaling();
     StartBbscSolidNpcs();
     // 0x0138BC70 Lua_MultiDoping: same prologue (push rbp; mov rbp, rsp; push r15).
@@ -13089,6 +15136,29 @@ void InstallBbscSpectateHooks() {
     LOG_INFO(Debug, "BBSC spectate enabled (SoloPlayDeath_2 {:#x}, PartyGhostDeath_2 {:#x})",
              SoloPlayDeathFinalOffset, PartyGhostDeathFinalOffset);
     InstallBbscBossClearHooks();
+}
+
+// When the game was last out of a stage transition (global+0x08 == 0) for a second (game tick), see
+// ArmBbscRejoin: a kept end after that belongs to a new load.
+std::atomic<s64> bbsc_transition_idle_ms{0};
+
+void TickBbscTransitionIdle() {
+    static s64 idle_since_ms = 0;
+    const u64 global = GetGlobalState();
+    if (!ReadablePointer(global, 0x10)) {
+        return;
+    }
+    const s64 now = SteadyNowMs();
+    if (ReadValue<u8>(global, 0x08) != 0) {
+        idle_since_ms = 0;
+        return;
+    }
+    if (idle_since_ms == 0) {
+        idle_since_ms = now;
+    }
+    if (now - idle_since_ms >= 1'000) {
+        bbsc_transition_idle_ms.store(now, std::memory_order_release);
+    }
 }
 
 bool ArmBbscRejoinV7(u64 state, u32 death_selected_map) {
@@ -13183,9 +15253,24 @@ bool ArmBbscRejoin() {
     }
     if (BbscRejoinV7Enabled()) {
         // Several kept-end hooks can fire during one death load; snapshot once per load.
+        // 2026-10-20 (CONFIRMED, test5 guest 19:02:49 and Weronika 2026-10-19 21:45:17): "once per
+        // load" was "once per 20 s". The follow load 15 s after a wipe reload got no snapshot, so
+        // the guest was made as type 0 (a host) in the Dream, the host's game made its copy of the
+        // guest the same way and counted 0 co-op hunters, and at the boss kill BlockClear2_1 took the
+        // solo branch (SoloBlockClear 0x013859F0 -> CSMultiPlayMan::Stop, caller 0x01385A9A): the
+        // session ended for both. A kept end after the game was out of a transition for a second
+        // (TickBbscTransitionIdle) belongs to a new load; the 20 s limit stays as a fallback.
         static s64 v7_last_ms = 0;
-        if (v7_last_ms != 0 && now - v7_last_ms < BbscRejoinDescriptorTimeoutMs) {
+        const bool new_load =
+            bbsc_transition_idle_ms.load(std::memory_order_acquire) > v7_last_ms;
+        if (v7_last_ms != 0 && now - v7_last_ms < BbscRejoinDescriptorTimeoutMs && !new_load) {
             return false;
+        }
+        if (v7_last_ms != 0 && now - v7_last_ms < BbscRejoinDescriptorTimeoutMs) {
+            LOG_INFO(Debug, "BBSC rejoin v7: a new load {} ms after the last snapshot - taken again",
+                     now - v7_last_ms);
+            BBSC_TIMELINE("LOAD", "rejoin v7: a new load {} ms after the last snapshot - taken again",
+                          now - v7_last_ms);
         }
         v7_last_ms = now;
         return ArmBbscRejoinV7(state, ReadValue<u32>(state, 0x0C));
@@ -13451,6 +15536,55 @@ BbscPresence bbsc_presence;
 s64 bbsc_presence_tick_ms = 0;
 s32 bbsc_presence_boss_id = -1;
 
+// The player's build for the Discord status (2026-10-20, a friend of the user): the highest of
+// Strength, Skill, Bloodtinge and Arcane. They are [[0x0553B130]+8] +0x58 / +0x60 / +0x68 / +0x70
+// (CONFIRMED statically: the weapon requirement checks 0x01F29F00 and 0x0157DC80 compare exactly
+// these with EquipParamWeapon properStrength / properAgility / properMagic / properFaith, on the
+// character's game data chr->vtable[0x1C8]; Insight +0x84 and echoes +0x94 are in the same block).
+// Strength and Skill both on top = Quality; two others within 3 of each other = "A/B build";
+// nothing at 15 yet = no build. Every change is logged with the four values.
+std::string BbscBuildName() {
+    const u64 slots = ReadValue<u64>(image_base + PlayerSlotManagerPointerOffset, 0);
+    const u64 data = ReadablePointer(slots, 0x10) ? ReadValue<u64>(slots, 0x08) : 0;
+    if (!ReadablePointer(data, 0x78)) {
+        return {};
+    }
+    std::array<std::pair<s32, const char*>, 4> stats{{{ReadValue<s32>(data, 0x58), "Strength"},
+                                                      {ReadValue<s32>(data, 0x60), "Skill"},
+                                                      {ReadValue<s32>(data, 0x68), "Bloodtinge"},
+                                                      {ReadValue<s32>(data, 0x70), "Arcane"}}};
+    for (const auto& [value, name] : stats) {
+        if (value < 1 || value > 99) {
+            return {}; // not a loaded character
+        }
+    }
+    const s32 strength = stats[0].first;
+    const s32 skill = stats[1].first;
+    std::stable_sort(stats.begin(), stats.end(),
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
+    const s32 top = stats[0].first;
+    std::string build;
+    if (top >= 15) {
+        const auto near_top = [top](s32 value) { return value >= 15 && value >= top - 3; };
+        if (near_top(strength) && near_top(skill)) {
+            build = "Quality build";
+        } else if (near_top(stats[1].first)) {
+            build = fmt::format("{}/{} build", stats[0].second, stats[1].second);
+        } else {
+            build = fmt::format("{} build", stats[0].second);
+        }
+    }
+    static std::string logged;
+    const std::string line = fmt::format("{} (Strength {}, Skill {}, Bloodtinge {}, Arcane {})",
+                                         build.empty() ? "no build yet" : build, strength, skill,
+                                         ReadValue<s32>(data, 0x68), ReadValue<s32>(data, 0x70));
+    if (line != logged) {
+        logged = line;
+        LOG_INFO(Debug, "BBSC Discord status: {}", line);
+    }
+    return build;
+}
+
 void TickBbscPresence() {
     const s64 now = SteadyNowMs();
     if (now - bbsc_presence_tick_ms < 1000) {
@@ -13467,6 +15601,16 @@ void TickBbscPresence() {
     next.max_hunters = BbscHuntersEnabled() ? 5 : 3;
     const s32 state = GetSessionState();
     next.role = state == 3 ? 1 : state == 6 ? 2 : 0;
+    if (next.in_game) {
+        next.build = BbscBuildName();
+        const u64 player = GetLocalPlayerCharacter();
+        next.dead = bbsc_spectate_active || (player != 0 && GetCharacterHp(player) == 0);
+        next.spectating = bbsc_spectate_active;
+        if (next.spectating && bbsc_watch.on && !bbsc_watch.free && bbsc_watch.count > 0) {
+            next.watching = bbsc_watch.index;
+            next.watch_count = bbsc_watch.count;
+        }
+    }
     if (next.role != 0) {
         const s32 members = GetBbscSessionMemberCount(GetGlobalState());
         next.hunters = std::clamp(members, 2, next.max_hunters);
@@ -13487,6 +15631,10 @@ void TickBbscPresence() {
                 last_key = key;
                 LOG_INFO(Debug,
                          "BBSC hunters: {} in the world - {} cooperator(s), {} invader(s), session "
+                         "state {} ({})",
+                         all, coop, inv, state,
+                         state == 3 ? "hosting" : state == 6 ? "guest" : "alone");
+                BBSC_TIMELINE("PARTY", "hunters: {} in the world - {} cooperator(s), {} invader(s), session "
                          "state {} ({})",
                          all, coop, inv, state,
                          state == 3 ? "hosting" : state == 6 ? "guest" : "alone");
@@ -13595,12 +15743,263 @@ void TickBbscFreeBell() {
              ReadValue<u8>(result.row, 0x38));
 }
 
+// ---- Free bell, no free Insight (2026-10-18) -----------------------------------------------------
+// Report (kukar3x, host, alone): ring the Hunt Bell, quit to the menu and continue - "+1 Insight,
+// with a message that no-one was found"; the same after a Silencing Blank; 5 Insight that way.
+// When a Beckoning Bell runs out unanswered the game gives its Insight back ("Could not discover
+// the chime of a Small Resonant Bell. No insight was consumed.", text 100300) - but the free bell
+// (and the kit's Hunt Bell, consumeHeroPoint 0) never took any. The refund itself is native and
+// was not found (HYPOTHESIS: a fixed 1); so BBSC takes back exactly +1 Insight that turns up right
+// after an unanswered bell ends: within 10 s of a hosting session that nobody joined, or within
+// 45 s of the next run's first character load when the game was left while still ringing (a marker
+// file per shadPS4 user, <mod>\bell-pending\<user>.txt - the save slot is not known that early).
+// Insight = [[0x0553B130]+8]+0x84 (CONFIRMED statically: GetHeroPoint 0x01338670 reads it).
+constexpr size_t PlayerInsightOffset = 0x84;
+constexpr s64 BbscBellRefundWindowMs = 10'000;
+constexpr s64 BbscBellRefundLoadWindowMs = 45'000;
+
+void TickBbscFreeBellRefund() {
+    static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_FREE_BELL");
+    static s64 last_ms = 0;
+    static s32 last_insight = -1;
+    static bool alone_hosting = false;   // hosting, nobody has joined yet
+    static s64 ended_unanswered_ms = 0;  // an unanswered bell just ended
+    static s64 loaded_with_marker_ms = 0; // first character of this run, the last run left a bell
+    static bool marker_checked = false;
+    if (!enabled || image_base == 0) {
+        return;
+    }
+    const s64 now = SteadyNowMs();
+    if (now - last_ms < 500) {
+        return;
+    }
+    last_ms = now;
+    namespace fs = std::filesystem;
+    static const fs::path marker =
+        Common::FS::GetUserPath(Common::FS::PathType::CapturesDir).parent_path() / "bell-pending" /
+        fmt::format("{}.txt", BbscProcessUserId().empty() ? std::string("default")
+                                                          : BbscProcessUserId());
+    const u64 local = GetPlayerSlotData();
+    const u64 global = GetGlobalState();
+    const bool loading = !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0;
+    if (local == 0 || loading) {
+        last_insight = -1;
+        return;
+    }
+    const s32 insight = ReadValue<s32>(local, PlayerInsightOffset);
+    const s32 state = GetSessionState();
+    const s32 members = GetBbscSessionMemberCount(global);
+    if (!marker_checked) {
+        marker_checked = true;
+        std::error_code ec;
+        if (fs::exists(marker, ec)) {
+            loaded_with_marker_ms = now;
+            fs::remove(marker, ec);
+            LOG_INFO(Debug, "BBSC free bell: the last run ended while our bell still rang - "
+                            "watching for the game's Insight refund");
+            BBSC_TIMELINE("INSIGHT", "free bell: the last run ended while our bell still rang - "
+                            "watching for the game's Insight refund");
+        }
+    }
+    // Hosting alone = a bell that nobody has answered yet; a marker while it lasts.
+    if (state == 3 && members <= 1) {
+        if (!alone_hosting) {
+            alone_hosting = true;
+            std::error_code ec;
+            fs::create_directories(marker.parent_path(), ec);
+            std::ofstream(marker) << "bell rang, nobody joined yet\n";
+        }
+    } else if (alone_hosting) {
+        const bool answered = state == 3 && members > 1;
+        alone_hosting = false;
+        if (!answered) {
+            ended_unanswered_ms = now;
+        }
+        std::error_code ec;
+        fs::remove(marker, ec);
+    }
+    const bool in_window =
+        (ended_unanswered_ms != 0 && now - ended_unanswered_ms < BbscBellRefundWindowMs) ||
+        (loaded_with_marker_ms != 0 && now - loaded_with_marker_ms < BbscBellRefundLoadWindowMs);
+    if (last_insight >= 0 && insight == last_insight + 1 && in_window) {
+        WriteValue<s32>(local, PlayerInsightOffset, last_insight);
+        LOG_INFO(Debug, "BBSC free bell: +1 Insight right after an unanswered bell ({}) - the game's "
+                        "refund for a bell that cost nothing, taken back ({} -> {})",
+                 ended_unanswered_ms != 0 ? "session ended" : "after the reload", insight,
+                 last_insight);
+        BBSC_TIMELINE("INSIGHT", "free bell: +1 Insight right after an unanswered bell ({}) - the game's "
+                        "refund for a bell that cost nothing, taken back ({} -> {})",
+                 ended_unanswered_ms != 0 ? "session ended" : "after the reload", insight,
+                 last_insight);
+        ended_unanswered_ms = 0;
+        loaded_with_marker_ms = 0;
+        return; // last_insight stays
+    }
+    if (ended_unanswered_ms != 0 && now - ended_unanswered_ms >= BbscBellRefundWindowMs) {
+        ended_unanswered_ms = 0;
+    }
+    if (loaded_with_marker_ms != 0 && now - loaded_with_marker_ms >= BbscBellRefundLoadWindowMs) {
+        loaded_with_marker_ms = 0;
+    }
+    last_insight = insight;
+}
+
+// Timeline (see "Timeline" at the top): the role and area every line is stamped with, plus the
+// changes of session state, area and Insight themselves. Game tick.
+void TickBbscTimelineContext() {
+    static s64 last_ms = 0;
+    static s32 last_state = -2;
+    static u32 last_map = 0;
+    static s32 last_insight = -1;
+    const s64 now = SteadyNowMs();
+    if (image_base == 0 || now - last_ms < 250) {
+        return;
+    }
+    last_ms = now;
+    const s32 state = GetSessionState();
+    const u32 map = GetCurrentPackedMap();
+    bbsc_timeline_state = state;
+    bbsc_timeline_type = GetLocalPlayerType();
+    if (state != last_state) {
+        static constexpr std::array<const char*, 8> names{
+            "solo", "1", "2", "hosting (bell rung)", "joining", "5", "in a host's world", "leaving"};
+        BBSC_TIMELINE("SESSION", "session state {} -> {} ({})", last_state < 0 ? 0 : last_state,
+                      state,
+                      state >= 0 && state < static_cast<s32>(names.size()) ? names[state] : "?");
+        last_state = state;
+    }
+    if (IsUsablePackedMap(map) && map != last_map) {
+        const u32 before = last_map;
+        last_map = map;
+        bbsc_timeline_map = map;
+        BBSC_TIMELINE("AREA", "now in {} (m{:02}_{:02}){}", BbscAreaName(map), (map >> 24) & 0xFF,
+                      (map >> 16) & 0xFF,
+                      before == 0 ? std::string{}
+                                  : fmt::format(", was {}", BbscAreaName(before)));
+    }
+    const u64 local = GetPlayerSlotData();
+    const u64 global = GetGlobalState();
+    if (local == 0 || !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0) {
+        return; // loading: the values are not settled
+    }
+    const s32 insight = ReadValue<s32>(local, PlayerInsightOffset);
+    if (last_insight >= 0 && insight != last_insight && insight >= 0 && insight < 1000) {
+        BBSC_TIMELINE("INSIGHT", "{} -> {} ({:+})", last_insight, insight, insight - last_insight);
+    }
+    last_insight = insight;
+}
+
+// ---- Bells anywhere (2026-10-19) ----------------------------------------------------------------
+// The user: "make u can use ur bell anywhere without restrictions" (reports: "can't use the Kin Bell
+// in the Hunter's Dream", "Kin Bell not usable in the sewers"). The item check 0x0157F200 (callers:
+// goods id, character, [chr+0x1C8], player type [chr+0x78], both weapon ids) ANDs about twenty
+// conditions into one answer, `mov al, cl` at 0x015800D1 - the RE trace site
+// ResponderBell.Availability.FinalResult. What each frame local holds (CONFIRMED statically, from
+// the disassembly; meanings marked ? are read from what they test, not from names):
+//   Kept - the player's own state, the game's answer stays: r12b the row's enable bit (+0x44) for
+//   the player type (a phantom cannot ring a host's bell); [rbp-0x1D0] character flag
+//   [chr+0x1E1] & 0x400 (?); [rbp-0x1C8] online-only item while offline (global+0x1590, set by
+//   the network state machine 0x01E57170); [rbp-0x1DA] a co-op session is on and the row is not
+//   for co-op (enable bit 4; the slot table 0x0186FE40 / member count); [rbp-0x1F8] / [rbp-0x1FC]
+//   the menu manager [0x05540508] (+0x400C = 0.5 s after a menu closes); [rbp-0x200] Insight;
+//   [rbp-0x1B8] bullets; [rbp-0x1D9] stats; [rbp-0x1E8] key-item type; weapon flags [rbp-0x1D8],
+//   [rbp-0x1D4], [rbp-0x1B9]; at the end r15b, [rbp-0x1B4] and sil & r8b (weapon / SpEffect
+//   state 232).
+//   Lifted for the kit bells - where you are: [rbp-0x1E0] the character's SpEffect holder refuses
+//   the goods ([chr+0x1C8] vfunc +0x10, ?); [rbp-0x1E1] candidate state (goods 9998/9999);
+//   [rbp-0x1EC] / [rbp-0x1BA] the bell branches (area check 0x0191A750, the Blank's session tests);
+//   [rbp-0x1F4] goods 120; [rbp-0x1F0] the Beckoning Bell's area result.
+// Only the local, living player's kit bells (rows with BBSC's sortId 240010-240013: Hunt, Kin,
+// Bloodlust, Duel Bell), only when the game said no and nothing in the kept list did. Switch
+// SHADPS4_BBSC_BELLS_ANYWHERE. Logs 'BBSC bells anywhere:' on every change of bell / reasons / map.
+constexpr u64 ItemUsableResultOffset = 0x015800D1;
+void ApplyBbscBellsAnywhere(const GuestRegisterSnapshot* registers) {
+    static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_BELLS_ANYWHERE");
+    if (!enabled || (registers->rcx & 0xFF) != 0) {
+        return; // off, or the game already says yes
+    }
+    const u64 row = registers->r13;
+    if (!ReadablePointer(row, 0x48)) {
+        return;
+    }
+    static constexpr std::array<std::string_view, 4> Bells{"Hunt Bell", "Kin Bell",
+                                                           "Bloodlust Bell", "Duel Bell"};
+    const s32 sort_id = ReadValue<s32>(row, 28);
+    if (sort_id < 240010 || sort_id > 240013) {
+        return; // not one of the kit's bells
+    }
+    const std::string_view bell = Bells[static_cast<size_t>(sort_id - 240010)];
+    const u64 frame = registers->rbp;
+    if (registers->r14 == 0 || registers->r14 != GetLocalPlayerCharacter() ||
+        GetCharacterHp(registers->r14) <= 0 || !ReadablePointer(frame - 0x200, 0x200)) {
+        return;
+    }
+    const auto low = [frame](u64 off) { return ReadValue<u8>(frame - off, 0); };
+    std::string kept;
+    const auto keep = [&kept](bool blocked, std::string_view why) {
+        if (blocked) {
+            kept += kept.empty() ? "" : ", ";
+            kept += why;
+        }
+    };
+    keep((registers->r12 & 0xFF) == 0, "not for this player type");
+    keep((ReadValue<u64>(frame - 0x1D0, 0) & 0xFFFFFFFFFFull) != 0, "character state");
+    keep((low(0x1C8) & 1) != 0, "offline");
+    keep(low(0x1DA) != 0, "in a co-op session");
+    keep(low(0x1F8) != 0 || low(0x1FC) != 0, "menu just closed");
+    keep(low(0x200) != 0, "Insight");
+    keep(low(0x1B8) != 0, "bullets");
+    keep(low(0x1D9) != 0, "stats");
+    keep(low(0x1E8) != 0, "item type");
+    keep(low(0x1D8) == 0 || low(0x1D4) == 0 || low(0x1B9) != 0, "weapon");
+    keep((registers->r15 & 0xFF) == 0 || low(0x1B4) == 0 ||
+             (registers->rsi & registers->r8 & 0xFF) == 0,
+         "weapon or effect state");
+    std::string lifted;
+    const auto lift = [&lifted](bool blocked, std::string_view why) {
+        if (blocked) {
+            lifted += lifted.empty() ? "" : ", ";
+            lifted += why;
+        }
+    };
+    lift((low(0x1E0) & 1) != 0, "item rule of the character's effects");
+    lift(low(0x1E1) == 0, "candidate state");
+    lift(low(0x1EC) == 0, "bell branch");
+    lift((low(0x1F4) & 1) != 0, "goods 120 rule");
+    lift((low(0x1F0) & 1) != 0, "area");
+    lift(low(0x1BA) == 0, "session branch");
+    const bool allow = kept.empty() && !lifted.empty();
+    if (allow) {
+        auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
+        changed->rcx = (changed->rcx & ~u64{0xFF}) | 1;
+    }
+    static std::mutex last_mutex;
+    static std::string last;
+    const u32 map = GetCurrentPackedMap();
+    std::string line =
+        allow ? fmt::format("{} usable in map {:#x} - lifted: {}", bell, map, lifted)
+        : !kept.empty()
+            ? fmt::format("{} stays unusable in map {:#x} - the player's state: {}{}{}", bell,
+                          map, kept, lifted.empty() ? "" : "; would lift: ", lifted)
+            : fmt::format("{} stays unusable in map {:#x} - none of the known rules (the game's "
+                          "last check)", bell, map);
+    std::scoped_lock lock{last_mutex};
+    if (line != last) {
+        last = line;
+        LOG_INFO(Debug, "BBSC bells anywhere: {}", line);
+        BBSC_TIMELINE("BELL", "{}", line);
+    }
+}
+
 void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
     if (tag >= Sites.size() || registers == nullptr) {
         return;
     }
 
     const auto& site = Sites[tag];
+    if (site.offset == ItemUsableResultOffset) {
+        ApplyBbscBellsAnywhere(registers);
+    }
     if (site.offset == SummonBuildEntryOffset) {
         ApplyBbscHunterCap(registers->rdi);
     }
@@ -13638,6 +16037,16 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
     }
     if (site.offset == BbscGameTickOffset) {
         bbsc_tick_map.store(GetCurrentPackedMap(), std::memory_order_release);
+        TickBbscTimelineContext();
+        TickBbscFrameRate();
+        TickBbscGateWatch();
+        TickBbscTransitionIdle();
+        TickBbscCoopCountFix();
+        TickBbscGuestTypeWatch();
+        TickBbscBossGoodsCheck();
+        TickBbscRespawnPointWatch();
+        TickBbscHostTime();
+        TickBbscHomeSpot();
         TickBbscRelayHostLock();
         TickBbscBossRewards();
         TickBbscGuestDrops();
@@ -13669,6 +16078,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscGuestBlank();
         TickBbscDeadWatchdog();
         TickBbscDeathCurtain();
+        TickBbscLoadingScreenClose();
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
@@ -13676,6 +16086,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
         TickBbscFreeBell();
+        TickBbscFreeBellRefund();
         TickBbscEchoTrace();
         TickBbscMapTrace();
         TickBbscPresence();
@@ -14261,6 +16672,8 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
             break;
         case TraceKind::EnginePanic:
             WriteEnginePanicStack(capture_file, *registers);
+            BBSC_TIMELINE("CRASH", "game panic {} (\"{}\") - the game closes now", registers->rsi,
+                          ReadGuestAscii(registers->rdx, 80));
             break;
         }
         capture_file << "}\n";
@@ -14346,9 +16759,13 @@ void OnBbscProgressPacket(const std::uint32_t* flags, std::size_t count) {
                std::ranges::find(BbscProgressFlagsMore, flag) != BbscProgressFlagsMore.end();
     };
     size_t added = 0;
+    s32 time_bits = 0; // the packet holds every listed flag the host has on, so absent = off
     {
         std::scoped_lock lock{bbsc_progress_mutex};
         for (size_t i = 0; i < count; ++i) {
+            if (flags[i] >= 9800 && flags[i] <= 9802) {
+                time_bits |= 0x80 >> (flags[i] - 9800);
+            }
             if (known(flags[i]) && std::ranges::find(bbsc_progress_host_flags, flags[i]) ==
                                        bbsc_progress_host_flags.end()) {
                 bbsc_progress_host_flags.push_back(flags[i]);
@@ -14356,8 +16773,13 @@ void OnBbscProgressPacket(const std::uint32_t* flags, std::size_t count) {
             }
         }
     }
+    // None of the three: a host on an older BBSC (it does not send them) - unknown, not "no night".
+    bbsc_host_time_bits = time_bits != 0 ? time_bits : -1;
+    bbsc_host_time_ms = SteadyNowMs();
     if (added != 0) {
         LOG_INFO(Debug, "BBSC shared progress: the host has {} more boss flag(s) for our world",
+                 added);
+        BBSC_TIMELINE("WORLD", "shared progress: the host has {} more boss flag(s) for our world",
                  added);
     }
 }
@@ -14373,6 +16795,11 @@ void NoteBbscRelayHost(std::uint32_t sender, std::uint32_t packed_map, float x, 
 
 std::uint32_t GetBbscRelayHost() {
     return BbscRelayHostForPackets();
+}
+
+void NoteBbscHostRangOurSign(std::uint32_t sender) {
+    std::scoped_lock lock{bbsc_rang_mutex};
+    bbsc_rang_hosts[sender] = SteadyNowMs();
 }
 
 std::int32_t GetBbscRelaySessionState() {
@@ -14425,7 +16852,11 @@ void OnBbscScalePacket(const std::uint16_t (&percent)[5]) {
 
 void OnBbscPvpPacket(std::uint8_t kind, std::uint8_t on) {
     if (kind == 0) {
-        bbsc_pvp_host_state = on != 0 ? 1 : 0;
+        const int requested = on != 0 ? 1 : 0;
+        if (bbsc_pvp_host_state.exchange(requested) != requested) {
+            LOG_INFO(Debug, "BBSC PvP: received the host's Duel Bell state: {}",
+                     requested != 0 ? "on" : "off");
+        }
         bbsc_pvp_host_state_ms = SteadyNowMs();
     } else if (kind == 1) {
         bbsc_pvp_request = on != 0 ? 1 : 0;
@@ -14561,6 +16992,72 @@ std::optional<std::uint32_t> GetBbscConnectFirstAreaId() {
     return map;
 }
 
+void BbscTimelineEvent(std::string_view kind, std::string_view text) {
+    BbscTimeline(kind, text);
+}
+
+// ---- Message and bloodstain lists (2026-10-18) ---------------------------------------------------
+// Reports (valriv55, greatinvs host+guest, aau2, yoshiyukirose, shacoringa, emirya, ansemtv66):
+// "[Dantelion2 Panic] (null)(265) Transaction failed" at Father Gascoigne / Cathedral Ward, host and
+// guest, shadPS4 and BBport, right after a tomb_messenger/message_area reply of 155-197 KB (the
+// same 197 KB list read fine five times, the sixth panicked). CONFIRMED statically: panic 265 with
+// "Transaction failed" (0x04737D80) is what the engine's allocator sites (0x00C8BD70 and ~20 more)
+// call when an allocation comes back null - a full heap, so the more entries, the likelier. The
+// server caps its replies (64 KB, game server F777BEBB), but players on a server without that fix
+// still crash: the game's own request is lowered here, every area's "GetCount" to a few entries.
+// Servers honour GetCount (ours since the first one), so the reply shrinks with it.
+constexpr u32 BbscTombsPerArea = 4;
+constexpr u32 BbscMessagesPerArea = 10;
+
+std::string CapBbscAreaListRequest(std::string_view path, std::string& body) {
+    static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_AREA_LIST_CAP");
+    if (!enabled || path.find("/message_area") == std::string_view::npos) {
+        return {};
+    }
+    u32 cap = 0;
+    if (path.find("/tomb_messenger/") != std::string_view::npos) {
+        cap = BbscTombsPerArea;
+    } else if (path.find("/blood_messenger/") != std::string_view::npos) {
+        cap = BbscMessagesPerArea;
+    } else {
+        return {};
+    }
+    const std::string_view key = "\"GetCount\":";
+    u32 areas = 0;
+    u32 lowered = 0;
+    u64 asked = 0;
+    for (size_t at = body.find(key); at != std::string::npos; at = body.find(key, at + 1)) {
+        size_t begin = at + key.size();
+        while (begin < body.size() && body[begin] == ' ') {
+            ++begin;
+        }
+        size_t end = begin;
+        while (end < body.size() && body[end] >= '0' && body[end] <= '9' && end - begin < 9) {
+            ++end;
+        }
+        if (end == begin) {
+            continue;
+        }
+        const u32 count = static_cast<u32>(std::strtoul(body.substr(begin, end - begin).c_str(),
+                                                        nullptr, 10));
+        ++areas;
+        asked += count;
+        if (count > cap) {
+            body.replace(begin, end - begin, std::to_string(cap));
+            ++lowered;
+        }
+    }
+    if (lowered == 0) {
+        return {};
+    }
+    std::string summary =
+        fmt::format("BBSC area list: {} - {} area(s), {} asked for more than {} (asked {} in all)",
+                    cap == BbscTombsPerArea ? "bloodstains" : "messages", areas, lowered, cap,
+                    asked);
+    BbscTimeline("NET", std::string_view(summary).substr(5));
+    return summary;
+}
+
 std::optional<std::string> GetSeamlessHostPlacementHeader() {
     std::optional<SummonPlacementDescriptor> placement;
     {
@@ -14640,7 +17137,7 @@ bool SetSeamlessHostPlacementHeader(std::string_view value) {
             bbsc_connect_first_since_ms.store(SteadyNowMs(), std::memory_order_release);
         } else if (const u32 old = bbsc_connect_first_map.exchange(0, std::memory_order_acq_rel);
                    old != 0) {
-            // Test 2026-10-07 (third player): the host was in the Dream for a moment while a tester
+            // Test 2026-10-07 (third player): the host was in the Dream for a moment while kalee
             // put his sign down; the host came back to Central Yharnam 2 minutes later, but a
             // placement in our own map never cleared the old target, so the sign stayed
             // advertised in the Dream for 10 minutes and the host never saw it.
@@ -15305,6 +17802,7 @@ void InstallReverseEngineeringTrace() {
     installed = hook_count == Sites.size();
     LOG_INFO(Debug, "Bloodborne RE trace installed {}/{} hooks; capture={}", hook_count,
              Sites.size(), Common::FS::PathToUTF8String(capture_path));
+    BBSC_TIMELINE("START", "BBSC hooks installed: {} of {}", hook_count, Sites.size());
     InstallBbscSpectateHooks();
     InstallBbscWallHooks();
     InstallBbscEchoPathHooks();

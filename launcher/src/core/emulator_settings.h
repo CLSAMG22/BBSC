@@ -210,8 +210,8 @@ struct GeneralSettings {
     Setting<bool> show_fps_counter{false};
     Setting<int> console_language{1};
     Setting<int> big_picture_scale{1000};
-    Setting<std::string> shadnet_server{"srv.shadps4.net:31313"};
-    Setting<std::string> shadnet_webapi_server{"http://srv.shadps4.net:31315"};
+    Setting<std::string> shadnet_server{"play.seamlesshunt.com:31313"};
+    Setting<std::string> shadnet_webapi_server{"http://play.seamlesshunt.com:31315"};
     Setting<std::string> signaling_info{};
     Setting<bool> enable_upnp{true};
 

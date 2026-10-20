@@ -24,6 +24,7 @@ it runs on a stock Python, and it can retune the summon parameters on the way ou
 """
 import argparse
 import base64
+import collections
 import datetime
 import hashlib
 import json
@@ -239,6 +240,25 @@ MESSAGES_PER_REGION = 100   # newest kept per region
 TOMBS_PER_REGION = 40
 TOMBS_PER_USER_REGION = 3   # a player's older bloodstains in the same region drop out
 TOMB_MAX_AGE = 7 * 24 * 3600
+# Reply size cap (2026-10-18). Reports (valriv55, Gascoigne / Cathedral Ward, host and guest, solo
+# too): "[Dantelion2 Panic] (null)(265) Transaction failed" every time right after a
+# tomb_messenger/message_area reply of ~155 KB; replies of 97 KB / 106 KB never crashed.
+# Lists are cut, newest first, so the whole reply stays under this many bytes of JSON.
+# --tomb-max-response-bytes (SeamlessHunt's flag, 2026-10-17) sets it for messages and bloodstains;
+# 0 there = no cap. Without the flag the 64 KB default applies.
+AREA_REPLY_BUDGET = 64 * 1024
+
+def _within_budget(entries, budget=None):
+    budget = AREA_REPLY_BUDGET if budget is None else budget
+    if not budget:
+        return list(entries)
+    kept, size = [], 512   # room for the reply's other fields
+    for entry in entries:
+        size += len(json.dumps(entry, separators=(",", ":"))) + 1
+        if size > budget:
+            break
+        kept.append(entry)
+    return kept
 
 def _as_int(value, default=0):
     try:
@@ -367,6 +387,10 @@ def blood_area(req):
             here = [m for m in messages if _region(m) == key and m["UserId"] != user]
             here.sort(key=lambda m: m["BloodMessId"], reverse=True)
             found += [_message_entry(m) for m in here[:limit]]
+    total = len(found)
+    found = _within_budget(found)
+    if len(found) < total:
+        print("      messages: reply cut to {} of {} (size cap)".format(len(found), total), flush=True)
     areas = ["{}/{}".format(*_region(a)[:2]) for a in body.get("AreaInfoList") or []]
     stored = sorted({"{}/{}".format(m["AreaId"], m["AreaRegionId"]) for m in messages})
     print("      messages: {} for user {} (asked {}; stored in {})".format(
@@ -488,6 +512,11 @@ def tomb_area(req):
             here = [t for t in tombs if _region(t) == key and t["UserId"] != user]
             here.sort(key=lambda t: t["TombMessId"], reverse=True)
             found += [_tomb_entry(t) for t in here[:limit]]
+    total = len(found)
+    found = _within_budget(found)
+    if len(found) < total:
+        print("      bloodstains: reply cut to {} of {} (size cap)".format(len(found), total),
+              flush=True)
     areas = ["{}/{}".format(*_region(a)[:2]) for a in body.get("AreaInfoList") or []]
     print("      bloodstains: {} for user {} (asked {}; {} stored)".format(
         len(found), user, ",".join(areas) or "-", len(tombs)), flush=True)
@@ -527,15 +556,41 @@ def tomb_delete(req):
 # (FormDataVersion, FormData, ChannelId, ShareLevel, Status, DiscernmentWord, RitualLevel,
 # HolyGrailTypeId, FixedOrGeneral, SubFeatureFlag, CreateUserId, CreateCharaId, CreateDate,
 # LastPlayDate, TurnoutLevel, WishMaterialList); the reply parser 0x01E7F240 reads ChannelId and
-# DiscernmentWord at the top level of an upload / share reply. Search (used by the ritual itself,
-# GetCount 1) stays empty on purpose: answering it could swap a player's freshly made dungeon for
-# someone else's. Unknown ids are never reported in LostChannelIdList (dungeons made before this
-# server stored them must not be dropped from anyone's save).
+# DiscernmentWord at the top level of an upload / share reply. Search answers only the fixed
+# dungeons (FIXED_CHALICES below); any other search stays empty on purpose: answering it could swap
+# a player's freshly made dungeon for someone else's. Unknown ids are never reported in
+# LostChannelIdList (dungeons made before this server stored them must not be dropped from anyone's
+# save).
 GLYPH_LETTERS = "abcdefghijkmnpqrstuvwxyz23456789"
 CHANNEL_SKIP = ("SessionId", "MessageId", "UserId", "CharaId")
 # keys the server owns: an upload never overwrites them
 CHANNEL_SERVER_KEYS = ("ChannelId", "DiscernmentWord", "CreateUserId", "CreateCharaId",
                        "CreateDate", "LastPlayDate")
+
+# Fixed chalice dungeons (2026-10-19). The altar ritual of a FIXED chalice (Pthumeru, Hintertomb,
+# Loran, Isz) asks /channel/search for its dungeon: FixedOrGeneralList [{"FixedOrGeneral": 2}],
+# HolyGrailTypeId, RitualLevel, SubFeatureFlag 256, GetCount 1 (server log 2026-09-29 00:17:07,
+# Pthumeru level 1; that player was back at the login 18 s later). This server answered with an
+# empty list, so the ritual had no dungeon. The ten fixed dungeons' FormData is from
+# NoDreamForTheHunterBB by Fahad (github.com/Mob100percent/NoDreamForTheHunterBB, GPL-3.0), taken
+# from thehuntersdream.com. Each becomes one shared channel here (made at its first search, owner 0
+# so no player's share / upload changes it), so every player gets the same ChannelId and glyph.
+# Every entry: SubFeatureFlag 256, FixedOrGeneral 2, FormDataVersion 0, ShareLevel 2, Status 1,
+# UnlockFlagList [0, <bit>, 0] (the bit the game sends in UnlockedFlagList), no WishMaterialList.
+FIXED_CHALICE_SUB_FEATURE = 256
+FIXED_CHALICES = [
+    # (HolyGrailTypeId, RitualLevel, unlock bit, FormData)
+    (0, 1, 1, "BQAAAIwAAAAAWgod3RcAAP////////////////////8+pk47WgAAAP////////////////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAtAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (0, 2, 128, "BQAAAIwAAAAAWhQdQRgAAP////////////////////8+pk47WgAAAEimTjtbAAAA//////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (0, 3, 16384, "BQAAAIwAAAAAWh4dpRgAAKBHXzs9AAAAoOaDO1UAAAA+pk47WgAAAEimTjtbAAAA//////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (0, 4, 2097152, "BQAAAIwAAAAAWigdCRkAAEDOYDs+AAAAQANtO0YAAAA+pk47WgAAAEimTjtbAAAAXKZOO10AAACg3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (0, 5, 268435456, "BQAAAIwAAAAAWjIdbRkAAEDOYDs+AAAA4POGO1cAAAA+pk47WgAAAEimTjtbAAAAXKZOO10AAACg3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAtAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (1, 2, 256, "BQAAAIwAAAAAWhUdSxgAAP////////////////////+spk47XgAAAMB1ETsKAAAA//////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (1, 3, 32768, "BQAAAIwAAAAAWh8drxgAAP//////////QG2FO1YAAACspk47XgAAALamTjtfAAAAwHUROwoAAACg3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (2, 4, 8388608, "BQAAAIwAAAAAWiodHRkAAP////////////////////8kp047YAAAAP////////////////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (2, 5, 1073741824, "BQAAAIwAAAAAWjQdgRkAAP//////////gHqIO1gAAAAkp047YAAAAC6nTjthAAAA//////////+g3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    (3, 5, 2147483648, "BQAAAIwAAAAAWjUdixkAAD6mTjtaAAAAIAGKO1kAAACSp047YgAAAEimTjtbAAAArKZOO14AAACg3UY7LQAAAP///////////////////////////////y0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+]
 
 
 def _date(when):
@@ -635,7 +690,64 @@ def channel_word_search(req):
         found = [_channel_entry(c) for c in STORE.data["channels"].values()
                  if word and c.get("DiscernmentWord") == word]
     print("      chalice: glyph search '{}' -> {} found".format(word, len(found)), flush=True)
-    return empty("ChannelWordSearchResponse", ChannelList=found)
+    # Both shapes: NoDreamForTheHunterBB answers a glyph search with the dungeon's fields at the top
+    # level, this server used a ChannelList; which one the game reads is not checked yet. Unread keys
+    # are ignored by the game's parser.
+    return empty("ChannelWordSearchResponse", ChannelList=found, **(found[0] if found else {}))
+
+
+def _fixed_channel(grail, level, bit, form_data):
+    """The shared channel of one fixed chalice dungeon, made on first use. Call with STORE.lock."""
+    channels = STORE.data["channels"]
+    key = "{}-{}".format(grail, level)
+    known = channels.get(str(STORE.data.setdefault("fixed_channels", {}).get(key)))
+    if known is not None:
+        return known, False
+    channel_id = STORE.next_id()
+    channel = {"ChannelId": channel_id, "_created": time.time(), "_played": time.time(),
+               "DiscernmentWord": _new_glyph({c.get("DiscernmentWord") for c in channels.values()}),
+               "CreateUserId": 0, "CreateCharaId": 0,
+               "FixedOrGeneral": 2, "FormData": form_data, "FormDataVersion": 0,
+               "HolyGrailTypeId": grail, "RitualLevel": level,
+               "SubFeatureFlag": FIXED_CHALICE_SUB_FEATURE, "ShareLevel": 2, "Status": 1,
+               "TurnoutLevel": 0, "WishMaterialList": [],
+               "UnlockFlagList": [{"UnlockFlag": 0}, {"UnlockFlag": bit}, {"UnlockFlag": 0}]}
+    channels[str(channel_id)] = channel
+    STORE.data["fixed_channels"][key] = channel_id
+    return channel, True
+
+
+def channel_search(req):
+    body = _request(req)
+    kinds = {_as_int(x.get("FixedOrGeneral"), -1) for x in body.get("FixedOrGeneralList") or []
+             if isinstance(x, dict)}
+    # a field the game leaves out or sends as null does not narrow the search
+    wanted = {key: _as_int(body[key], -1) for key in ("HolyGrailTypeId", "RitualLevel",
+                                                      "SubFeatureFlag", "Status")
+              if body.get(key) is not None}
+    limit = max(_as_int(body.get("GetCount"), 1), 1)
+    found, made = [], []
+    if 2 in kinds:
+        with STORE.lock:
+            for grail, level, bit, form_data in FIXED_CHALICES:
+                have = {"HolyGrailTypeId": grail, "RitualLevel": level,
+                        "SubFeatureFlag": FIXED_CHALICE_SUB_FEATURE, "Status": 1}
+                if any(have[key] != value for key, value in wanted.items()):
+                    continue
+                channel, new = _fixed_channel(grail, level, bit, form_data)
+                if new:
+                    made.append(channel["ChannelId"])
+                found.append(_channel_entry(channel))
+                if len(found) >= limit:
+                    break
+            if made:
+                STORE.save()
+    print("      chalice: search {} {} -> {}{}".format(
+        sorted(kinds), wanted,
+        ", ".join("fixed dungeon {} glyph {}".format(c["ChannelId"], c["DiscernmentWord"])
+                  for c in found) or "nothing (only fixed dungeons are answered)",
+        " (new: {})".format(made) if made else ""), flush=True)
+    return empty("ChannelSearchResponse", ChannelList=found)
 
 
 # Server notice (welcome message): server-notice.txt next to the messages file (--data). First line =
@@ -651,7 +763,11 @@ def normal_notice(req):
         title, text = lines[0].strip(), "\n".join(lines[1:]).strip()
         if title or text:
             stamp = int(os.path.getmtime(path))
-            notices.append({"NoticeId": stamp, "Title": title, "Notice": text,
+            # Id + base64 text: confirmed by a server owner (2026-10-16) - with NoticeId and plain
+            # text the game showed "There is no new information."
+            notices.append({"Id": stamp, "NoticeId": stamp,
+                            "Title": base64.b64encode(title.encode("utf-8")).decode("ascii"),
+                            "Notice": base64.b64encode(text.encode("utf-8")).decode("ascii"),
                             "CheckTime": stamp})
     except OSError:
         pass
@@ -696,10 +812,10 @@ ROUTES = {
     "/chair_messenger/get": lambda req: empty("ChairMessGetListResponse", ChairMessCount=0),
     "/chair_messenger/update": lambda req: empty("ChairMessRespawnPointNoticeResponse"),
 
-    # chalice dungeon glyphs (channels), shared; search stays empty (see channel_upload)
+    # chalice dungeon glyphs (channels), shared; search answers only the fixed dungeons
     "/channel/upload": channel_upload,
     "/channel/share": channel_share,
-    "/channel/search": lambda req: empty("ChannelSearchResponse"),
+    "/channel/search": channel_search,
     "/channel/word_search": channel_word_search,
     "/channel/get_details_info": channel_get_details,
     "/channel/get_info": channel_get_info,
@@ -824,25 +940,83 @@ class Handler(BaseHTTPRequestHandler):
     do_GET = do_POST = do_PUT = do_DELETE = do_HEAD = _handle
 
 class Tee:
-    """Everything printed goes to the console window and to the log file."""
+    """Everything printed goes to the log file at once and to the console window through a queue.
 
-    def __init__(self, *streams):
-        self.streams = streams
+    2026-10-20 (Eryk's server, 17:19:22-17:21:26): nothing was answered for two minutes while
+    shadNet ran on, and both players' games hung waiting. Every request prints before it replies,
+    and a paused console window (a click into it - Windows QuickEdit - stops every write until a
+    key is pressed) stopped every one of them. The console now has its own writer thread and a
+    bounded queue, so a paused window only delays the console; the log file keeps every line.
+    """
+
+    CONSOLE_QUEUE_MAX = 5000
+
+    def __init__(self, console, log):
+        self.console = console
+        self.log = log
+        self.lock = threading.Lock()
+        self.queue = collections.deque()
+        self.dropped = 0
+        self.wake = threading.Event()
+        threading.Thread(target=self._console_writer, daemon=True).start()
 
     def write(self, text):
-        for stream in self.streams:
+        with self.lock:
             try:
-                stream.write(text)
+                self.log.write(text)
             except Exception:
                 pass
+            if len(self.queue) < self.CONSOLE_QUEUE_MAX:
+                self.queue.append(text)
+            else:
+                self.dropped += 1
+        self.wake.set()
         return len(text)
 
     def flush(self):
-        for stream in self.streams:
+        with self.lock:
             try:
-                stream.flush()
+                self.log.flush()
             except Exception:
                 pass
+
+    def _console_writer(self):
+        while True:
+            self.wake.wait()
+            with self.lock:
+                text = "".join(self.queue)
+                self.queue.clear()
+                dropped, self.dropped = self.dropped, 0
+                self.wake.clear()
+            if dropped:
+                text += ("      (console: {} line(s) not shown while this window was paused - they "
+                         "are in the log file)\n".format(dropped))
+            if self.console is None or not text:
+                continue
+            try:
+                self.console.write(text)
+                self.console.flush()
+            except Exception:
+                pass
+
+
+def disable_quick_edit():
+    """Windows: a click into the console window must not pause the server (QuickEdit off).
+    Text can still be selected through the window menu (Edit > Mark)."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)) and mode.value & 0x0040:
+            # clear ENABLE_QUICK_EDIT_MODE (0x40), keep ENABLE_EXTENDED_FLAGS (0x80) so it sticks
+            kernel32.SetConsoleMode(handle, (mode.value & ~0x0040) | 0x0080)
+            print("console: click-to-select (QuickEdit) is off - a click in this window no longer "
+                  "pauses the server")
+    except Exception:
+        pass
 
 
 def open_log(log_dir):
@@ -865,62 +1039,320 @@ def open_log(log_dir):
 import socket
 import struct
 
-RELAY_CLIENTS = {}
+RELAY_CLIENTS = {}  # conn -> RelayClient
 RELAY_LOCK = threading.Lock()
+# Immutable snapshot rebuilt on connects/disconnects, not on every frame.
+# Keep connection keys, so the sender exclusion remains exactly "is not conn".
+RELAY_ROSTER = ()
+RELAY_QUEUE_LIMIT = 512 * 1024  # bytes waiting for one player before he is dropped as too slow
+# Stage 3A: coalesce ALREADY-QUEUED frames for each client into bounded TCP writes.
+# No queue wait is introduced. Wire bytes, per-peer FIFO order and recipient list do not change.
+RELAY_WRITE_BATCH_MAX_BYTES = 64 * 1024
+RELAY_WRITE_BATCH_MAX_FRAMES = 64
+
+# Share a single immutable encoded frame across recipient queues. With
+# --relay-session-routing, high-rate session-state packets are sent only to the
+# host and guests that advertised the same session in the existing 0x40 envelope.
+# Discovery/follow packets and old or malformed frames retain global delivery.
+RELAY_STATS_LOCK = threading.Lock()
+RELAY_STATS = collections.Counter()
+# Index of currently recorded session hints, protected by RELAY_LOCK.
+RELAY_HINT_COUNTS = collections.Counter()
+RELAY_HINTED_CLIENTS = 0
+RELAY_SESSION_TYPES = frozenset((0x22, 0x23, 0x24, 0x25, 0x26, 0x27))
+RELAY_DISCOVERY_TYPES = frozenset((0x20, 0x30))
 
 
-def _relay_send(conn, payload):
-    conn.sendall(struct.pack("<I", len(payload)) + payload)
+def _relay_stats_enabled():
+    return bool(getattr(ARGS, "relay_tcp_stats_interval", 0) > 0)
+
+
+def _relay_parse_envelope(payload):
+    """Untrusted observational hint, NOT an authentication/permission check.
+
+    Client format: SHAD 0x40, sender uint32 LE, host-session uint32 LE,
+    nested SHAD plus inner packet type. Older/malformed frames stay global.
+    """
+    if (len(payload) < 18 or payload[:5] != b"SHAD\x40" or
+            payload[13:17] != b"SHAD"):
+        return None
+    sender, session = struct.unpack_from("<II", payload, 5)
+    if not sender:
+        return None
+    return sender, session, payload[17]
+
+
+def _relay_record(**values):
+    with RELAY_STATS_LOCK:
+        RELAY_STATS.update(values)
+
+
+def _relay_snapshot():
+    with RELAY_STATS_LOCK:
+        return RELAY_STATS.copy()
+
+
+def _relay_log_stats(interval):
+    previous = _relay_snapshot()
+    while True:
+        time.sleep(interval)
+        now = _relay_snapshot()
+        delta = now.copy()
+        delta.subtract(previous)
+        previous = now
+        with RELAY_LOCK:
+            clients = len(RELAY_CLIENTS)
+        print(("bbsc TCP relay stats {}s: clients={}; rx_frames={} / {} bytes; "
+               "enqueued_frames={} / {} bytes; fanout={:.2f}; "
+               "observed_session_frames={}; discovery_frames={}; opaque_frames={}; "
+               "shadow_would_skip={} / {} bytes; slow_disconnects={}; send_errors={}").format(
+                   interval, clients, delta["rx_frames"], delta["rx_bytes"],
+                   delta["queued_frames"], delta["queued_bytes"],
+                   delta["queued_frames"] / max(delta["rx_frames"], 1),
+                   delta["session_frames"], delta["discovery_frames"],
+                   delta["opaque_frames"], delta["shadow_skip_frames"],
+                   delta["shadow_skip_bytes"], delta["slow_disconnects"],
+                   delta["send_errors"]), flush=True)
+
+
+
+def _relay_register_client(conn, client):
+    """Register a socket, refreshing the snapshot and observational hints."""
+    global RELAY_ROSTER, RELAY_HINTED_CLIENTS
+    with RELAY_LOCK:
+        prior = RELAY_CLIENTS.get(conn)
+        if prior is not None and prior.session_hint is not None:
+            RELAY_HINT_COUNTS[prior.session_hint] -= 1
+            RELAY_HINTED_CLIENTS -= 1
+            if not RELAY_HINT_COUNTS[prior.session_hint]:
+                del RELAY_HINT_COUNTS[prior.session_hint]
+        RELAY_CLIENTS[conn] = client
+        if client.session_hint is not None:
+            RELAY_HINT_COUNTS[client.session_hint] += 1
+            RELAY_HINTED_CLIENTS += 1
+        RELAY_ROSTER = tuple(RELAY_CLIENTS.items())
+        return len(RELAY_CLIENTS)
+
+
+def _relay_unregister_client(conn):
+    """Drop a socket, including its monitoring-only session-hint entry."""
+    global RELAY_ROSTER, RELAY_HINTED_CLIENTS
+    with RELAY_LOCK:
+        old_client = RELAY_CLIENTS.pop(conn, None)
+        if old_client is not None and old_client.session_hint is not None:
+            RELAY_HINT_COUNTS[old_client.session_hint] -= 1
+            RELAY_HINTED_CLIENTS -= 1
+            if RELAY_HINT_COUNTS[old_client.session_hint] <= 0:
+                del RELAY_HINT_COUNTS[old_client.session_hint]
+        RELAY_ROSTER = tuple(RELAY_CLIENTS.items())
+        return len(RELAY_CLIENTS)
+
+
+def _relay_forward(conn, payload):
+    """Forward one unchanged frame globally or to its advertised session.
+
+    Session hints are routing hints, not authentication. They only narrow who
+    receives ordinary state frames; discovery, follow and opaque traffic remain
+    global for compatibility with joining and older clients.
+    """
+    global RELAY_HINTED_CLIENTS
+    observe = _relay_stats_enabled()
+    skip_count = 0
+    category = "opaque_frames"
+    routing = bool(getattr(ARGS, "relay_session_routing", False))
+    envelope = _relay_parse_envelope(payload)
+    with RELAY_LOCK:
+        # Atomic reference to the old-style membership snapshot, preserving
+        # insertion order and socket identities without per-frame list copies.
+        roster = RELAY_ROSTER
+        sender_client = RELAY_CLIENTS.get(conn)
+        if envelope is not None and sender_client is not None and (observe or routing):
+            sender, session, kind = envelope
+            sender_client.sender_hint = sender
+            sender_client.seen_envelope = True
+            old_hint = sender_client.session_hint
+            new_hint = session or None
+            if new_hint != old_hint:
+                if old_hint is not None:
+                    RELAY_HINT_COUNTS[old_hint] -= 1
+                    RELAY_HINTED_CLIENTS -= 1
+                    if RELAY_HINT_COUNTS[old_hint] <= 0:
+                        del RELAY_HINT_COUNTS[old_hint]
+                if new_hint is not None:
+                    RELAY_HINT_COUNTS[new_hint] += 1
+                    RELAY_HINTED_CLIENTS += 1
+                sender_client.session_hint = new_hint
+            if kind in RELAY_DISCOVERY_TYPES:
+                category = "discovery_frames"
+            elif session and kind in RELAY_SESSION_TYPES:
+                category = "session_frames"
+                # Sender has just been indexed under this session, so
+                # counting all other known sessions excludes the sender.
+                skip_count = RELAY_HINTED_CLIENTS - RELAY_HINT_COUNTS.get(session, 0)
+                if routing:
+                    # The host identifies itself with sender == session; guests
+                    # advertise session == host. A modern client that has sent a
+                    # valid envelope but still reports session zero keeps receiving
+                    # early snapshots until it advertises a nonzero party. Completely
+                    # silent/legacy sockets are not flooded with every world's state.
+                    roster = tuple(
+                        (peer_conn, peer) for peer_conn, peer in roster
+                        if (peer_conn is conn or
+                            (peer.seen_envelope and peer.session_hint is None) or
+                            peer.session_hint == session or
+                            peer.sender_hint == session))
+    # The encoded bytes and per-recipient FIFO ordering remain unchanged.
+    frame = struct.pack("<I", len(payload)) + payload if roster else b""
+    queued = 0
+    for peer_conn, client in roster:
+        if peer_conn is not conn:
+            queued += client.send_framed(frame)
+    if observe:
+        _relay_record(rx_frames=1, rx_bytes=4 + len(payload),
+                      queued_frames=queued, queued_bytes=queued * (4 + len(payload)),
+                      shadow_skip_frames=skip_count,
+                      shadow_skip_bytes=skip_count * (4 + len(payload)),
+                      **{category: 1})
+    return queued
+
+
+class RelayClient:
+    """One player's outgoing frames (2026-10-13). Each player has his own writer thread, so a
+    player whose game stopped reading (crash, dead link) can no longer stall the reader of everyone
+    else: before, the sender's thread blocked in sendall to him, stopped reading the sender, and
+    the sender's game dropped the link ~10 s later - every 10 s while hosting."""
+
+    def __init__(self, conn, name):
+        self.conn = conn
+        self.name = name
+        self.queue = collections.deque()
+        self.queued = 0
+        self.cond = threading.Condition()
+        self.closed = False
+        self.reason = ""
+        self.sender_hint = None
+        self.session_hint = None
+        self.seen_envelope = False
+        threading.Thread(target=self._writer, daemon=True).start()
+
+    def send(self, payload):
+        # Retain original API for peer-count (0x7f) announcements.
+        return self.send_framed(struct.pack("<I", len(payload)) + payload)
+
+    def send_framed(self, data):
+        """Queue already length-prefixed immutable bytes; return accepted/not accepted."""
+        with self.cond:
+            if self.closed:
+                return False
+            if self.queued + len(data) > RELAY_QUEUE_LIMIT:
+                self._fail_locked("too slow ({} bytes waiting)".format(self.queued))
+                return False
+            was_empty = not self.queue
+            self.queue.append(data)
+            self.queued += len(data)
+            # A sleeping writer can exist only while the queue is empty.
+            if was_empty:
+                self.cond.notify()
+            return True
+
+    def _fail_locked(self, reason):
+        if not self.reason:
+            self.reason = reason
+            if _relay_stats_enabled():
+                if reason.startswith("too slow"):
+                    _relay_record(slow_disconnects=1)
+                elif reason.startswith("send failed"):
+                    _relay_record(send_errors=1)
+        self.closed = True
+        self.queue.clear()
+        self.queued = 0
+        self.cond.notify()
+        try:
+            self.conn.shutdown(socket.SHUT_RDWR)  # ends his reader too
+        except OSError:
+            pass
+
+    def fail(self, reason):
+        with self.cond:
+            self._fail_locked(reason)
+
+    def _writer(self):
+        while True:
+            with self.cond:
+                while not self.queue and not self.closed:
+                    self.cond.wait()
+                if self.closed:
+                    return
+                # Drain only frames already waiting. This adds no artificial
+                # latency and leaves the same 512-KiB enqueue/backpressure rule.
+                data = self.queue.popleft()
+                self.queued -= len(data)
+                # The common case is a single frame with an otherwise empty
+                # queue: avoid allocating a list or copying its bytes.
+                if self.queue and len(data) < RELAY_WRITE_BATCH_MAX_BYTES:
+                    batch = [data]
+                    size = len(data)
+                    while (self.queue and len(batch) < RELAY_WRITE_BATCH_MAX_FRAMES and
+                           size + len(self.queue[0]) <= RELAY_WRITE_BATCH_MAX_BYTES):
+                        frame = self.queue.popleft()
+                        batch.append(frame)
+                        size += len(frame)
+                        self.queued -= len(frame)
+                    if len(batch) > 1:
+                        data = b"".join(batch)
+            # Preserve the exact concatenated length-prefixed TCP stream.
+            try:
+                self.conn.sendall(data)
+            except OSError as error:
+                self.fail("send failed ({})".format(error))
+                return
 
 
 def _relay_announce():
     with RELAY_LOCK:
-        clients = list(RELAY_CLIENTS.items())
-    for conn, _ in clients:
-        try:
-            _relay_send(conn, bytes([0x7F, min(len(clients) - 1, 255)]))
-        except OSError:
-            pass
+        clients = list(RELAY_CLIENTS.values())
+    for client in clients:
+        client.send(bytes([0x7F, min(len(clients) - 1, 255)]))
 
 
 def _relay_client(conn, address):
     name = "{}:{}".format(*address)
-    with RELAY_LOCK:
-        RELAY_CLIENTS[conn] = name
-    print("      relay: {} connected ({} player(s))".format(name, len(RELAY_CLIENTS)), flush=True)
+    client = RelayClient(conn, name)
+    count = _relay_register_client(conn, client)
+    print("      relay: {} connected ({} player(s))".format(name, count), flush=True)
     _relay_announce()
     frames = 0
+    reason = ""
+    started = time.time()
     try:
         while True:
             header = _recv_exact(conn, 4)
             if header is None:
+                reason = "closed by the player"
                 break
             size = struct.unpack("<I", header)[0]
             if size > 64 * 1024:
+                reason = "oversized frame ({} bytes)".format(size)
                 break
             payload = _recv_exact(conn, size) if size else b""
             if payload is None:
+                reason = "closed by the player"
                 break
             frames += 1
-            with RELAY_LOCK:
-                others = [c for c in RELAY_CLIENTS if c is not conn]
-            for other in others:
-                try:
-                    _relay_send(other, payload)
-                except OSError:
-                    pass
-    except OSError:
-        pass
+            _relay_forward(conn, payload)
+    except OSError as error:
+        reason = "read failed ({})".format(error)
     finally:
-        with RELAY_LOCK:
-            RELAY_CLIENTS.pop(conn, None)
-            left = len(RELAY_CLIENTS)
+        left = _relay_unregister_client(conn)
+        if client.reason:
+            reason = client.reason  # the writer gave up first
+        client.fail(reason or "gone")
         try:
             conn.close()
         except OSError:
             pass
-        print("      relay: {} left after {} frames ({} player(s))".format(name, frames, left),
-              flush=True)
+        print("      relay: {} left after {} frames, {:.0f} s ({}) ({} player(s))".format(
+            name, frames, time.time() - started, reason, left), flush=True)
         _relay_announce()
 
 
@@ -944,10 +1376,18 @@ def start_relay(host, port):
         while True:
             conn, address = listener.accept()
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            if hasattr(socket, "TCP_USER_TIMEOUT"):  # Linux: unacked data for 20 s = dead link
+                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 20000)
             threading.Thread(target=_relay_client, args=(conn, address), daemon=True).start()
 
     threading.Thread(target=accept_loop, daemon=True).start()
-    print("BBSC relay on {}:{} (for the BBSC mod)".format(host, port))
+    print("BBSC relay on {}:{} (for the BBSC mod); immutable frame reuse enabled".format(
+        host, port))
+    interval = getattr(ARGS, "relay_tcp_stats_interval", 0)
+    if interval > 0:
+        threading.Thread(target=_relay_log_stats, args=(interval,), daemon=True,
+                         name="bbsc-tcp-stats").start()
 
 
 class QuietHTTPServer(ThreadingHTTPServer):
@@ -985,7 +1425,28 @@ def start_bbhost():
         return
     if not public:
         print("bbhost: no public address (set --advertise or --bbhost-public-ip): relay off")
-    bbhost_service.RELAY.start(ARGS.bbhost_stun_bind or ARGS.host, ARGS.bbhost_stun_port)
+    bbhost_service.RELAY.start(ARGS.bbhost_stun_bind or ARGS.host, ARGS.bbhost_stun_port,
+                               rcvbuf_bytes=ARGS.bbhost_udp_rcvbuf)
+    if ARGS.bbhost_udp_stats_interval:
+        interval = ARGS.bbhost_udp_stats_interval
+        if not 5 <= interval <= 3600:
+            raise ValueError("UDP stats interval must be 5..3600 seconds")
+
+        def log_udp_stats():
+            before = bbhost_service.RELAY.counters()
+            while True:
+                time.sleep(interval)
+                after = bbhost_service.RELAY.counters()
+                delta = {key: after[key] - before[key] for key in after}
+                before = after
+                print("bbhost UDP stats {}s: rx={} datagrams / {} bytes; tx={} datagrams / {} bytes; "
+                      "shad forwarded={}; bbhost forwarded={}; send_errors={}; unrecognized={}".format(
+                          interval, delta["datagrams_in"], delta["bytes_in"],
+                          delta["datagrams_out"], delta["bytes_out"],
+                          delta["shad_frames"], delta["frames"],
+                          delta["send_errors"], delta["unrecognized_in"]), flush=True)
+
+        threading.Thread(target=log_udp_stats, daemon=True, name="bbhost-udp-stats").start()
 
     def follow_address():
         # a DuckDNS name can change address; the relay addresses must follow it
@@ -1001,6 +1462,7 @@ def start_bbhost():
 
 def main():
     global ARGS, SS_INFO_B64, SS_INFO_LOCAL_B64, SS_INFO_BBHOST_B64, SS_INFO_BBHOST_LOCAL_B64
+    global AREA_REPLY_BUDGET
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--shadnet", required=True,
@@ -1009,6 +1471,12 @@ def main():
     parser.add_argument("--port", type=int, default=20443)
     parser.add_argument("--relay-port", type=int, default=20444,
                         help="BBSC mod relay (TCP); 0 turns it off")
+    parser.add_argument("--relay-tcp-stats-interval", type=int, default=0,
+                        help="TCP fan-out and untrusted-session SHADOW telemetry seconds; "
+                             "0 disables statistics. Routing stays global.")
+    parser.add_argument("--relay-session-routing", action="store_true",
+                        help="route high-rate BBSC state frames only within their advertised "
+                             "host session; discovery/follow/legacy frames remain global")
     parser.add_argument("--advertise",
                         help="address to put in ss.info if it differs from --host")
     parser.add_argument("--summon-interval", type=int, default=0,
@@ -1017,6 +1485,9 @@ def main():
                         help="co-op level window (vanilla 20; try 999 to match at any level)")
     parser.add_argument("--no-playlog", action="store_true",
                         help="turn off the play-log uploads to Amazon S3 (recommended)")
+    parser.add_argument("--tomb-max-response-bytes", type=int, default=None,
+                        help="message / bloodstain reply budget in bytes (default 65536 - the "
+                             "Dantelion2 Panic 265 fix); 0 = no cap")
     parser.add_argument("--verbose", action="store_true", help="log headers and request bodies")
     parser.add_argument("--no-bbhost", dest="bbhost", action="store_false",
                         help="turn off the bbhost players' services (bbhost_service.py)")
@@ -1024,6 +1495,10 @@ def main():
                         help="bbhost's session/account port (bbhost's default 18671; 0 = only --port)")
     parser.add_argument("--bbhost-stun-port", type=int, default=3478,
                         help="bbhost STUN + relay, UDP (0 = off)")
+    parser.add_argument("--bbhost-udp-rcvbuf", type=int, default=0,
+                        help="requested UDP SO_RCVBUF bytes; 0 leaves OS default (safe default)")
+    parser.add_argument("--bbhost-udp-stats-interval", type=int, default=0,
+                        help="periodic UDP traffic counters, seconds; 0 disables logging")
     parser.add_argument("--bbhost-stun-bind", default="",
                         help="address the STUN socket binds to (default: --host)")
     parser.add_argument("--bbhost-public-ip", default="",
@@ -1040,10 +1515,19 @@ def main():
     parser.add_argument("--data", default=os.path.join(data_home, "online-data.json"),
                         help="where shared messages and bloodstains are kept between runs")
     ARGS = parser.parse_args()
+    if ARGS.tomb_max_response_bytes and not 4096 <= ARGS.tomb_max_response_bytes <= 2*1024*1024:
+        parser.error("--tomb-max-response-bytes must be 0 or 4096..2097152")
+    if ARGS.bbhost_udp_stats_interval and not 5 <= ARGS.bbhost_udp_stats_interval <= 3600:
+        parser.error("--bbhost-udp-stats-interval must be 0 or 5..3600")
+    if ARGS.bbhost_udp_rcvbuf and not 8192 <= ARGS.bbhost_udp_rcvbuf <= 64*1024*1024:
+        parser.error("--bbhost-udp-rcvbuf must be 0 or 8192..67108864")
+    if ARGS.tomb_max_response_bytes is not None:
+        AREA_REPLY_BUDGET = ARGS.tomb_max_response_bytes
 
     log_path = open_log(ARGS.log_dir)
     print("BBSC game server - {} - log: {}".format(
         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), log_path))
+    disable_quick_edit()
 
     global STORE
     STORE = OnlineStore(ARGS.data)

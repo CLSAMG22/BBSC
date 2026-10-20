@@ -10,6 +10,7 @@
 
 #include "common/logging/log.h"
 #include "common/singleton.h"
+#include "core/bloodborne_re.h"
 #include "core/libraries/error_codes.h"
 #include "core/libraries/kernel/kernel.h"
 #include "core/libraries/kernel/process.h"
@@ -727,6 +728,13 @@ void CloseConnectionAndDispatchDead(s32 conn_id, s32 error_code) {
                  : static_cast<u32>(error_code) == static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TERMINATED_BY_PEER) ? ": closed by the peer"
                  : static_cast<u32>(error_code) == static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TERMINATED_BY_MYSELF) ? ": closed by us"
                                                                                 : "");
+        // BBSC timeline: a lost connection to another player, without its address.
+        Core::Bloodborne::BbscTimelineEvent(
+            "NET", fmt::format("connection to '{}' lost ({:#x}{})", peer, static_cast<u32>(error_code),
+                               static_cast<u32>(error_code) ==
+                                       static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TIMEOUT)
+                                   ? ": no answer"
+                                   : ""));
         DispatchConnectionEvent(conn_id, ORBIS_NP_SIGNALING_EVENT_DEAD, error_code);
         SignalingMutexGuard lock;
         RemoveConnectionLocked(conn_id);
@@ -797,6 +805,8 @@ void EstablishConnection(s32 conn_id, bool peer_activated_hint) {
         LOG_INFO(Lib_NpSignaling, "Connection {} -> ESTABLISHED ({}) peer at {:#x}:{}", conn_id,
                  fire_established ? "owner" : "answerer/non-owner", peer_addr,
                  sceNetNtohs(peer_port));
+        Core::Bloodborne::BbscTimelineEvent(
+            "NET", fmt::format("connection {} to another player established", conn_id));
     }
     if (fire_peer_activated) {
         DispatchPeerActivatedEvent(conn_id);

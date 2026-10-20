@@ -20,7 +20,9 @@ SPECIAL THANKS
     split-screen Bloodborne on one PC; BBSC runs in it
     https://github.com/framilano/BloodborneNucleusCoopHandler
   Fahad (fhody125) - No Dream For The Hunter
-    the game server and ss.info groundwork BBSC's servers grew from
+    the game server and ss.info groundwork BBSC's servers grew from,
+    and the fixed Chalice Dungeon data (NoDreamForTheHunterBB, published by Mob)
+    https://github.com/Mob100percent/NoDreamForTheHunterBB
 
 BUILT ON
   shadPS4 - the PS4 emulator (shadPS4 team and contributors, GPL-2.0)

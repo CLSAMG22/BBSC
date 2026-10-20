@@ -7,7 +7,12 @@
 //   F1 on/off | hold right mouse: look | WASD move | E / Space up, Q / C down
 //   Shift fast, Alt slow | wheel: speed | Z / X zoom, V reset zoom | , . roll, / reset roll
 //   arrow keys: look | [ ] smoothing (glide) less / more
+// Dead in co-op it watches a living hunter instead (bloodborne_re.cpp BbscWatchCamera): Tab / E /
+// left click next hunter, Shift+Tab / Q previous, F fly freely and back; the controller's R1 / L1
+// and right stick reach it only then (CinematicPadRead - the F1 camera leaves the pad to the hunter).
 
+#include <algorithm>
+#include <cmath>
 #include <mutex>
 
 #include <SDL3/SDL_events.h>
@@ -23,6 +28,17 @@ namespace {
 std::mutex cine_mutex;
 CinematicInput cine_state;
 bool looking = false;
+bool watching = false;     // the game thread says the camera watches a hunter
+unsigned pad_last = 0;     // pad buttons at the last read
+int pad_switch = 0;        // R1 / L1 presses while watching
+float pad_rx = 0.0f, pad_ry = 0.0f, pad_ly = 0.0f;
+
+float PadAxis(unsigned char value) {
+    const float v = (static_cast<float>(value) - 128.0f) / 127.0f;
+    constexpr float Dead = 0.15f;
+    return std::abs(v) < Dead ? 0.0f
+                              : std::clamp((v - std::copysign(Dead, v)) / (1.0f - Dead), -1.0f, 1.0f);
+}
 
 bool CinematicEnabledBySwitch() {
     static const bool enabled = SwitchEnabled("SHADPS4_BBSC_CINEMATIC");
@@ -101,11 +117,25 @@ bool CinematicHandleEvent(const SDL_Event& event, SDL_Window* window) {
         if (key >= SDLK_F2 && key <= SDLK_F12) {
             return false; // the emulator's own hotkeys (fullscreen, fps, pause...) keep working
         }
+        if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+            if (key == SDLK_TAB) {
+                cine_state.switch_target += (event.key.mod & SDL_KMOD_SHIFT) != 0 ? -1 : 1;
+            } else if (key == SDLK_E) {
+                ++cine_state.switch_target;
+            } else if (key == SDLK_Q) {
+                --cine_state.switch_target;
+            } else if (key == SDLK_F) {
+                cine_state.toggle_free = true;
+            }
+        }
         SetKey(key, event.type == SDL_EVENT_KEY_DOWN);
         return true;
     }
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event.button.button == SDL_BUTTON_LEFT && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            ++cine_state.switch_target;
+        }
         if (event.button.button == SDL_BUTTON_RIGHT) {
             looking = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
             if (window != nullptr) {
@@ -133,6 +163,15 @@ bool CinematicHandleEvent(const SDL_Event& event, SDL_Window* window) {
 CinematicInput TakeCinematicInput() {
     std::scoped_lock lock{cine_mutex};
     CinematicInput out = cine_state;
+    if (watching) {
+        out.pad_look_x = pad_rx;
+        out.pad_look_y = -pad_ry;
+        out.pad_move_y = -pad_ly; // stick up = closer
+        out.switch_target += pad_switch;
+    }
+    pad_switch = 0;
+    cine_state.switch_target = 0;
+    cine_state.toggle_free = false;
     cine_state.mouse_dx = 0.0f;
     cine_state.mouse_dy = 0.0f;
     cine_state.wheel = 0;
@@ -153,6 +192,31 @@ void CinematicForceOn() {
         cine_state = CinematicInput{};
         cine_state.enabled = true;
     }
+}
+
+void CinematicSetWatching(bool on) {
+    std::scoped_lock lock{cine_mutex};
+    if (watching != on) {
+        pad_switch = 0;
+        pad_rx = pad_ry = pad_ly = 0.0f;
+    }
+    watching = on;
+}
+
+void CinematicPadRead(unsigned buttons, unsigned char rx, unsigned char ry, unsigned char lx,
+                      unsigned char ly) {
+    (void)lx;
+    std::scoped_lock lock{cine_mutex};
+    constexpr unsigned L1 = 0x400, R1 = 0x800;
+    const unsigned pressed = buttons & ~pad_last;
+    pad_last = buttons;
+    if (!cine_state.enabled || !watching) {
+        return;
+    }
+    pad_switch += ((pressed & R1) != 0 ? 1 : 0) - ((pressed & L1) != 0 ? 1 : 0);
+    pad_rx = PadAxis(rx);
+    pad_ry = PadAxis(ry);
+    pad_ly = PadAxis(ly);
 }
 
 } // namespace Core::Bbsc

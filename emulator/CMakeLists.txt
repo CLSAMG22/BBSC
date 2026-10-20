@@ -958,6 +958,9 @@ set(CORE src/core/aerolib/stubs.cpp
 if (ARCHITECTURE STREQUAL "x86_64")
     set(CORE ${CORE}
              src/core/bbsc_persistence.cpp
+             src/core/bbsc_relay_client.cpp
+             src/core/bbsc_relay_client.h
+             mod/bbsc_discord.cpp
              src/core/bbsc_cinematic.cpp
              src/core/bbsc_cinematic.h
              src/core/bbsc_persistence.h

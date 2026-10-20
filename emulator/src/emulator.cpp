@@ -30,6 +30,7 @@
 #include "common/polyfill_thread.h"
 #include "common/scm_rev.h"
 #include "common/singleton.h"
+#include "core/bloodborne_re.h" // BBSC Discord status
 #include "core/cpu_patches.h" // Windows static guest red-zone protection
 #include "core/debugger.h"
 #include "core/devtools/widget/module_list.h"
@@ -678,7 +679,9 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
     // Discord RPC - not when the BBSC mod shows its own status ("Discord status" in the Mods tab,
     // set by ApplyEnvironment above), or Discord would show both.
     const char* bbsc_discord = std::getenv("SHADPS4_BBSC_DISCORD");
-    const bool bbsc_status = bbsc_discord != nullptr && std::string_view{bbsc_discord} == "1";
+    // The emulator's built-in BBSC shows the same status (started at the eboot load, module.cpp).
+    const bool bbsc_status = (bbsc_discord != nullptr && std::string_view{bbsc_discord} == "1") ||
+                             Core::Bbsc::DiscordStatusRunning();
     if (bbsc_status) {
         LOG_INFO(Loader, "Discord RPC: left to the BBSC mod's Discord status");
     }

@@ -14,6 +14,7 @@
 namespace Libraries::Np::NpSignaling {
 
 inline constexpr u8 kSignalingBbscWorldFlagsType = 0x22;
+inline constexpr u8 kSignalingBbscPvpType = 0x25;
 
 // One chunk of a host world-flag snapshot: up to 8 event-flag groups (1000 flags, 125 bytes each)
 // of the host's current map block, in the fixed order of Core::Bloodborne's BbscWorldGroupKey.
@@ -35,6 +36,16 @@ struct SignalingBbscWorldFlags {
     u8 groups[kBbscWorldFlagGroupsPerChunk][kBbscWorldFlagGroupBytes]{};
 };
 static_assert(sizeof(SignalingBbscWorldFlags) == 18 + 8 * 125);
+
+// Duel Bell state. kind 0 is the host's authoritative state; kind 1 is a guest request.
+struct SignalingBbscPvp {
+    u8 magic[4] = {'S', 'H', 'A', 'D'};
+    u8 type = kSignalingBbscPvpType;
+    u8 kind = 0;
+    u8 on = 0;
+    u32 sequence = 0;
+};
+static_assert(sizeof(SignalingBbscPvp) == 11);
 #pragma pack(pop)
 
 } // namespace Libraries::Np::NpSignaling

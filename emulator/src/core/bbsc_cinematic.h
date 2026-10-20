@@ -31,6 +31,10 @@ struct CinematicInput {
     // down/up, L2/R2 zoom out/in.
     float pad_move_x = 0.0f, pad_move_y = 0.0f, pad_rise = 0.0f;
     float pad_look_x = 0.0f, pad_look_y = 0.0f, pad_zoom = 0.0f;
+    // Watching a living hunter while dead (2026-10-20): presses since the last call, + next /
+    // - previous (Tab, E, left click, R1 / Shift+Tab, Q, L1), and F (watch <-> fly freely).
+    int switch_target = 0;
+    bool toggle_free = false;
 };
 
 // Game thread: the current keys plus everything accumulated since the last call.
@@ -41,5 +45,14 @@ void CinematicForceOff();
 
 // Game thread: switches the camera on (you died in co-op); nothing when it is already on.
 void CinematicForceOn();
+
+// Game thread: the camera is watching a living hunter (you are dead). Emulator build: only then
+// does the controller reach the camera (CinematicPadRead) - the F1 camera leaves it to the hunter.
+void CinematicSetWatching(bool watching);
+
+// Emulator build, pad thread (scePadReadState): the game's pad data, read only. While watching,
+// R1 / L1 switch the hunter and the right stick turns the camera.
+void CinematicPadRead(unsigned buttons, unsigned char rx, unsigned char ry, unsigned char lx,
+                      unsigned char ly);
 
 } // namespace Core::Bbsc

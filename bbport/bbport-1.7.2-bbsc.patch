@@ -1,0 +1,4776 @@
+﻿diff --git a/gpu/bbnet/bbnet_glue.cpp b/gpu/bbnet/bbnet_glue.cpp
+index ce38d53..e9af059 100644
+--- a/gpu/bbnet/bbnet_glue.cpp
++++ b/gpu/bbnet/bbnet_glue.cpp
+@@ -56,6 +56,7 @@
+ #include "core/libraries/np/np_score/np_score.h"
+ #include "core/libraries/np/np_signaling/np_signaling.h"
+ #include "core/libraries/np/np_tus.h"
++#include "core/libraries/np/np_utility.h" // bbsc: sceNpLookupNpId online
+ #include "core/libraries/np/np_web_api/np_web_api.h"
+ #include "core/libraries/np/np_web_api2/np_web_api2.h"
+ 
+@@ -471,6 +472,7 @@ extern "C" void bbnet_register(void) {
+     Libraries::Np::NpScore::RegisterLib(sym);
+     Libraries::Np::NpSignaling::RegisterLib(sym);
+     Libraries::Np::NpTus::RegisterLib(sym);
++    Libraries::Np::NpUtility::RegisterLib(sym); // bbsc: was an offline stub (3rd player join)
+     Libraries::Np::NpWebApi::RegisterLib(sym);
+     Libraries::Np::NpWebApi2::RegisterLib(sym);
+ }
+diff --git a/gpu/shadps4/core/libraries/network/p2p_sockets.cpp b/gpu/shadps4/core/libraries/network/p2p_sockets.cpp
+index 353cf69..afa6c1f 100644
+--- a/gpu/shadps4/core/libraries/network/p2p_sockets.cpp
++++ b/gpu/shadps4/core/libraries/network/p2p_sockets.cpp
+@@ -8,6 +8,8 @@
+ #include <cstring>
+ #include <deque>
+ #include <limits>
++#include <string>
++#include <string_view>
+ #include <thread>
+ #include <unordered_map>
+ #include <vector>
+@@ -330,6 +332,11 @@ public:
+             }
+         }
+ 
++        const RelayPath path = RelayRoute(dest_addr_nbo, dest_port_nbo, framed);
++        if (path == RelayPath::Relay) {
++            return static_cast<int>(len);
++        }
++
+         sockaddr_in dest{};
+         dest.sin_family = AF_INET;
+         dest.sin_addr.s_addr = dest_addr_nbo;
+@@ -341,7 +348,7 @@ public:
+         if (rc < 0) {
+             LOG_DEBUG(Lib_Net, "P2P sendto failed error={} dst={:#x}:{}", LastSocketError(),
+                       dest_addr_nbo, ntohs(dest_port_nbo));
+-            return -1;
++            return path == RelayPath::Both ? static_cast<int>(len) : -1;
+         }
+         if (static_cast<size_t>(rc) != framed.size()) {
+             LOG_WARNING(Lib_Net, "P2P short UDP send: {} of {} bytes", rc, framed.size());
+@@ -454,6 +461,8 @@ private:
+ #if defined(__linux__) || defined(_WIN32)
+         std::vector<u8> buffer(65536);
+         while (running.load(std::memory_order_acquire)) {
++            // Before recvfrom: its send would overwrite recvfrom's error code.
++            RelayKeepAlive();
+             sockaddr_in from{};
+             socklen_t from_len = sizeof(from);
+ #ifdef _WIN32
+@@ -476,11 +485,10 @@ private:
+                 continue;
+             }
+ 
+-            if (rc < static_cast<decltype(rc)>(kVPortHeaderSize)) {
+-                LOG_DEBUG(Lib_Net, "P2P dropping too-short UDP frame size={}", rc);
++            if (IsRelayServer(from.sin_addr.s_addr, from.sin_port)) {
++                RelayReceive(buffer.data(), static_cast<size_t>(rc));
+                 continue;
+             }
+-
+             // The other instance of SameHostPeers(): seen at the address the server gives for
+             // it, so the game and the signaling state know one address for the peer.
+             if (SameHostPeers() && from.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+@@ -501,38 +509,470 @@ private:
+                 continue;
+             }
+ 
+-            u16 source_vport_nbo = 0;
+-            u16 dest_vport_nbo = 0;
+-            std::memcpy(&source_vport_nbo, buffer.data(), sizeof(source_vport_nbo));
+-            std::memcpy(&dest_vport_nbo, buffer.data() + sizeof(source_vport_nbo),
+-                        sizeof(dest_vport_nbo));
++            NoteDirectReceive(from.sin_addr.s_addr, from.sin_port);
++            DispatchFrame(from.sin_addr.s_addr, from.sin_port, buffer.data(),
++                          static_cast<size_t>(rc));
++        }
++#endif
++    }
++
++    void DispatchFrame(u32 from_addr, u16 from_port, const u8* frame, size_t size) {
++        if (size < kVPortHeaderSize) {
++            LOG_DEBUG(Lib_Net, "P2P dropping too-short UDP frame size={}", size);
++            return;
++        }
+ 
+-            const u8* payload = buffer.data() + kVPortHeaderSize;
+-            const size_t payload_size = static_cast<size_t>(rc) - kVPortHeaderSize;
++        u16 source_vport_nbo = 0;
++        u16 dest_vport_nbo = 0;
++        std::memcpy(&source_vport_nbo, frame, sizeof(source_vport_nbo));
++        std::memcpy(&dest_vport_nbo, frame + sizeof(source_vport_nbo), sizeof(dest_vport_nbo));
+ 
+-            if (dest_vport_nbo == kSignalingVPortNbo) {
+-                PushInternal(ClassifyInternal(payload, payload_size), from.sin_addr.s_addr,
+-                             from.sin_port, payload, payload_size);
+-                continue;
++        const u8* payload = frame + kVPortHeaderSize;
++        const size_t payload_size = size - kVPortHeaderSize;
++
++        if (dest_vport_nbo == kSignalingVPortNbo) {
++            PushInternal(ClassifyInternal(payload, payload_size), from_addr, from_port, payload,
++                         payload_size);
++            return;
++        }
++
++        std::lock_guard lock(registry_mutex);
++        const auto it = game_sockets.find(dest_vport_nbo);
++        if (it == game_sockets.end() || it->second == nullptr) {
++            LOG_TRACE(Lib_Net, "P2P RX no socket for dst_vport={}", ntohs(dest_vport_nbo));
++            return;
++        }
++
++        P2PDatagram packet{};
++        packet.source_addr = from_addr;
++        packet.source_port = from_port;
++        packet.source_vport = source_vport_nbo;
++        packet.payload.assign(payload, payload + payload_size);
++        it->second->EnqueuePacket(std::move(packet));
++    }
++
++public:
++    // ---- BBSC relay fallback (2026-10-12) ------------------------------------------------------
++    // Direct P2P needs one side reachable: CGNAT, strict routers and several windows on one PC
++    // (no hairpin) leave both sides unreachable and the connection goes DEAD after 30 s. Every
++    // peer whose online id we know (shadNet lookups) starts direct; if nothing came back from it
++    // directly 2 s after our first frame, its frames go through the game server's relay instead
++    // (tools/gameserver/bbhost_service.py Relay._shad, UDP 3478):
++    //   "BBR1" 0x01 id[16]                 register, every 5 s (keeps our NAT mapping open)
++    //   "BBR1" 0x03 dst[16] src[16] ep[6] frame  frame for dst
++    //   "BBR1" 0x04 src[16] ep[6] frame          frame from src
++    //   "BBR1" 0x05 dst[16]                      dst is not on the relay (direct only for 10 s)
++    // ep = the sender's own public address and port as shadNet sees them (its STUN echo), so the
++    // receiver files the frame under the same endpoint its signaling code uses for that peer (an
++    // ActivationRequest answer goes to the packet's mapped_addr + the frame's source port).
++    // A peer that reaches us through the relay is answered through it at once.
++    // 0.0.2 (2026-10-13): every known peer goes through the relay from the first frame (public
++    // players behind CGNAT/strict routers could not reach each other; direct copies still go out
++    // until the peer answers, and a peer without the relay is answered directly).
++    // SHADPS4_P2P_RELAY=0 turns it off, =auto (or direct) = the old "direct first, relay after
++    // 2 s"; SHADPS4_P2P_RELAY_PORT changes the port.
++    void RelaySetServer(u32 addr_nbo) {
++        std::lock_guard lock(relay_mutex);
++        const char* env = std::getenv("SHADPS4_P2P_RELAY");
++        const std::string mode = env != nullptr ? env : "";
++        relay_force = mode != "auto" && mode != "direct";
++        u16 port = 3478;
++        if (const char* p = std::getenv("SHADPS4_P2P_RELAY_PORT"); p != nullptr && *p != 0) {
++            const long parsed = std::strtol(p, nullptr, 10);
++            if (parsed > 0 && parsed < 65536) {
++                port = static_cast<u16>(parsed);
++            }
++        }
++        if (mode == "0" || mode == "off") {
++            addr_nbo = 0;
++        } else if (const size_t colon = mode.find(':'); colon != std::string::npos) {
++            // Test override "a.b.c.d:port" (a relay other than the shadNet server's).
++            in_addr parsed{};
++            const long parsed_port = std::strtol(mode.c_str() + colon + 1, nullptr, 10);
++            if (addr_nbo != 0 &&
++                ::inet_pton(AF_INET, mode.substr(0, colon).c_str(), &parsed) == 1 &&
++                parsed_port > 0 && parsed_port < 65536) {
++                addr_nbo = parsed.s_addr;
++                port = static_cast<u16>(parsed_port);
+             }
++        }
++        const u16 port_nbo = addr_nbo != 0 ? htons(port) : 0;
++        if (relay_server_addr == addr_nbo && relay_server_port == port_nbo) {
++            return;
++        }
++        relay_server_addr = addr_nbo;
++        relay_server_port = port_nbo;
++        relay_acked = false;
++        relay_last_register = {};
++        if (addr_nbo != 0) {
++            LOG_INFO(Lib_Net, "P2P relay fallback: server {:#x}:{}{}", addr_nbo, port,
++                     relay_force ? " (forced for every peer)" : "");
++        } else {
++            LOG_INFO(Lib_Net, "P2P relay fallback: off");
++        }
++    }
+ 
+-            std::lock_guard lock(registry_mutex);
+-            const auto it = game_sockets.find(dest_vport_nbo);
+-            if (it == game_sockets.end() || it->second == nullptr) {
+-                LOG_TRACE(Lib_Net, "P2P RX no socket for dst_vport={}", ntohs(dest_vport_nbo));
+-                continue;
++    void RelaySetSelfEndpoint(u32 addr_nbo, u16 port_nbo) {
++        std::lock_guard lock(relay_mutex);
++        if (relay_self_addr != addr_nbo || relay_self_port != port_nbo) {
++            LOG_INFO(Lib_Net, "P2P relay fallback: our public endpoint {:#x}:{}", addr_nbo,
++                     ntohs(port_nbo));
++        }
++        relay_self_addr = addr_nbo;
++        relay_self_port = port_nbo;
++    }
++
++    void RelaySetLocalId(std::string_view online_id) {
++        if (online_id.empty()) {
++            return;
++        }
++        std::lock_guard lock(relay_mutex);
++        const std::string id = PadId(online_id);
++        if (std::find(relay_local_ids.begin(), relay_local_ids.end(), id) ==
++            relay_local_ids.end()) {
++            relay_local_ids.push_back(id);
++            relay_last_register = {};
++        }
++    }
++
++    void RelayRememberPeer(std::string_view online_id, u32 addr_nbo, u16 port_nbo) {
++        if (online_id.empty() || addr_nbo == 0 || port_nbo == 0) {
++            return;
++        }
++        std::lock_guard lock(relay_mutex);
++        const std::string id = PadId(online_id);
++        // Peers are kept by online id; every endpoint signaling or the relay ever gave for it
++        // stays an alias. (Before 2026-10-13 the peer was filed under ONE endpoint and moved when
++        // the relay brought another one - signaling's sends to the endpoint it knows then found
++        // no relay entry and went direct only: one-way relay, DEAD after 30 s behind CGNAT.)
++        RelayPeer& peer = relay_peers[id];
++        peer.id = id;
++        peer.addr = addr_nbo; // the endpoint signaling uses: relayed frames arrive "from" it
++        peer.port = port_nbo;
++        AddRelayAliasLocked(id, addr_nbo, port_nbo, "signaling");
++    }
++
++private:
++    struct RelayPeer {
++        std::string id;
++        u32 addr{};
++        u16 port{};
++        bool relayed{false};
++        bool direct_rx{false};
++        bool tx_started{false};
++        bool relay_seen{false}; // it sent to us through the relay (it has the relay too)
++        std::chrono::steady_clock::time_point first_tx{};
++        std::chrono::steady_clock::time_point relayed_since{};
++        // The relay said it is not registered (no relay in its emulator, or not running): direct
++        // only until then (asked again after it).
++        std::chrono::steady_clock::time_point missing_until{};
++        bool missing_logged{false};
++        std::vector<std::vector<u8>> early; // sent directly before the switch (sent again then)
++    };
++    static constexpr size_t kRelayEarlyFrames = 32;
++
++    // Direct = send directly only; Relay = through the relay only; Both = relay + a direct copy.
++    // After the switch, frames still go directly too until the peer answers either way: an
++    // emulator without the relay can only be reached directly (and NAT holes can take longer
++    // than 2 s to open). A direct answer from a peer that never used the relay -> back to direct.
++    // A peer that uses the relay gets direct copies for 10 s more, then the relay alone.
++    enum class RelayPath { Direct, Relay, Both };
++
++    static constexpr size_t kRelayIdSize = 16;
++    static constexpr size_t kRelayEpSize = 6;
++    static constexpr u8 kRelayMagic[4] = {'B', 'B', 'R', '1'};
++
++    static std::string PadId(std::string_view online_id) {
++        std::string id(online_id.substr(0, kRelayIdSize));
++        id.resize(kRelayIdSize, static_cast<char>(0));
++        return id;
++    }
++
++    static std::string IdText(const std::string& id) {
++        return std::string(id.c_str());
++    }
++
++    static u64 EndpointKey(u32 addr_nbo, u16 port_nbo) {
++        return (static_cast<u64>(addr_nbo) << 16) | port_nbo;
++    }
++
++    // relay_mutex held.
++    void AddRelayAliasLocked(const std::string& id, u32 addr_nbo, u16 port_nbo, const char* from) {
++        if (addr_nbo == 0 || port_nbo == 0) {
++            return;
++        }
++        const u64 key = EndpointKey(addr_nbo, port_nbo);
++        const auto it = relay_alias.find(key);
++        if (it != relay_alias.end() && it->second == id) {
++            return;
++        }
++        relay_alias[key] = id;
++        LOG_INFO(Lib_Net, "P2P relay fallback: '{}' known at {:#x}:{} (from {})", IdText(id),
++                 addr_nbo, ntohs(port_nbo), from);
++    }
++
++    // relay_mutex held.
++    RelayPeer* FindRelayPeerLocked(u32 addr_nbo, u16 port_nbo) {
++        const auto alias = relay_alias.find(EndpointKey(addr_nbo, port_nbo));
++        if (alias == relay_alias.end()) {
++            return nullptr;
++        }
++        const auto it = relay_peers.find(alias->second);
++        return it == relay_peers.end() ? nullptr : &it->second;
++    }
++
++    bool IsRelayServer(u32 addr_nbo, u16 port_nbo) {
++        std::lock_guard lock(relay_mutex);
++        return relay_server_addr != 0 && addr_nbo == relay_server_addr &&
++               port_nbo == relay_server_port;
++    }
++
++    // relay_mutex held.
++    void SendToRelayLocked(const std::vector<u8>& packet) {
++        sockaddr_in dest{};
++        dest.sin_family = AF_INET;
++        dest.sin_addr.s_addr = relay_server_addr;
++        dest.sin_port = relay_server_port;
++        (void)::sendto(host_socket, reinterpret_cast<const char*>(packet.data()),
++                       static_cast<int>(packet.size()), 0,
++                       reinterpret_cast<const sockaddr*>(&dest), sizeof(dest));
++    }
++
++    // Called from the receive loop (every few ms): register every 5 s (2 s until answered).
++    void RelayKeepAlive() {
++        std::lock_guard lock(relay_mutex);
++        if (relay_server_addr == 0 || relay_local_ids.empty()) {
++            return;
++        }
++        const auto now = std::chrono::steady_clock::now();
++        const auto interval = relay_acked ? std::chrono::seconds(5) : std::chrono::seconds(2);
++        if (relay_last_register.time_since_epoch().count() != 0 &&
++            now - relay_last_register < interval) {
++            return;
++        }
++        relay_last_register = now;
++        if (now - relay_last_status >= std::chrono::seconds(30) &&
++            (relay_sent != relay_status_sent || relay_received != relay_status_received)) {
++            relay_last_status = now;
++            relay_status_sent = relay_sent;
++            relay_status_received = relay_received;
++            std::string peers;
++            for (const auto& [id, peer] : relay_peers) {
++                if (!peers.empty()) {
++                    peers += ", ";
++                }
++                peers += IdText(peer.id);
++                peers += !peer.relayed                     ? " direct"
++                         : now < peer.missing_until        ? " not on the relay"
++                         : peer.relay_seen                 ? " relay"
++                                                           : " relay (no answer yet)";
+             }
++            LOG_INFO(Lib_Net, "P2P relay fallback: {} frame(s) sent / {} received through the "
++                              "relay so far; peers: {}",
++                     relay_sent, relay_received, peers.empty() ? "none" : peers);
++        }
++        for (const std::string& id : relay_local_ids) {
++            std::vector<u8> packet(std::begin(kRelayMagic), std::end(kRelayMagic));
++            packet.push_back(0x01);
++            packet.insert(packet.end(), id.begin(), id.end());
++            SendToRelayLocked(packet);
++        }
++    }
+ 
+-            P2PDatagram packet{};
+-            packet.source_addr = from.sin_addr.s_addr;
+-            packet.source_port = from.sin_port;
+-            packet.source_vport = source_vport_nbo;
+-            packet.payload.assign(payload, payload + payload_size);
+-            it->second->EnqueuePacket(std::move(packet));
++    // Relay = sent through the relay, the caller sends nothing directly; Both = sent through the
++    // relay and the caller sends it directly too; Direct = the caller sends it directly only.
++    RelayPath RelayRoute(u32 dest_addr_nbo, u16 dest_port_nbo, const std::vector<u8>& framed) {
++        std::lock_guard lock(relay_mutex);
++        if (relay_server_addr == 0 || relay_local_ids.empty() ||
++            dest_addr_nbo == relay_server_addr) {
++            return RelayPath::Direct;
++        }
++        RelayPeer* const found = FindRelayPeerLocked(dest_addr_nbo, dest_port_nbo);
++        if (found == nullptr) {
++            return RelayPath::Direct;
++        }
++        RelayPeer& peer = *found;
++        const auto now = std::chrono::steady_clock::now();
++        if (peer.relayed && now < peer.missing_until) {
++            return RelayPath::Direct;
++        }
++        if (!peer.relayed) {
++            if (relay_force) {
++                peer.relayed = true;
++            } else if (!peer.tx_started) {
++                peer.tx_started = true;
++                peer.first_tx = now;
++            } else if (!peer.direct_rx && now - peer.first_tx >= std::chrono::seconds(2)) {
++                peer.relayed = true;
++            }
++            if (!peer.relayed) {
++                // Kept for the switch: signaling sends some packets only once (the
++                // ActivationRequest); lost directly, the peer ignores everything after it and
++                // the connection dies after 30 s.
++                if (!peer.direct_rx && peer.early.size() < kRelayEarlyFrames) {
++                    peer.early.push_back(framed);
++                }
++                return RelayPath::Direct;
++            }
++            peer.relayed_since = now;
++            LOG_INFO(Lib_Net,
++                     "P2P relay fallback: '{}' at {:#x}:{} {} - through the relay ({} earlier "
++                     "frame(s) sent again)",
++                     IdText(peer.id), peer.addr, ntohs(peer.port),
++                     relay_force ? "(forced)" : "sent nothing back directly in 2 s",
++                     peer.early.size());
++            for (const std::vector<u8>& early : peer.early) {
++                SendRelayedLocked(peer, early);
++            }
++            peer.early.clear();
++            peer.early.shrink_to_fit();
++        }
++        SendRelayedLocked(peer, framed);
++        const bool direct_copy =
++            !peer.direct_rx &&
++            (!peer.relay_seen || now - peer.relayed_since < std::chrono::seconds(10));
++        return direct_copy ? RelayPath::Both : RelayPath::Relay;
++    }
++
++    // relay_mutex held.
++    void SendRelayedLocked(const RelayPeer& peer, const std::vector<u8>& framed) {
++        const std::string& self = relay_local_ids.front();
++        std::vector<u8> packet;
++        packet.reserve(5 + 2 * kRelayIdSize + kRelayEpSize + framed.size());
++        packet.insert(packet.end(), std::begin(kRelayMagic), std::end(kRelayMagic));
++        packet.push_back(0x03);
++        packet.insert(packet.end(), peer.id.begin(), peer.id.end());
++        packet.insert(packet.end(), self.begin(), self.end());
++        u8 ep[kRelayEpSize];
++        std::memcpy(ep, &relay_self_addr, 4);
++        std::memcpy(ep + 4, &relay_self_port, 2);
++        packet.insert(packet.end(), ep, ep + kRelayEpSize);
++        packet.insert(packet.end(), framed.begin(), framed.end());
++        SendToRelayLocked(packet);
++        ++relay_sent;
++    }
++
++    void NoteDirectReceive(u32 addr_nbo, u16 port_nbo) {
++        std::lock_guard lock(relay_mutex);
++        if (relay_peers.empty()) {
++            return;
++        }
++        RelayPeer* const found = FindRelayPeerLocked(addr_nbo, port_nbo);
++        if (found != nullptr && !found->direct_rx) {
++            RelayPeer& peer = *found;
++            peer.direct_rx = true;
++            peer.early.clear();
++            if (peer.relayed && !peer.relay_seen) {
++                // It answers directly and never used the relay (an emulator without it, or a
++                // NAT hole that took longer than 2 s): direct from now on.
++                peer.relayed = false;
++                LOG_INFO(Lib_Net, "P2P relay fallback: '{}' reached us directly - back to direct",
++                         IdText(peer.id));
++            } else {
++                LOG_INFO(Lib_Net, "P2P relay fallback: '{}' reached us directly{}",
++                         IdText(peer.id), peer.relayed ? " (staying on the relay)" : "");
++            }
+         }
+-#endif
+     }
+ 
++    void RelayReceive(const u8* data, size_t size) {
++        if (size < 5 || std::memcmp(data, kRelayMagic, 4) != 0) {
++            return;
++        }
++        if (data[4] == 0x02) {
++            std::lock_guard lock(relay_mutex);
++            if (!relay_acked) {
++                relay_acked = true;
++                LOG_INFO(Lib_Net, "P2P relay fallback: registered with the relay");
++            }
++            return;
++        }
++        if (data[4] == 0x05 && size >= 5 + kRelayIdSize) {
++            const std::string id(reinterpret_cast<const char*>(data + 5), kRelayIdSize);
++            std::lock_guard lock(relay_mutex);
++            const auto known = relay_peers.find(id);
++            if (known != relay_peers.end()) {
++                RelayPeer& peer = known->second;
++                peer.missing_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
++                if (!peer.missing_logged) {
++                    peer.missing_logged = true;
++                    LOG_WARNING(Lib_Net,
++                                "P2P relay fallback: '{}' is not on the relay (its emulator is "
++                                "older than 2026-10-12, or it is not running) - direct only; if "
++                                "direct does not work either, it cannot connect until it updates",
++                                IdText(peer.id));
++                }
++            }
++            return;
++        }
++        if (data[4] != 0x04 || size < 5 + kRelayIdSize + kRelayEpSize) {
++            return;
++        }
++        const std::string id(reinterpret_cast<const char*>(data + 5), kRelayIdSize);
++        u32 ep_addr = 0;
++        u16 ep_port = 0;
++        std::memcpy(&ep_addr, data + 5 + kRelayIdSize, 4);
++        std::memcpy(&ep_port, data + 5 + kRelayIdSize + 4, 2);
++        u32 from_addr = 0;
++        u16 from_port = 0;
++        {
++            std::lock_guard lock(relay_mutex);
++            if (!relay_peers.contains(id)) {
++                // A peer signaling never looked up: the endpoint it gave, else a made-up one
++                // (169.254.x.x, never sent to directly) so the answers go back through the relay.
++                RelayPeer& made = relay_peers[id];
++                made.id = id;
++                if (ep_addr != 0 && ep_port != 0) {
++                    made.addr = ep_addr;
++                    made.port = ep_port;
++                } else {
++                    made.addr = htonl(0xA9FE0000u | (relay_next_pseudo++ & 0xFFFFu));
++                    made.port = htons(3173);
++                }
++                AddRelayAliasLocked(id, made.addr, made.port, "relay, new peer");
++            }
++            // Its own endpoint is one more alias; the peer keeps the endpoint signaling knows,
++            // so the frame below arrives from where signaling expects it.
++            AddRelayAliasLocked(id, ep_addr, ep_port, "relay");
++            RelayPeer& peer = relay_peers[id];
++            peer.relay_seen = true;
++            peer.missing_until = {};
++            if (!peer.relayed) {
++                peer.relayed = true;
++                peer.relayed_since = std::chrono::steady_clock::now();
++                LOG_INFO(Lib_Net,
++                         "P2P relay fallback: '{}' reached us through the relay - answering the "
++                         "same way",
++                         IdText(peer.id));
++            }
++            ++relay_received;
++            from_addr = peer.addr;
++            from_port = peer.port;
++        }
++        const size_t head = 5 + kRelayIdSize + kRelayEpSize;
++        DispatchFrame(from_addr, from_port, data + head, size - head);
++    }
++
++    std::mutex relay_mutex;
++    u32 relay_server_addr{0};
++    u16 relay_server_port{0};
++    bool relay_force{false};
++    bool relay_acked{false};
++    u32 relay_self_addr{0};
++    u16 relay_self_port{0};
++    std::chrono::steady_clock::time_point relay_last_register{};
++    std::vector<std::string> relay_local_ids;
++    std::unordered_map<std::string, RelayPeer> relay_peers; // by padded online id
++    std::unordered_map<u64, std::string> relay_alias;       // every known endpoint -> online id
++    u32 relay_next_pseudo{1};
++    u64 relay_sent{0};
++    u64 relay_received{0};
++    std::chrono::steady_clock::time_point relay_last_status{};
++    u64 relay_status_sent{0};
++    u64 relay_status_received{0};
++
++private:
++
+     mutable std::mutex start_mutex;
+     std::atomic<bool> running{false};
+     std::thread receive_thread;
+@@ -1076,4 +1516,20 @@ int P2PMatching2RecvFrom(void* buf, u32 len, u32* from_addr, u16* from_port) {
+                                                     from_port);
+ }
+ 
++void P2PRelaySetServer(u32 addr_nbo) {
++    P2PTransport::Instance().RelaySetServer(addr_nbo);
++}
++
++void P2PRelaySetSelfEndpoint(u32 addr_nbo, u16 port_nbo) {
++    P2PTransport::Instance().RelaySetSelfEndpoint(addr_nbo, port_nbo);
++}
++
++void P2PRelaySetLocalId(std::string_view online_id) {
++    P2PTransport::Instance().RelaySetLocalId(online_id);
++}
++
++void P2PRelayRememberPeer(std::string_view online_id, u32 addr_nbo, u16 port_nbo) {
++    P2PTransport::Instance().RelayRememberPeer(online_id, addr_nbo, port_nbo);
++}
++
+ } // namespace Libraries::Net
+diff --git a/gpu/shadps4/core/libraries/network/sockets.h b/gpu/shadps4/core/libraries/network/sockets.h
+index 173b0ca..d1dd20f 100644
+--- a/gpu/shadps4/core/libraries/network/sockets.h
++++ b/gpu/shadps4/core/libraries/network/sockets.h
+@@ -46,6 +46,7 @@ typedef int net_socket;
+ #endif
+ #include <condition_variable>
+ #include <deque>
++#include <string_view>
+ #include <map>
+ #include <memory>
+ #include <mutex>
+@@ -240,4 +241,11 @@ int P2PControlRecvFrom(void* buf, u32 len, u32* from_addr, u16* from_port);
+ int P2PMatching2SendTo(const void* data, u32 len, u32 dest_addr, u16 dest_port);
+ int P2PMatching2RecvFrom(void* buf, u32 len, u32* from_addr, u16* from_port);
+ 
+-} // namespace Libraries::Net
+\ No newline at end of file
++// BBSC relay fallback (2026-10-12): a peer that sends nothing back directly within 2 s is reached
++// through the game server's UDP relay (port 3478 on the shadNet server's address), by online id.
++void P2PRelaySetServer(u32 addr_nbo);
++void P2PRelaySetLocalId(std::string_view online_id);
++void P2PRelaySetSelfEndpoint(u32 addr_nbo, u16 port_nbo); // our public endpoint (STUN echo)
++void P2PRelayRememberPeer(std::string_view online_id, u32 addr_nbo, u16 port_nbo);
++
++} // namespace Libraries::Net
+\ No newline at end of file
+diff --git a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.cpp b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.cpp
+index 637a475..d33f2d6 100644
+--- a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.cpp
++++ b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.cpp
+@@ -680,6 +680,7 @@ void SetMmShadNetClient(std::shared_ptr<ShadNet::ShadNetClient> client,
+         NpSignaling::Stubs::SetPeerResolver(nullptr);
+         NpSignaling::Stubs::SetMatching2Enabled(false);
+         NpSignaling::Stubs::SetMmServerEndpoint(0, 0);
++        Net::P2PRelaySetServer(0);
+         StopMatching2HandshakeThread();
+         return;
+     }
+@@ -697,6 +698,8 @@ void SetMmShadNetClient(std::shared_ptr<ShadNet::ShadNetClient> client,
+     NpSignaling::Stubs::SetPeerResolver(matching2_enabled ? RequestSignalingInfos : nullptr);
+     NpSignaling::Stubs::SetMatching2Enabled(matching2_enabled);
+     NpSignaling::Stubs::SetMmServerEndpoint(server_addr, server_udp_port);
++    // BBSC relay fallback: the game server's UDP relay runs on the shadNet server's address.
++    Net::P2PRelaySetServer(matching2_enabled ? server_addr : 0);
+     if (matching2_enabled) {
+         StartMatching2HandshakeThread();
+     } else {
+@@ -1238,8 +1241,76 @@ bool RequestSignalingInfos(std::string_view target_online_id, u32* out_addr, u16
+     }
+     *out_addr = addr_nbo;
+     *out_port = Libraries::Net::sceNetHtons(port_host);
++    Net::P2PRelayRememberPeer(target_online_id, *out_addr, *out_port);
+     LOG_DEBUG(Lib_NpMatching2, "'{}' -> {}:{}", target_online_id, addr_str, port_host);
+     return true;
+ }
+ 
++// BBSC (experimental, Phase 2): after Bloodborne keeps a session through a stage load, the reloaded
++// process has lost the partner's character. Re-deliver the room membership notifications that the
++// game originally used to insert the partner, built from the unchanged room cache. Nothing is sent
++// to shadNet and no cache, peer or signaling state is modified.
++int BbscReplayRoomMembers(bool announce_left) {
++    int replayed = 0;
++    const auto now = std::chrono::steady_clock::now();
++    for (u32 id = 1; id <= ContextManager::kMaxContexts; ++id) {
++        ContextObject* ctx = ContextManager::Instance().Get(static_cast<OrbisNpMatching2ContextId>(id));
++        if (!ctx || ctx->room_id == 0) {
++            continue;
++        }
++        const auto room_it = ctx->room_cache.find(ctx->room_id);
++        if (room_it == ctx->room_cache.end()) {
++            continue;
++        }
++        for (const auto& [member_id, member] : room_it->second.members) {
++            if (member_id == 0 || member_id == ctx->my_member_id) {
++                continue;
++            }
++            auto schedule_member_event = [&](OrbisNpMatching2Event event, OrbisNpMatching2Event event_a,
++                                             OrbisNpMatching2EventCause cause,
++                                             std::chrono::milliseconds delay) {
++                auto payload = std::make_shared<CallbackPayload>();
++                BuildMemberUpdate(*payload, room_it->second, member, cause, ctx->a_variant);
++                PendingEvent ev{};
++                ev.type = PendingEvent::ROOM_EVENT_CB;
++                ev.ctx_id = ctx->ctx_id;
++                ev.fire_at = now + delay;
++                ev.room_id = ctx->room_id;
++                ev.room_event = ctx->a_variant ? event_a : event;
++                ev.room_event_data = payload->room_event_data;
++                ev.request_payload_owner = std::move(payload);
++                ScheduleEvent(std::move(ev));
++            };
++
++            auto join_delay = std::chrono::milliseconds{0};
++            if (announce_left) {
++                schedule_member_event(ORBIS_NP_MATCHING2_ROOM_EVENT_MEMBER_LEFT,
++                                      ORBIS_NP_MATCHING2_ROOM_EVENT_MEMBER_LEFT_A,
++                                      ORBIS_NP_MATCHING2_EVENT_CAUSE_LEAVE_ACTION,
++                                      std::chrono::milliseconds{0});
++                join_delay = std::chrono::milliseconds{1500};
++            }
++            schedule_member_event(ORBIS_NP_MATCHING2_ROOM_EVENT_MEMBER_JOINED,
++                                  ORBIS_NP_MATCHING2_ROOM_EVENT_MEMBER_JOINED_A,
++                                  static_cast<OrbisNpMatching2EventCause>(0), join_delay);
++
++            PendingEvent sig{};
++            sig.type = PendingEvent::SIGNALING_CB;
++            sig.ctx_id = ctx->ctx_id;
++            sig.fire_at = now + join_delay + std::chrono::milliseconds{500};
++            sig.room_id = ctx->room_id;
++            sig.member_id = member_id;
++            sig.sig_event = ORBIS_NP_MATCHING2_SIGNALING_EVENT_ESTABLISHED;
++            sig.error_code = ORBIS_OK;
++            ScheduleEvent(std::move(sig));
++
++            LOG_INFO(Lib_NpMatching2,
++                     "BBSC reinsert: replayed member {} ('{}') in room {} ctx {} (announce_left={})",
++                     member_id, member.np_id.handle.data, ctx->room_id, ctx->ctx_id, announce_left);
++            ++replayed;
++        }
++    }
++    return replayed;
++}
++
+ } // namespace Libraries::Np::NpMatching2
+diff --git a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.h b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.h
+index d4e40c3..9d9bf3e 100644
+--- a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.h
++++ b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_mm.h
+@@ -1,94 +1,98 @@
+-// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-#pragma once
+-
+-#include <memory>
+-#include <string_view>
+-#include <vector>
+-
+-#include "common/types.h"
+-#include "core/libraries/np/np_matching2/np_matching2.h"
+-
+-namespace ShadNet {
+-class ShadNetClient;
+-enum class CommandType : u16;
+-enum class ErrorType : u8;
+-} // namespace ShadNet
+-
+-namespace Libraries::Np::NpMatching2 {
+-
+-enum class MmCommand : u16 {
+-    ContextStart = 100,
+-    CreateRoom = 101,
+-    JoinRoom = 102,
+-    LeaveRoom = 103,
+-    SearchRoom = 104,
+-    RequestSignalingInfos = 105,
+-    ContextStop = 106,
+-    SetUserInfo = 107,
+-    SetRoomDataInternal = 108,
+-    SetRoomDataExternal = 109,
+-    KickoutRoomMember = 110,
+-    GetWorldInfoList = 111,
+-    GetRoomDataExternalList = 112,
+-    GetUserInfoList = 113,
+-    GetRoomMemberDataExternalList = 114,
+-    SendRoomMessage = 115,
+-};
+-
+-void SetMmShadNetClient(std::shared_ptr<ShadNet::ShadNetClient> client,
+-                        std::string_view server_host, u16 tcp_port);
+-void ClearMmShadNetClient();
+-bool IsMmClientRunning();
+-
+-void OnMatchingReply(ShadNet::CommandType cmd, u64 pkt_id, ShadNet::ErrorType error,
+-                     const std::vector<u8>& body);
+-
+-void MmContextStart(OrbisNpMatching2ContextId ctx_id);
+-s32 MmContextStop(OrbisNpMatching2ContextId ctx_id);
+-
+-s32 MmSubmitRequest(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                    OrbisNpMatching2Event req_event, MmCommand cmd, const std::vector<u8>& payload,
+-                    bool a_variant = false);
+-
+-s32 MmCreateJoinRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                     const OrbisNpMatching2CreateJoinRoomRequest& request);
+-s32 MmCreateJoinRoomA(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                      const OrbisNpMatching2CreateJoinRoomRequestA& request);
+-s32 MmJoinRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-               const OrbisNpMatching2JoinRoomRequest& request);
+-s32 MmJoinRoomA(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                const OrbisNpMatching2JoinRoomRequestA& request);
+-s32 MmLeaveRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                const OrbisNpMatching2LeaveRoomRequest& request);
+-s32 MmGetWorldInfoList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                       const OrbisNpMatching2GetWorldInfoListRequest& request);
+-s32 MmSearchRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                 const OrbisNpMatching2SearchRoomRequest& request, bool a_variant = false);
+-s32 MmGetRoomDataExternalList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                              const OrbisNpMatching2GetRoomDataExternalListRequest& request,
+-                              bool a_variant = false);
+-s32 MmGetRoomMemberDataExternalList(
+-    OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-    const OrbisNpMatching2GetRoomMemberDataExternalListRequest& request, bool a_variant = false);
+-s32 MmGetUserInfoList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                      const OrbisNpMatching2GetUserInfoListRequest& request,
+-                      bool a_variant = false);
+-s32 MmSetUserInfo(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                  const OrbisNpMatching2SetUserInfoRequest& request);
+-s32 MmSendRoomMessage(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                      const OrbisNpMatching2SendRoomMessageRequest& request);
+-s32 MmSetRoomDataInternal(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                          const OrbisNpMatching2SetRoomDataInternalRequest& request);
+-s32 MmSetRoomDataExternal(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                          const OrbisNpMatching2SetRoomDataExternalRequest& request);
+-s32 MmKickoutRoomMember(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
+-                        const OrbisNpMatching2KickoutRoomMemberRequest& request);
+-
+-u32 GetMmServerAddr();
+-u16 GetMmServerUdpPort();
+-
+-bool RequestSignalingInfos(std::string_view target_online_id, u32* out_addr, u16* out_port);
+-
+-} // namespace Libraries::Np::NpMatching2
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#include <memory>
++#include <string_view>
++#include <vector>
++
++#include "common/types.h"
++#include "core/libraries/np/np_matching2/np_matching2.h"
++
++namespace ShadNet {
++class ShadNetClient;
++enum class CommandType : u16;
++enum class ErrorType : u8;
++} // namespace ShadNet
++
++namespace Libraries::Np::NpMatching2 {
++
++enum class MmCommand : u16 {
++    ContextStart = 100,
++    CreateRoom = 101,
++    JoinRoom = 102,
++    LeaveRoom = 103,
++    SearchRoom = 104,
++    RequestSignalingInfos = 105,
++    ContextStop = 106,
++    SetUserInfo = 107,
++    SetRoomDataInternal = 108,
++    SetRoomDataExternal = 109,
++    KickoutRoomMember = 110,
++    GetWorldInfoList = 111,
++    GetRoomDataExternalList = 112,
++    GetUserInfoList = 113,
++    GetRoomMemberDataExternalList = 114,
++    SendRoomMessage = 115,
++};
++
++void SetMmShadNetClient(std::shared_ptr<ShadNet::ShadNetClient> client,
++                        std::string_view server_host, u16 tcp_port);
++void ClearMmShadNetClient();
++bool IsMmClientRunning();
++
++void OnMatchingReply(ShadNet::CommandType cmd, u64 pkt_id, ShadNet::ErrorType error,
++                     const std::vector<u8>& body);
++
++void MmContextStart(OrbisNpMatching2ContextId ctx_id);
++s32 MmContextStop(OrbisNpMatching2ContextId ctx_id);
++
++s32 MmSubmitRequest(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                    OrbisNpMatching2Event req_event, MmCommand cmd, const std::vector<u8>& payload,
++                    bool a_variant = false);
++
++s32 MmCreateJoinRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                     const OrbisNpMatching2CreateJoinRoomRequest& request);
++s32 MmCreateJoinRoomA(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                      const OrbisNpMatching2CreateJoinRoomRequestA& request);
++s32 MmJoinRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++               const OrbisNpMatching2JoinRoomRequest& request);
++s32 MmJoinRoomA(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                const OrbisNpMatching2JoinRoomRequestA& request);
++s32 MmLeaveRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                const OrbisNpMatching2LeaveRoomRequest& request);
++s32 MmGetWorldInfoList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                       const OrbisNpMatching2GetWorldInfoListRequest& request);
++s32 MmSearchRoom(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                 const OrbisNpMatching2SearchRoomRequest& request, bool a_variant = false);
++s32 MmGetRoomDataExternalList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                              const OrbisNpMatching2GetRoomDataExternalListRequest& request,
++                              bool a_variant = false);
++s32 MmGetRoomMemberDataExternalList(
++    OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++    const OrbisNpMatching2GetRoomMemberDataExternalListRequest& request, bool a_variant = false);
++s32 MmGetUserInfoList(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                      const OrbisNpMatching2GetUserInfoListRequest& request,
++                      bool a_variant = false);
++s32 MmSetUserInfo(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                  const OrbisNpMatching2SetUserInfoRequest& request);
++s32 MmSendRoomMessage(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                      const OrbisNpMatching2SendRoomMessageRequest& request);
++s32 MmSetRoomDataInternal(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                          const OrbisNpMatching2SetRoomDataInternalRequest& request);
++s32 MmSetRoomDataExternal(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                          const OrbisNpMatching2SetRoomDataExternalRequest& request);
++s32 MmKickoutRoomMember(OrbisNpMatching2ContextId ctx_id, OrbisNpMatching2RequestId req_id,
++                        const OrbisNpMatching2KickoutRoomMemberRequest& request);
++
++u32 GetMmServerAddr();
++u16 GetMmServerUdpPort();
++
++bool RequestSignalingInfos(std::string_view target_online_id, u32* out_addr, u16* out_port);
++
++// BBSC experimental re-insertion: re-delivers member-joined (optionally member-left first) and
++// signaling-established callbacks for every other member of the current room. Returns the count.
++int BbscReplayRoomMembers(bool announce_left);
++
++} // namespace Libraries::Np::NpMatching2
+diff --git a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_signaling.cpp b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_signaling.cpp
+index 8fac488..adeda14 100644
+--- a/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_signaling.cpp
++++ b/gpu/shadps4/core/libraries/np/np_matching2/np_matching2_signaling.cpp
+@@ -1,617 +1,764 @@
+-// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-#include <algorithm>
+-#include <atomic>
+-#include <chrono>
+-#include <cstring>
+-#include <limits>
+-#include <memory>
+-#include <mutex>
+-#include <string>
+-#include <string_view>
+-#include <thread>
+-
+-#include "common/logging/log.h"
+-#include "core/libraries/network/net.h"
+-#include "core/libraries/network/sockets.h"
+-#include "core/libraries/np/np_error.h"
+-#include "core/libraries/np/np_matching2/np_matching2_internal.h"
+-#include "core/libraries/np/np_matching2/np_matching2_mm.h"
+-#include "core/libraries/np/np_matching2/np_matching2_signaling.h"
+-#include "core/libraries/np/np_signaling/np_signaling_stubs.h"
+-
+-namespace Libraries::Np::NpMatching2 {
+-
+-namespace {
+-
+-constexpr s32 kMatching2ConnInactive = 0;
+-constexpr s32 kMatching2ConnPending = 1;
+-constexpr s32 kMatching2ConnActive = 2;
+-constexpr auto kMatching2HandshakeRetry = std::chrono::milliseconds(350);
+-constexpr auto kMatching2HandshakeTimeout = std::chrono::seconds(10);
+-constexpr auto kMatching2StunPingInterval = std::chrono::seconds(5);
+-
+-std::atomic<bool> g_matching2_stop{false};
+-std::mutex g_matching2_thread_mutex;
+-std::thread g_matching2_thread;
+-
+-enum class Matching2HandshakeKind : u8 {
+-    Offer = 1,
+-    Accept = 2,
+-    Check = 3,
+-    CheckAck = 4,
+-};
+-
+-#pragma pack(push, 1)
+-struct Matching2HandshakePacket {
+-    u8 magic[4] = {'S', 'H', 'A', 'D'};
+-    u8 type = 0x21;
+-    u8 kind = 0;
+-    u64 room_id = 0;
+-    u16 from_member_id = 0;
+-    u16 to_member_id = 0;
+-    u8 online_id_from[16]{};
+-    u32 mapped_addr = 0;
+-    u16 mapped_port = 0;
+-    u16 reserved = 0;
+-    u64 nonce = 0;
+-};
+-#pragma pack(pop)
+-static_assert(sizeof(Matching2HandshakePacket) == 0x32);
+-
+-#pragma pack(push, 1)
+-struct Matching2StunPing {
+-    u8 cmd = 0x01;
+-    u8 online_id[ORBIS_NP_ONLINEID_MAX_LENGTH]{};
+-    u32 local_ip = 0;
+-};
+-#pragma pack(pop)
+-static_assert(sizeof(Matching2StunPing) == 21);
+-
+-bool HasMatching2Magic(const Matching2HandshakePacket& pkt) {
+-    return pkt.magic[0] == 'S' && pkt.magic[1] == 'H' && pkt.magic[2] == 'A' &&
+-           pkt.magic[3] == 'D' && pkt.type == 0x21;
+-}
+-
+-std::string OnlineIdToString(const Libraries::Np::OrbisNpOnlineId& online_id) {
+-    char buf[ORBIS_NP_ONLINEID_MAX_LENGTH + 1]{};
+-    std::memcpy(buf, online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
+-    return std::string(buf);
+-}
+-
+-bool ShouldConnectToPeer(const RoomCache& room, OrbisNpMatching2RoomMemberId self,
+-                         OrbisNpMatching2RoomMemberId peer) {
+-    if (peer == 0 || peer == self) {
+-        return false;
+-    }
+-    if (room.signaling_type == ORBIS_NP_MATCHING2_SIGNALING_TYPE_NONE) {
+-        return false;
+-    }
+-    if (room.signaling_type == ORBIS_NP_MATCHING2_SIGNALING_TYPE_STAR &&
+-        room.signaling_main_member != 0) {
+-        return self == room.signaling_main_member || peer == room.signaling_main_member;
+-    }
+-    return true;
+-}
+-
+-bool ResolvePeerEndpoint(const MemberCache& member, PeerInfo& peer) {
+-    if (peer.addr != 0 && peer.port != 0) {
+-        return true;
+-    }
+-    if (member.addr != 0 && member.port != 0) {
+-        peer.addr = member.addr;
+-        peer.port = member.port;
+-        if (peer.online_id.data[0] == 0) {
+-            peer.online_id = member.np_id.handle;
+-        }
+-        return true;
+-    }
+-
+-    const std::string online_id(member.np_id.handle.data);
+-    u32 resolved_addr = 0;
+-    u16 resolved_port = 0;
+-    if (!online_id.empty() && RequestSignalingInfos(online_id, &resolved_addr, &resolved_port)) {
+-        peer.addr = resolved_addr;
+-        peer.port = resolved_port;
+-    }
+-    if (peer.online_id.data[0] == 0) {
+-        peer.online_id = member.np_id.handle;
+-    }
+-    return peer.addr != 0 && peer.port != 0;
+-}
+-
+-void MarkMatching2PeerActive(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
+-                             OrbisNpMatching2RoomMemberId member_id, u32 addr, u16 port) {
+-    if (member_id == 0 || member_id == ctx.my_member_id) {
+-        return;
+-    }
+-
+-    PeerInfo& peer = ctx.peers[member_id];
+-    peer.member_id = member_id;
+-    if (addr != 0) {
+-        peer.addr = addr;
+-    }
+-    if (port != 0) {
+-        peer.port = port;
+-    }
+-    const bool first_active = peer.status != kMatching2ConnActive;
+-    peer.status = kMatching2ConnActive;
+-    peer.handshake_started = true;
+-
+-    if (first_active && !peer.sent_established) {
+-        peer.sent_established = true;
+-        QueueMatching2SignalingEvent(ctx, room_id, member_id,
+-                                     ORBIS_NP_MATCHING2_SIGNALING_EVENT_ESTABLISHED, ORBIS_OK);
+-        LOG_INFO(Lib_NpMatching2,
+-                 "Matching2 signaling established: ctx={} room={} member={} addr={:#x}:{}",
+-                 ctx.ctx_id, room_id, member_id, peer.addr, Libraries::Net::sceNetNtohs(peer.port));
+-    }
+-}
+-
+-bool SendMatching2Handshake(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
+-                            OrbisNpMatching2RoomMemberId member_id, Matching2HandshakeKind kind,
+-                            u64 nonce) {
+-    auto room_it = ctx.room_cache.find(room_id);
+-    if (room_it == ctx.room_cache.end()) {
+-        return false;
+-    }
+-    auto member_it = room_it->second.members.find(member_id);
+-    if (member_it == room_it->second.members.end()) {
+-        return false;
+-    }
+-
+-    PeerInfo& peer = ctx.peers[member_id];
+-    peer.member_id = member_id;
+-    if (!ResolvePeerEndpoint(member_it->second, peer)) {
+-        LOG_WARNING(Lib_NpMatching2, "Matching2 signaling: unresolved endpoint room={} member={}",
+-                    room_id, member_id);
+-        return false;
+-    }
+-
+-    Matching2HandshakePacket pkt{};
+-    pkt.kind = static_cast<u8>(kind);
+-    pkt.room_id = room_id;
+-    pkt.from_member_id = ctx.my_member_id;
+-    pkt.to_member_id = member_id;
+-    std::memcpy(pkt.online_id_from, ctx.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
+-    pkt.mapped_addr = Net::GetP2PAdvertisedAddr();
+-    pkt.mapped_port = Net::GetP2PConfiguredPort() != 0
+-                          ? Libraries::Net::sceNetHtons(Net::GetP2PConfiguredPort())
+-                          : 0;
+-    pkt.nonce = nonce;
+-
+-    const int rc = Net::P2PMatching2SendTo(&pkt, sizeof(pkt), peer.addr, peer.port);
+-    const auto now = std::chrono::steady_clock::now();
+-    peer.last_send = now;
+-    if (kind == Matching2HandshakeKind::Check) {
+-        peer.last_check_send = now;
+-    }
+-    LOG_DEBUG(Lib_NpMatching2,
+-              "Matching2 handshake send kind={} ctx={} room={} {}->{} dst={:#x}:{} rc={}",
+-              static_cast<u8>(kind), ctx.ctx_id, room_id, ctx.my_member_id, member_id, peer.addr,
+-              Libraries::Net::sceNetNtohs(peer.port), rc);
+-    return rc >= 0;
+-}
+-
+-ContextObject* FindContextForMatching2Packet(const Matching2HandshakePacket& pkt) {
+-    for (u32 id = 1; id <= ContextManager::kMaxContexts; ++id) {
+-        ContextObject* ctx =
+-            ContextManager::Instance().Get(static_cast<OrbisNpMatching2ContextId>(id));
+-        if (!ctx || ctx->room_id != pkt.room_id || ctx->my_member_id != pkt.to_member_id) {
+-            continue;
+-        }
+-        if (ctx->room_cache.find(static_cast<OrbisNpMatching2RoomId>(pkt.room_id)) !=
+-            ctx->room_cache.end()) {
+-            return ctx;
+-        }
+-    }
+-    return nullptr;
+-}
+-
+-void HandleMatching2HandshakePacket(u32 from_addr, u16 from_port,
+-                                    const Matching2HandshakePacket& pkt) {
+-    if (!HasMatching2Magic(pkt)) {
+-        return;
+-    }
+-
+-    ContextObject* ctx = FindContextForMatching2Packet(pkt);
+-    if (!ctx) {
+-        LOG_DEBUG(Lib_NpMatching2, "Matching2 handshake: no ctx for room={} to_member={}",
+-                  pkt.room_id, pkt.to_member_id);
+-        return;
+-    }
+-
+-    const auto room_id = static_cast<OrbisNpMatching2RoomId>(pkt.room_id);
+-    const auto member_id = static_cast<OrbisNpMatching2RoomMemberId>(pkt.from_member_id);
+-    auto room_it = ctx->room_cache.find(room_id);
+-    if (room_it == ctx->room_cache.end() ||
+-        !ShouldConnectToPeer(room_it->second, ctx->my_member_id, member_id)) {
+-        return;
+-    }
+-
+-    PeerInfo& peer = ctx->peers[member_id];
+-    peer.member_id = member_id;
+-    // The UDP source endpoint is what this peer's NAT actually exposed to us.
+-    // Prefer it over the self-reported mapping, because a NAT can translate
+-    // the sender's local UDP port.
+-    peer.addr = from_addr != 0 ? from_addr : pkt.mapped_addr;
+-    peer.port = from_port != 0 ? from_port : pkt.mapped_port;
+-    peer.status =
+-        peer.status == kMatching2ConnActive ? kMatching2ConnActive : kMatching2ConnPending;
+-    peer.handshake_started = true;
+-    SetNpOnlineId(peer.online_id,
+-                  std::string_view(reinterpret_cast<const char*>(pkt.online_id_from),
+-                                   ORBIS_NP_ONLINEID_MAX_LENGTH));
+-
+-    const auto kind = static_cast<Matching2HandshakeKind>(pkt.kind);
+-    switch (kind) {
+-    case Matching2HandshakeKind::Offer:
+-        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::Accept, 0);
+-        break;
+-    case Matching2HandshakeKind::Accept:
+-        peer.sent_check = true;
+-        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::Check, peer.nonce);
+-        break;
+-    case Matching2HandshakeKind::Check:
+-        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::CheckAck,
+-                               pkt.nonce);
+-        MarkMatching2PeerActive(*ctx, room_id, member_id, peer.addr, peer.port);
+-        break;
+-    case Matching2HandshakeKind::CheckAck:
+-        if (pkt.nonce == 0 || pkt.nonce == peer.nonce) {
+-            if (peer.last_check_send.time_since_epoch().count() != 0) {
+-                const auto rtt = std::chrono::duration_cast<std::chrono::microseconds>(
+-                    std::chrono::steady_clock::now() - peer.last_check_send);
+-                peer.ping_us =
+-                    static_cast<u32>(std::min<u64>(static_cast<u64>(std::max<s64>(0, rtt.count())),
+-                                                   std::numeric_limits<u32>::max()));
+-                peer.last_check_send = {};
+-            }
+-            MarkMatching2PeerActive(*ctx, room_id, member_id, peer.addr, peer.port);
+-        }
+-        break;
+-    default:
+-        break;
+-    }
+-}
+-
+-void Matching2HandshakeThreadMain() {
+-    auto last_stun_ping = std::chrono::steady_clock::time_point{};
+-    while (!g_matching2_stop.load(std::memory_order_relaxed)) {
+-        Matching2HandshakePacket pkt{};
+-        u32 from_addr = 0;
+-        u16 from_port = 0;
+-        const int rc = Net::P2PMatching2RecvFrom(&pkt, sizeof(pkt), &from_addr, &from_port);
+-        if (rc == sizeof(pkt)) {
+-            HandleMatching2HandshakePacket(from_addr, from_port, pkt);
+-        }
+-
+-        const auto now = std::chrono::steady_clock::now();
+-        const bool should_stun_ping = last_stun_ping.time_since_epoch().count() == 0 ||
+-                                      now - last_stun_ping >= kMatching2StunPingInterval;
+-        for (u32 id = 1; id <= ContextManager::kMaxContexts; ++id) {
+-            ContextObject* ctx =
+-                ContextManager::Instance().Get(static_cast<OrbisNpMatching2ContextId>(id));
+-            if (!ctx) {
+-                continue;
+-            }
+-            if (should_stun_ping) {
+-                SendMatching2StunPing(*ctx);
+-            }
+-            if (ctx->room_id == 0) {
+-                continue;
+-            }
+-            auto room_it = ctx->room_cache.find(ctx->room_id);
+-            if (room_it == ctx->room_cache.end()) {
+-                continue;
+-            }
+-            for (auto& [member_id, peer] : ctx->peers) {
+-                if (peer.status != kMatching2ConnPending || !peer.handshake_started) {
+-                    continue;
+-                }
+-                if (peer.last_send.time_since_epoch().count() != 0 &&
+-                    now - peer.last_send > kMatching2HandshakeTimeout) {
+-                    peer.status = kMatching2ConnInactive;
+-                    QueueMatching2SignalingEvent(*ctx, ctx->room_id, member_id,
+-                                                 ORBIS_NP_MATCHING2_SIGNALING_EVENT_DEAD,
+-                                                 ORBIS_NP_MATCHING2_SIGNALING_ERROR_TIMEOUT);
+-                    continue;
+-                }
+-                if (peer.last_send.time_since_epoch().count() == 0 ||
+-                    now - peer.last_send >= kMatching2HandshakeRetry) {
+-                    SendMatching2Handshake(*ctx, ctx->room_id, member_id,
+-                                           peer.sent_check ? Matching2HandshakeKind::Check
+-                                                           : Matching2HandshakeKind::Offer,
+-                                           peer.sent_check ? peer.nonce : 0);
+-                }
+-            }
+-        }
+-        if (should_stun_ping) {
+-            last_stun_ping = now;
+-        }
+-
+-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+-    }
+-}
+-
+-} // namespace
+-
+-bool SendMatching2StunPing(const ContextObject& ctx) {
+-    if (!NpSignaling::Stubs::Matching2Enabled()) {
+-        return false;
+-    }
+-    if (!ctx.started || ctx.online_id.data[0] == '\0') {
+-        return false;
+-    }
+-    if (!NpSignaling::Stubs::EnsureTransport()) {
+-        return false;
+-    }
+-
+-    const u32 server_addr = NpSignaling::Stubs::MmServerAddr();
+-    const u16 server_udp = NpSignaling::Stubs::MmServerUdpPort();
+-    if (server_addr == 0 || server_udp == 0) {
+-        return false;
+-    }
+-
+-    Matching2StunPing ping{};
+-    ping.cmd = 0x01;
+-    std::memcpy(ping.online_id, ctx.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
+-    ping.local_ip = NpSignaling::Stubs::AdvertisedAddr();
+-
+-    const int rc =
+-        NpSignaling::Stubs::SignalingSendTo(&ping, sizeof(ping), server_addr, server_udp);
+-    LOG_DEBUG(Lib_NpMatching2,
+-              "Matching2 STUN ping: ctx={} online_id='{}' server={:#x}:{} local_ip={:#x} rc={}",
+-              ctx.ctx_id, OnlineIdToString(ctx.online_id), server_addr,
+-              Libraries::Net::sceNetNtohs(server_udp), ping.local_ip, rc);
+-    return rc >= 0;
+-}
+-
+-void QueueMatching2SignalingEvent(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
+-                                  OrbisNpMatching2RoomMemberId member_id,
+-                                  OrbisNpMatching2Event event, s32 error_code) {
+-    PendingEvent ev{};
+-    ev.type = PendingEvent::SIGNALING_CB;
+-    ev.ctx_id = ctx.ctx_id;
+-    ev.fire_at = std::chrono::steady_clock::now();
+-    ev.room_id = room_id;
+-    ev.member_id = member_id;
+-    ev.sig_event = event;
+-    ev.error_code = error_code;
+-    ScheduleEvent(std::move(ev));
+-}
+-
+-void StartMatching2PeerHandshake(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
+-                                 OrbisNpMatching2RoomMemberId member_id) {
+-    auto room_it = ctx.room_cache.find(room_id);
+-    if (room_it == ctx.room_cache.end() ||
+-        !ShouldConnectToPeer(room_it->second, ctx.my_member_id, member_id)) {
+-        return;
+-    }
+-    auto member_it = room_it->second.members.find(member_id);
+-    if (member_it == room_it->second.members.end()) {
+-        return;
+-    }
+-
+-    Net::EnsureP2PTransport();
+-
+-    PeerInfo& peer = ctx.peers[member_id];
+-    peer.member_id = member_id;
+-    if (peer.status == kMatching2ConnActive) {
+-        return;
+-    }
+-    ResolvePeerEndpoint(member_it->second, peer);
+-    peer.status = kMatching2ConnPending;
+-    peer.handshake_started = true;
+-    peer.sent_check = false;
+-    if (peer.nonce == 0) {
+-        peer.nonce = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count() ^
+-                                      (static_cast<u64>(ctx.ctx_id) << 48) ^
+-                                      (static_cast<u64>(member_id) << 16));
+-    }
+-    SendMatching2Handshake(ctx, room_id, member_id, Matching2HandshakeKind::Offer, 0);
+-}
+-
+-void StartMatching2SignalingForRoomPeers(ContextObject& ctx, OrbisNpMatching2RoomId room_id) {
+-    const auto room_it = ctx.room_cache.find(room_id);
+-    if (room_it == ctx.room_cache.end()) {
+-        return;
+-    }
+-    for (const auto& [member_id, member] : room_it->second.members) {
+-        StartMatching2PeerHandshake(ctx, room_id, member_id);
+-    }
+-}
+-
+-void QueueMatching2DeadForRoomPeers(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
+-                                    s32 error_code) {
+-    auto room_it = ctx.room_cache.find(room_id);
+-    if (room_it == ctx.room_cache.end()) {
+-        return;
+-    }
+-
+-    for (const auto& [member_id, member] : room_it->second.members) {
+-        if (member_id == 0 || member_id == ctx.my_member_id) {
+-            continue;
+-        }
+-
+-        auto peer_it = ctx.peers.find(member_id);
+-        if (peer_it != ctx.peers.end()) {
+-            peer_it->second.status = kMatching2ConnInactive;
+-            peer_it->second.handshake_started = false;
+-            peer_it->second.sent_check = false;
+-        }
+-
+-        QueueMatching2SignalingEvent(ctx, room_id, member_id,
+-                                     ORBIS_NP_MATCHING2_SIGNALING_EVENT_DEAD, error_code);
+-        LOG_INFO(Lib_NpMatching2, "Matching2 signaling dead: ctx={} room={} member={} reason={:#x}",
+-                 ctx.ctx_id, room_id, member_id, static_cast<u32>(error_code));
+-    }
+-}
+-
+-void StartMatching2HandshakeThread() {
+-    std::lock_guard lock(g_matching2_thread_mutex);
+-    if (g_matching2_thread.joinable()) {
+-        return;
+-    }
+-    g_matching2_stop.store(false, std::memory_order_relaxed);
+-    g_matching2_thread = std::thread(Matching2HandshakeThreadMain);
+-}
+-
+-void StopMatching2HandshakeThread() {
+-    {
+-        std::lock_guard lock(g_matching2_thread_mutex);
+-        g_matching2_stop.store(true, std::memory_order_relaxed);
+-    }
+-    if (g_matching2_thread.joinable()) {
+-        g_matching2_thread.join();
+-    }
+-}
+-
+-u32 GetRoomPingUs(const ContextObject& ctx, OrbisNpMatching2RoomId roomId) {
+-    const auto room_it = ctx.room_cache.find(roomId);
+-    if (room_it == ctx.room_cache.end()) {
+-        return 0;
+-    }
+-
+-    u64 total_ping = 0;
+-    u32 ping_count = 0;
+-    for (const auto& [member_id, member] : room_it->second.members) {
+-        if (member_id == ctx.my_member_id) {
+-            continue;
+-        }
+-        const auto peer_it = ctx.peers.find(member_id);
+-        if (peer_it == ctx.peers.end() || peer_it->second.ping_us == 0) {
+-            continue;
+-        }
+-        total_ping += peer_it->second.ping_us;
+-        ++ping_count;
+-    }
+-
+-    return ping_count == 0 ? 0 : static_cast<u32>(total_ping / ping_count);
+-}
+-
+-void* BuildSignalingGetPingInfoPayload(ContextObject& ctx, OrbisNpMatching2RoomId roomId) {
+-    CallbackPayload& p =
+-        ctx.request_payload_override ? *ctx.request_payload_override : ctx.request_payload;
+-    p.Reset();
+-
+-    const auto room_it = ctx.room_cache.find(roomId);
+-    p.ping_info_response = std::make_unique<OrbisNpMatching2SignalingGetPingInfoResponse>();
+-    auto& out = *p.ping_info_response;
+-    out = {};
+-    if (room_it != ctx.room_cache.end()) {
+-        out.serverId = room_it->second.server_id;
+-        out.worldId = room_it->second.world_id;
+-        out.roomId = room_it->second.room_id;
+-    } else {
+-        out.serverId = ctx.server_id;
+-        out.worldId = ctx.world_id;
+-        out.roomId = roomId;
+-    }
+-    out.rtt = GetRoomPingUs(ctx, roomId);
+-
+-    p.request_data = p.ping_info_response.get();
+-    return p.request_data;
+-}
+-
+-s32 FillMatching2ConnectionInfo(const ContextObject& ctx, OrbisNpMatching2RoomId roomId,
+-                                OrbisNpMatching2RoomMemberId memberId, u32 infoType, void* connInfo,
+-                                bool a_variant) {
+-    if (!connInfo) {
+-        LOG_ERROR(Lib_NpMatching2, "connInfo null");
+-        return ORBIS_NP_MATCHING2_ERROR_INVALID_ARGUMENT;
+-    }
+-
+-    const auto room_it = ctx.room_cache.find(roomId);
+-    if (room_it == ctx.room_cache.end()) {
+-        LOG_INFO(Lib_NpMatching2, "room={} not cached for connection info", roomId);
+-        if (a_variant) {
+-            *static_cast<OrbisNpMatching2SignalingConnectionInfoA*>(connInfo) = {};
+-        } else {
+-            *static_cast<OrbisNpMatching2SignalingConnectionInfo*>(connInfo) = {};
+-        }
+-        return ORBIS_OK;
+-    }
+-
+-    const auto member_it = room_it->second.members.find(memberId);
+-    const MemberCache* member =
+-        member_it != room_it->second.members.end() ? &member_it->second : nullptr;
+-    const auto peer_it = ctx.peers.find(memberId);
+-    const PeerInfo* peer = peer_it != ctx.peers.end() ? &peer_it->second : nullptr;
+-
+-    if (a_variant) {
+-        auto* out = static_cast<OrbisNpMatching2SignalingConnectionInfoA*>(connInfo);
+-        *out = {};
+-        switch (infoType) {
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_RTT:
+-            out->rtt = peer ? peer->ping_us : 0;
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_BANDWIDTH:
+-            out->bandwidth = 0;
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDR:
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_MAPPED_ADDR:
+-            if (peer) {
+-                out->address.addr = peer->addr;
+-                out->address.port = peer->port;
+-            } else if (member) {
+-                out->address.addr = member->addr;
+-                out->address.port = member->port;
+-            }
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PACKET_LOSS:
+-            out->packetLoss = 0;
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDRESS_A:
+-            if (member) {
+-                out->peerAddrA.accountId = member->account_id;
+-                out->peerAddrA.platform = member->platform;
+-            }
+-            break;
+-        default:
+-            LOG_WARNING(Lib_NpMatching2, "unsupported connection info A type={}", infoType);
+-            return ORBIS_NP_MATCHING2_SIGNALING_ERROR_INVALID_ARGUMENT;
+-        }
+-    } else {
+-        auto* out = static_cast<OrbisNpMatching2SignalingConnectionInfo*>(connInfo);
+-        *out = {};
+-        switch (infoType) {
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_RTT:
+-            out->rtt = peer ? peer->ping_us : 0;
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_BANDWIDTH:
+-            out->bandwidth = 0;
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_NP_ID:
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_NPID:
+-            if (member) {
+-                out->npId = member->np_id;
+-            }
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDR:
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_MAPPED_ADDR:
+-            if (peer) {
+-                out->address.addr = peer->addr;
+-                out->address.port = peer->port;
+-            } else if (member) {
+-                out->address.addr = member->addr;
+-                out->address.port = member->port;
+-            }
+-            break;
+-        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PACKET_LOSS:
+-            out->packetLoss = 0;
+-            break;
+-        default:
+-            LOG_WARNING(Lib_NpMatching2, "unsupported connection info type={}", infoType);
+-            return ORBIS_NP_MATCHING2_SIGNALING_ERROR_INVALID_ARGUMENT;
+-        }
+-    }
+-
+-    LOG_INFO(Lib_NpMatching2, "connection info{}: ctx={} room={} member={} type={} rtt={}",
+-             a_variant ? "A" : "", ctx.ctx_id, roomId, memberId, infoType,
+-             peer ? peer->ping_us : 0);
+-    return ORBIS_OK;
+-}
+-
+-} // namespace Libraries::Np::NpMatching2
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#include <algorithm>
++#include <atomic>
++#include <chrono>
++#include <cstdlib>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <limits>
++#include <memory>
++#include <mutex>
++#include <string>
++#include <string_view>
++#include <thread>
++#include <unordered_map>
++
++#include <nlohmann/json.hpp>
++
++#include "common/logging/log.h"
++#include "common/path_util.h"
++#include "core/libraries/network/net.h"
++#include "core/libraries/network/sockets.h"
++#include "core/libraries/np/np_error.h"
++#include "core/libraries/np/np_matching2/np_matching2_internal.h"
++#include "core/libraries/np/np_matching2/np_matching2_mm.h"
++#include "core/libraries/np/np_matching2/np_matching2_signaling.h"
++#include "core/libraries/np/np_signaling/np_signaling_stubs.h"
++
++namespace Libraries::Np::NpMatching2 {
++
++namespace {
++
++constexpr s32 kMatching2ConnInactive = 0;
++constexpr s32 kMatching2ConnPending = 1;
++constexpr s32 kMatching2ConnActive = 2;
++constexpr auto kMatching2HandshakeRetry = std::chrono::milliseconds(350);
++constexpr auto kMatching2HandshakeTimeout = std::chrono::seconds(10);
++constexpr auto kMatching2StunPingInterval = std::chrono::seconds(5);
++
++std::atomic<bool> g_matching2_stop{false};
++std::mutex g_matching2_thread_mutex;
++std::thread g_matching2_thread;
++
++enum class Matching2HandshakeKind : u8 {
++    Offer = 1,
++    Accept = 2,
++    Check = 3,
++    CheckAck = 4,
++};
++
++#pragma pack(push, 1)
++struct Matching2HandshakePacket {
++    u8 magic[4] = {'S', 'H', 'A', 'D'};
++    u8 type = 0x21;
++    u8 kind = 0;
++    u64 room_id = 0;
++    u16 from_member_id = 0;
++    u16 to_member_id = 0;
++    u8 online_id_from[16]{};
++    u32 mapped_addr = 0;
++    u16 mapped_port = 0;
++    u16 reserved = 0;
++    u64 nonce = 0;
++};
++#pragma pack(pop)
++static_assert(sizeof(Matching2HandshakePacket) == 0x32);
++
++#pragma pack(push, 1)
++struct Matching2StunPing {
++    u8 cmd = 0x01;
++    u8 online_id[ORBIS_NP_ONLINEID_MAX_LENGTH]{};
++    u32 local_ip = 0;
++};
++#pragma pack(pop)
++static_assert(sizeof(Matching2StunPing) == 21);
++
++bool HasMatching2Magic(const Matching2HandshakePacket& pkt) {
++    return pkt.magic[0] == 'S' && pkt.magic[1] == 'H' && pkt.magic[2] == 'A' &&
++           pkt.magic[3] == 'D' && pkt.type == 0x21;
++}
++
++std::string OnlineIdToString(const Libraries::Np::OrbisNpOnlineId& online_id) {
++    char buf[ORBIS_NP_ONLINEID_MAX_LENGTH + 1]{};
++    std::memcpy(buf, online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
++    return std::string(buf);
++}
++
++bool ShouldConnectToPeer(const RoomCache& room, OrbisNpMatching2RoomMemberId self,
++                         OrbisNpMatching2RoomMemberId peer) {
++    if (peer == 0 || peer == self) {
++        return false;
++    }
++    if (room.signaling_type == ORBIS_NP_MATCHING2_SIGNALING_TYPE_NONE) {
++        return false;
++    }
++    if (room.signaling_type == ORBIS_NP_MATCHING2_SIGNALING_TYPE_STAR &&
++        room.signaling_main_member != 0) {
++        return self == room.signaling_main_member || peer == room.signaling_main_member;
++    }
++    return true;
++}
++
++// BBSC: static peer map - "direct connection" mode.
++// When both players sit on a fixed virtual LAN (Tailscale / Radmin / ZeroTier) their addresses
++// never change, so asking the matchmaking server to resolve them is pure overhead and one more
++// thing that can be down. A configured entry wins over both the cached member address and the
++// server lookup, so a session comes up with no broker involved in addressing at all.
++//
++// Sources, in order (the first one to define an npid wins):
++//   SHADPS4_BBSC_PEERS   "npid=host:port,npid=host:port"
++//   bbsc_peers.json      in the user folder, path overridable with SHADPS4_BBSC_PEERS_JSON:
++//                        { "CLS_AMG": "100.101.102.103:41001" }
++// The port is that player's SHADPS4_P2P_PORT.
++struct StaticPeer {
++    u32 addr_nbo = 0;
++    u16 port_nbo = 0;
++};
++
++bool ParseStaticPeerEndpoint(std::string_view text, StaticPeer& out) {
++    const auto colon = text.rfind(':');
++    if (colon == std::string_view::npos || colon == 0 || colon + 1 >= text.size()) {
++        return false;
++    }
++    const std::string host(text.substr(0, colon));
++    u32 port_host = 0;
++    for (const char c : text.substr(colon + 1)) {
++        if (c < '0' || c > '9') {
++            return false;
++        }
++        port_host = port_host * 10 + static_cast<u32>(c - '0');
++        if (port_host > 65535) {
++            return false;
++        }
++    }
++    if (port_host == 0) {
++        return false;
++    }
++    u32 addr_nbo = 0;
++    if (Libraries::Net::sceNetInetPton(Net::ORBIS_NET_AF_INET, host.c_str(), &addr_nbo) <= 0) {
++        return false;
++    }
++    out.addr_nbo = addr_nbo;
++    out.port_nbo = Libraries::Net::sceNetHtons(static_cast<u16>(port_host));
++    return true;
++}
++
++std::unordered_map<std::string, StaticPeer> LoadStaticPeerMap() {
++    std::unordered_map<std::string, StaticPeer> peers;
++    const auto add = [&peers](std::string npid, std::string_view endpoint) {
++        StaticPeer parsed;
++        if (npid.empty() || !ParseStaticPeerEndpoint(endpoint, parsed)) {
++            LOG_ERROR(Lib_NpMatching2, "BBSC static peer: ignoring bad entry '{}' -> '{}'", npid,
++                      endpoint);
++            return;
++        }
++        peers.emplace(std::move(npid), parsed);
++    };
++
++    if (const char* env = std::getenv("SHADPS4_BBSC_PEERS"); env != nullptr && env[0] != '\0') {
++        std::string_view rest{env};
++        while (!rest.empty()) {
++            const auto comma = rest.find(',');
++            const std::string_view item = rest.substr(0, comma);
++            rest = comma == std::string_view::npos ? std::string_view{} : rest.substr(comma + 1);
++            if (const auto eq = item.find('='); eq != std::string_view::npos) {
++                add(std::string(item.substr(0, eq)), item.substr(eq + 1));
++            }
++        }
++    }
++
++    std::filesystem::path path;
++    if (const char* env = std::getenv("SHADPS4_BBSC_PEERS_JSON"); env != nullptr && env[0] != '\0') {
++        path = env;
++    } else {
++        path = Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "bbsc_peers.json";
++    }
++    if (std::ifstream f(path); f.is_open()) {
++        try {
++            const nlohmann::json doc = nlohmann::json::parse(f, nullptr, true, true);
++            for (const auto& [npid, value] : doc.items()) {
++                if (value.is_string()) {
++                    add(npid, value.get<std::string>());
++                }
++            }
++        } catch (const std::exception& e) {
++            LOG_ERROR(Lib_NpMatching2, "BBSC static peer: cannot parse {}: {}", path.string(),
++                      e.what());
++        }
++    }
++
++    if (!peers.empty()) {
++        LOG_INFO(Lib_NpMatching2, "BBSC static peer map: {} entries loaded", peers.size());
++    }
++    return peers;
++}
++
++const std::unordered_map<std::string, StaticPeer>& GetStaticPeerMap() {
++    static const std::unordered_map<std::string, StaticPeer> peers = LoadStaticPeerMap();
++    return peers;
++}
++
++bool LookupStaticPeer(const std::string& npid, StaticPeer& out) {
++    const auto& peers = GetStaticPeerMap();
++    if (peers.empty() || npid.empty()) {
++        return false;
++    }
++    const auto it = peers.find(npid);
++    if (it == peers.end()) {
++        return false;
++    }
++    out = it->second;
++    return true;
++}
++
++bool ResolvePeerEndpointUnremembered(const MemberCache& member, PeerInfo& peer);
++
++// BBSC relay fallback: the transport learns which online id sits behind each endpoint.
++bool ResolvePeerEndpoint(const MemberCache& member, PeerInfo& peer) {
++    const bool resolved = ResolvePeerEndpointUnremembered(member, peer);
++    if (resolved) {
++        Net::P2PRelayRememberPeer(std::string(member.np_id.handle.data), peer.addr, peer.port);
++    }
++    return resolved;
++}
++
++bool ResolvePeerEndpointUnremembered(const MemberCache& member, PeerInfo& peer) {
++    const std::string online_id(member.np_id.handle.data);
++
++    // A configured fixed endpoint wins over the cached address and the server lookup both - that
++    // is the whole point of direct mode, and it keeps the peer pinned if the broker disagrees.
++    if (StaticPeer fixed; LookupStaticPeer(online_id, fixed)) {
++        const bool changed = peer.addr != fixed.addr_nbo || peer.port != fixed.port_nbo;
++        peer.addr = fixed.addr_nbo;
++        peer.port = fixed.port_nbo;
++        if (peer.online_id.data[0] == 0) {
++            peer.online_id = member.np_id.handle;
++        }
++        if (changed) {
++            LOG_INFO(Lib_NpMatching2, "BBSC direct peer '{}' -> {:#x}:{} (no broker lookup)",
++                     online_id, peer.addr, Libraries::Net::sceNetNtohs(peer.port));
++        }
++        return true;
++    }
++
++    if (peer.addr != 0 && peer.port != 0) {
++        return true;
++    }
++    if (member.addr != 0 && member.port != 0) {
++        peer.addr = member.addr;
++        peer.port = member.port;
++        if (peer.online_id.data[0] == 0) {
++            peer.online_id = member.np_id.handle;
++        }
++        return true;
++    }
++
++    u32 resolved_addr = 0;
++    u16 resolved_port = 0;
++    if (!online_id.empty() && RequestSignalingInfos(online_id, &resolved_addr, &resolved_port)) {
++        peer.addr = resolved_addr;
++        peer.port = resolved_port;
++    }
++    if (peer.online_id.data[0] == 0) {
++        peer.online_id = member.np_id.handle;
++    }
++    return peer.addr != 0 && peer.port != 0;
++}
++
++void MarkMatching2PeerActive(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
++                             OrbisNpMatching2RoomMemberId member_id, u32 addr, u16 port) {
++    if (member_id == 0 || member_id == ctx.my_member_id) {
++        return;
++    }
++
++    PeerInfo& peer = ctx.peers[member_id];
++    peer.member_id = member_id;
++    if (addr != 0) {
++        peer.addr = addr;
++    }
++    if (port != 0) {
++        peer.port = port;
++    }
++    const bool first_active = peer.status != kMatching2ConnActive;
++    peer.status = kMatching2ConnActive;
++    peer.handshake_started = true;
++
++    if (first_active && !peer.sent_established) {
++        peer.sent_established = true;
++        QueueMatching2SignalingEvent(ctx, room_id, member_id,
++                                     ORBIS_NP_MATCHING2_SIGNALING_EVENT_ESTABLISHED, ORBIS_OK);
++        LOG_INFO(Lib_NpMatching2,
++                 "Matching2 signaling established: ctx={} room={} member={} addr={:#x}:{}",
++                 ctx.ctx_id, room_id, member_id, peer.addr, Libraries::Net::sceNetNtohs(peer.port));
++    }
++}
++
++bool SendMatching2Handshake(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
++                            OrbisNpMatching2RoomMemberId member_id, Matching2HandshakeKind kind,
++                            u64 nonce) {
++    auto room_it = ctx.room_cache.find(room_id);
++    if (room_it == ctx.room_cache.end()) {
++        return false;
++    }
++    auto member_it = room_it->second.members.find(member_id);
++    if (member_it == room_it->second.members.end()) {
++        return false;
++    }
++
++    PeerInfo& peer = ctx.peers[member_id];
++    peer.member_id = member_id;
++    if (!ResolvePeerEndpoint(member_it->second, peer)) {
++        LOG_WARNING(Lib_NpMatching2, "Matching2 signaling: unresolved endpoint room={} member={}",
++                    room_id, member_id);
++        return false;
++    }
++
++    Matching2HandshakePacket pkt{};
++    pkt.kind = static_cast<u8>(kind);
++    pkt.room_id = room_id;
++    pkt.from_member_id = ctx.my_member_id;
++    pkt.to_member_id = member_id;
++    std::memcpy(pkt.online_id_from, ctx.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
++    pkt.mapped_addr = Net::GetP2PAdvertisedAddr();
++    pkt.mapped_port = Net::GetP2PConfiguredPort() != 0
++                          ? Libraries::Net::sceNetHtons(Net::GetP2PConfiguredPort())
++                          : 0;
++    pkt.nonce = nonce;
++
++    const int rc = Net::P2PMatching2SendTo(&pkt, sizeof(pkt), peer.addr, peer.port);
++    const auto now = std::chrono::steady_clock::now();
++    peer.last_send = now;
++    if (kind == Matching2HandshakeKind::Check) {
++        peer.last_check_send = now;
++    }
++    LOG_DEBUG(Lib_NpMatching2,
++              "Matching2 handshake send kind={} ctx={} room={} {}->{} dst={:#x}:{} rc={}",
++              static_cast<u8>(kind), ctx.ctx_id, room_id, ctx.my_member_id, member_id, peer.addr,
++              Libraries::Net::sceNetNtohs(peer.port), rc);
++    return rc >= 0;
++}
++
++ContextObject* FindContextForMatching2Packet(const Matching2HandshakePacket& pkt) {
++    for (u32 id = 1; id <= ContextManager::kMaxContexts; ++id) {
++        ContextObject* ctx =
++            ContextManager::Instance().Get(static_cast<OrbisNpMatching2ContextId>(id));
++        if (!ctx || ctx->room_id != pkt.room_id || ctx->my_member_id != pkt.to_member_id) {
++            continue;
++        }
++        if (ctx->room_cache.find(static_cast<OrbisNpMatching2RoomId>(pkt.room_id)) !=
++            ctx->room_cache.end()) {
++            return ctx;
++        }
++    }
++    return nullptr;
++}
++
++void HandleMatching2HandshakePacket(u32 from_addr, u16 from_port,
++                                    const Matching2HandshakePacket& pkt) {
++    if (!HasMatching2Magic(pkt)) {
++        return;
++    }
++
++    ContextObject* ctx = FindContextForMatching2Packet(pkt);
++    if (!ctx) {
++        LOG_DEBUG(Lib_NpMatching2, "Matching2 handshake: no ctx for room={} to_member={}",
++                  pkt.room_id, pkt.to_member_id);
++        return;
++    }
++
++    const auto room_id = static_cast<OrbisNpMatching2RoomId>(pkt.room_id);
++    const auto member_id = static_cast<OrbisNpMatching2RoomMemberId>(pkt.from_member_id);
++    auto room_it = ctx->room_cache.find(room_id);
++    if (room_it == ctx->room_cache.end() ||
++        !ShouldConnectToPeer(room_it->second, ctx->my_member_id, member_id)) {
++        return;
++    }
++
++    PeerInfo& peer = ctx->peers[member_id];
++    peer.member_id = member_id;
++    // The UDP source endpoint is what this peer's NAT actually exposed to us.
++    // Prefer it over the self-reported mapping, because a NAT can translate
++    // the sender's local UDP port.
++    peer.addr = from_addr != 0 ? from_addr : pkt.mapped_addr;
++    peer.port = from_port != 0 ? from_port : pkt.mapped_port;
++    peer.status =
++        peer.status == kMatching2ConnActive ? kMatching2ConnActive : kMatching2ConnPending;
++    peer.handshake_started = true;
++    SetNpOnlineId(peer.online_id,
++                  std::string_view(reinterpret_cast<const char*>(pkt.online_id_from),
++                                   ORBIS_NP_ONLINEID_MAX_LENGTH));
++
++    const auto kind = static_cast<Matching2HandshakeKind>(pkt.kind);
++    switch (kind) {
++    case Matching2HandshakeKind::Offer:
++        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::Accept, 0);
++        break;
++    case Matching2HandshakeKind::Accept:
++        peer.sent_check = true;
++        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::Check, peer.nonce);
++        break;
++    case Matching2HandshakeKind::Check:
++        SendMatching2Handshake(*ctx, room_id, member_id, Matching2HandshakeKind::CheckAck,
++                               pkt.nonce);
++        MarkMatching2PeerActive(*ctx, room_id, member_id, peer.addr, peer.port);
++        break;
++    case Matching2HandshakeKind::CheckAck:
++        if (pkt.nonce == 0 || pkt.nonce == peer.nonce) {
++            if (peer.last_check_send.time_since_epoch().count() != 0) {
++                const auto rtt = std::chrono::duration_cast<std::chrono::microseconds>(
++                    std::chrono::steady_clock::now() - peer.last_check_send);
++                peer.ping_us =
++                    static_cast<u32>(std::min<u64>(static_cast<u64>(std::max<s64>(0, rtt.count())),
++                                                   std::numeric_limits<u32>::max()));
++                peer.last_check_send = {};
++            }
++            MarkMatching2PeerActive(*ctx, room_id, member_id, peer.addr, peer.port);
++        }
++        break;
++    default:
++        break;
++    }
++}
++
++void Matching2HandshakeThreadMain() {
++    auto last_stun_ping = std::chrono::steady_clock::time_point{};
++    while (!g_matching2_stop.load(std::memory_order_relaxed)) {
++        Matching2HandshakePacket pkt{};
++        u32 from_addr = 0;
++        u16 from_port = 0;
++        const int rc = Net::P2PMatching2RecvFrom(&pkt, sizeof(pkt), &from_addr, &from_port);
++        if (rc == sizeof(pkt)) {
++            HandleMatching2HandshakePacket(from_addr, from_port, pkt);
++        }
++
++        const auto now = std::chrono::steady_clock::now();
++        const bool should_stun_ping = last_stun_ping.time_since_epoch().count() == 0 ||
++                                      now - last_stun_ping >= kMatching2StunPingInterval;
++        for (u32 id = 1; id <= ContextManager::kMaxContexts; ++id) {
++            ContextObject* ctx =
++                ContextManager::Instance().Get(static_cast<OrbisNpMatching2ContextId>(id));
++            if (!ctx) {
++                continue;
++            }
++            if (should_stun_ping) {
++                SendMatching2StunPing(*ctx);
++            }
++            if (ctx->room_id == 0) {
++                continue;
++            }
++            auto room_it = ctx->room_cache.find(ctx->room_id);
++            if (room_it == ctx->room_cache.end()) {
++                continue;
++            }
++            for (auto& [member_id, peer] : ctx->peers) {
++                if (peer.status != kMatching2ConnPending || !peer.handshake_started) {
++                    continue;
++                }
++                if (peer.last_send.time_since_epoch().count() != 0 &&
++                    now - peer.last_send > kMatching2HandshakeTimeout) {
++                    peer.status = kMatching2ConnInactive;
++                    QueueMatching2SignalingEvent(*ctx, ctx->room_id, member_id,
++                                                 ORBIS_NP_MATCHING2_SIGNALING_EVENT_DEAD,
++                                                 ORBIS_NP_MATCHING2_SIGNALING_ERROR_TIMEOUT);
++                    continue;
++                }
++                if (peer.last_send.time_since_epoch().count() == 0 ||
++                    now - peer.last_send >= kMatching2HandshakeRetry) {
++                    SendMatching2Handshake(*ctx, ctx->room_id, member_id,
++                                           peer.sent_check ? Matching2HandshakeKind::Check
++                                                           : Matching2HandshakeKind::Offer,
++                                           peer.sent_check ? peer.nonce : 0);
++                }
++            }
++        }
++        if (should_stun_ping) {
++            last_stun_ping = now;
++        }
++
++        std::this_thread::sleep_for(std::chrono::milliseconds(5));
++    }
++}
++
++} // namespace
++
++bool SendMatching2StunPing(const ContextObject& ctx) {
++    if (!NpSignaling::Stubs::Matching2Enabled()) {
++        return false;
++    }
++    if (!ctx.started || ctx.online_id.data[0] == '\0') {
++        return false;
++    }
++    if (!NpSignaling::Stubs::EnsureTransport()) {
++        return false;
++    }
++
++    const u32 server_addr = NpSignaling::Stubs::MmServerAddr();
++    const u16 server_udp = NpSignaling::Stubs::MmServerUdpPort();
++    if (server_addr == 0 || server_udp == 0) {
++        return false;
++    }
++
++    Matching2StunPing ping{};
++    ping.cmd = 0x01;
++    std::memcpy(ping.online_id, ctx.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
++    ping.local_ip = NpSignaling::Stubs::AdvertisedAddr();
++
++    const int rc =
++        NpSignaling::Stubs::SignalingSendTo(&ping, sizeof(ping), server_addr, server_udp);
++    LOG_DEBUG(Lib_NpMatching2,
++              "Matching2 STUN ping: ctx={} online_id='{}' server={:#x}:{} local_ip={:#x} rc={}",
++              ctx.ctx_id, OnlineIdToString(ctx.online_id), server_addr,
++              Libraries::Net::sceNetNtohs(server_udp), ping.local_ip, rc);
++    return rc >= 0;
++}
++
++void QueueMatching2SignalingEvent(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
++                                  OrbisNpMatching2RoomMemberId member_id,
++                                  OrbisNpMatching2Event event, s32 error_code) {
++    PendingEvent ev{};
++    ev.type = PendingEvent::SIGNALING_CB;
++    ev.ctx_id = ctx.ctx_id;
++    ev.fire_at = std::chrono::steady_clock::now();
++    ev.room_id = room_id;
++    ev.member_id = member_id;
++    ev.sig_event = event;
++    ev.error_code = error_code;
++    ScheduleEvent(std::move(ev));
++}
++
++void StartMatching2PeerHandshake(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
++                                 OrbisNpMatching2RoomMemberId member_id) {
++    auto room_it = ctx.room_cache.find(room_id);
++    if (room_it == ctx.room_cache.end() ||
++        !ShouldConnectToPeer(room_it->second, ctx.my_member_id, member_id)) {
++        return;
++    }
++    auto member_it = room_it->second.members.find(member_id);
++    if (member_it == room_it->second.members.end()) {
++        return;
++    }
++
++    Net::EnsureP2PTransport();
++
++    PeerInfo& peer = ctx.peers[member_id];
++    peer.member_id = member_id;
++    if (peer.status == kMatching2ConnActive) {
++        return;
++    }
++    ResolvePeerEndpoint(member_it->second, peer);
++    peer.status = kMatching2ConnPending;
++    peer.handshake_started = true;
++    peer.sent_check = false;
++    if (peer.nonce == 0) {
++        peer.nonce = static_cast<u64>(std::chrono::steady_clock::now().time_since_epoch().count() ^
++                                      (static_cast<u64>(ctx.ctx_id) << 48) ^
++                                      (static_cast<u64>(member_id) << 16));
++    }
++    SendMatching2Handshake(ctx, room_id, member_id, Matching2HandshakeKind::Offer, 0);
++}
++
++void StartMatching2SignalingForRoomPeers(ContextObject& ctx, OrbisNpMatching2RoomId room_id) {
++    const auto room_it = ctx.room_cache.find(room_id);
++    if (room_it == ctx.room_cache.end()) {
++        return;
++    }
++    for (const auto& [member_id, member] : room_it->second.members) {
++        StartMatching2PeerHandshake(ctx, room_id, member_id);
++    }
++}
++
++void QueueMatching2DeadForRoomPeers(ContextObject& ctx, OrbisNpMatching2RoomId room_id,
++                                    s32 error_code) {
++    auto room_it = ctx.room_cache.find(room_id);
++    if (room_it == ctx.room_cache.end()) {
++        return;
++    }
++
++    for (const auto& [member_id, member] : room_it->second.members) {
++        if (member_id == 0 || member_id == ctx.my_member_id) {
++            continue;
++        }
++
++        auto peer_it = ctx.peers.find(member_id);
++        if (peer_it != ctx.peers.end()) {
++            peer_it->second.status = kMatching2ConnInactive;
++            peer_it->second.handshake_started = false;
++            peer_it->second.sent_check = false;
++        }
++
++        QueueMatching2SignalingEvent(ctx, room_id, member_id,
++                                     ORBIS_NP_MATCHING2_SIGNALING_EVENT_DEAD, error_code);
++        LOG_INFO(Lib_NpMatching2, "Matching2 signaling dead: ctx={} room={} member={} reason={:#x}",
++                 ctx.ctx_id, room_id, member_id, static_cast<u32>(error_code));
++    }
++}
++
++void StartMatching2HandshakeThread() {
++    std::lock_guard lock(g_matching2_thread_mutex);
++    if (g_matching2_thread.joinable()) {
++        return;
++    }
++    g_matching2_stop.store(false, std::memory_order_relaxed);
++    g_matching2_thread = std::thread(Matching2HandshakeThreadMain);
++}
++
++void StopMatching2HandshakeThread() {
++    {
++        std::lock_guard lock(g_matching2_thread_mutex);
++        g_matching2_stop.store(true, std::memory_order_relaxed);
++    }
++    if (g_matching2_thread.joinable()) {
++        g_matching2_thread.join();
++    }
++}
++
++u32 GetRoomPingUs(const ContextObject& ctx, OrbisNpMatching2RoomId roomId) {
++    const auto room_it = ctx.room_cache.find(roomId);
++    if (room_it == ctx.room_cache.end()) {
++        return 0;
++    }
++
++    u64 total_ping = 0;
++    u32 ping_count = 0;
++    for (const auto& [member_id, member] : room_it->second.members) {
++        if (member_id == ctx.my_member_id) {
++            continue;
++        }
++        const auto peer_it = ctx.peers.find(member_id);
++        if (peer_it == ctx.peers.end() || peer_it->second.ping_us == 0) {
++            continue;
++        }
++        total_ping += peer_it->second.ping_us;
++        ++ping_count;
++    }
++
++    return ping_count == 0 ? 0 : static_cast<u32>(total_ping / ping_count);
++}
++
++void* BuildSignalingGetPingInfoPayload(ContextObject& ctx, OrbisNpMatching2RoomId roomId) {
++    CallbackPayload& p =
++        ctx.request_payload_override ? *ctx.request_payload_override : ctx.request_payload;
++    p.Reset();
++
++    const auto room_it = ctx.room_cache.find(roomId);
++    p.ping_info_response = std::make_unique<OrbisNpMatching2SignalingGetPingInfoResponse>();
++    auto& out = *p.ping_info_response;
++    out = {};
++    if (room_it != ctx.room_cache.end()) {
++        out.serverId = room_it->second.server_id;
++        out.worldId = room_it->second.world_id;
++        out.roomId = room_it->second.room_id;
++    } else {
++        out.serverId = ctx.server_id;
++        out.worldId = ctx.world_id;
++        out.roomId = roomId;
++    }
++    out.rtt = GetRoomPingUs(ctx, roomId);
++
++    p.request_data = p.ping_info_response.get();
++    return p.request_data;
++}
++
++s32 FillMatching2ConnectionInfo(const ContextObject& ctx, OrbisNpMatching2RoomId roomId,
++                                OrbisNpMatching2RoomMemberId memberId, u32 infoType, void* connInfo,
++                                bool a_variant) {
++    if (!connInfo) {
++        LOG_ERROR(Lib_NpMatching2, "connInfo null");
++        return ORBIS_NP_MATCHING2_ERROR_INVALID_ARGUMENT;
++    }
++
++    const auto room_it = ctx.room_cache.find(roomId);
++    if (room_it == ctx.room_cache.end()) {
++        LOG_INFO(Lib_NpMatching2, "room={} not cached for connection info", roomId);
++        if (a_variant) {
++            *static_cast<OrbisNpMatching2SignalingConnectionInfoA*>(connInfo) = {};
++        } else {
++            *static_cast<OrbisNpMatching2SignalingConnectionInfo*>(connInfo) = {};
++        }
++        return ORBIS_OK;
++    }
++
++    const auto member_it = room_it->second.members.find(memberId);
++    const MemberCache* member =
++        member_it != room_it->second.members.end() ? &member_it->second : nullptr;
++    const auto peer_it = ctx.peers.find(memberId);
++    const PeerInfo* peer = peer_it != ctx.peers.end() ? &peer_it->second : nullptr;
++
++    if (a_variant) {
++        auto* out = static_cast<OrbisNpMatching2SignalingConnectionInfoA*>(connInfo);
++        *out = {};
++        switch (infoType) {
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_RTT:
++            out->rtt = peer ? peer->ping_us : 0;
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_BANDWIDTH:
++            out->bandwidth = 0;
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDR:
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_MAPPED_ADDR:
++            if (peer) {
++                out->address.addr = peer->addr;
++                out->address.port = peer->port;
++            } else if (member) {
++                out->address.addr = member->addr;
++                out->address.port = member->port;
++            }
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PACKET_LOSS:
++            out->packetLoss = 0;
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDRESS_A:
++            if (member) {
++                out->peerAddrA.accountId = member->account_id;
++                out->peerAddrA.platform = member->platform;
++            }
++            break;
++        default:
++            LOG_WARNING(Lib_NpMatching2, "unsupported connection info A type={}", infoType);
++            return ORBIS_NP_MATCHING2_SIGNALING_ERROR_INVALID_ARGUMENT;
++        }
++    } else {
++        auto* out = static_cast<OrbisNpMatching2SignalingConnectionInfo*>(connInfo);
++        *out = {};
++        switch (infoType) {
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_RTT:
++            out->rtt = peer ? peer->ping_us : 0;
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_BANDWIDTH:
++            out->bandwidth = 0;
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_NP_ID:
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_NPID:
++            if (member) {
++                out->npId = member->np_id;
++            }
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PEER_ADDR:
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_MAPPED_ADDR:
++            if (peer) {
++                out->address.addr = peer->addr;
++                out->address.port = peer->port;
++            } else if (member) {
++                out->address.addr = member->addr;
++                out->address.port = member->port;
++            }
++            break;
++        case ORBIS_NP_MATCHING2_SIGNALING_CONN_INFO_PACKET_LOSS:
++            out->packetLoss = 0;
++            break;
++        default:
++            LOG_WARNING(Lib_NpMatching2, "unsupported connection info type={}", infoType);
++            return ORBIS_NP_MATCHING2_SIGNALING_ERROR_INVALID_ARGUMENT;
++        }
++    }
++
++    LOG_INFO(Lib_NpMatching2, "connection info{}: ctx={} room={} member={} type={} rtt={}",
++             a_variant ? "A" : "", ctx.ctx_id, roomId, memberId, infoType,
++             peer ? peer->ping_us : 0);
++    return ORBIS_OK;
++}
++
++} // namespace Libraries::Np::NpMatching2
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling.cpp b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling.cpp
+index be41e7a..269ea5f 100644
+--- a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling.cpp
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling.cpp
+@@ -289,12 +289,20 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+         }
+     }
+     if (!peerNpId || !outConnId) {
++        LOG_WARNING(Lib_NpSignaling, "ActivateConnection refused: null peer or out pointer");
+         return ORBIS_NP_SIGNALING_ERROR_INVALID_ARGUMENT;
+     }
+ 
+     OrbisNpId peer_npid{};
+     OrbisNpOnlineId peer_online_id{};
+     if (NormalizeNpId(peerNpId, &peer_npid, &peer_online_id) != ORBIS_OK) {
++        // 2026-10-06 (4-player Nucleus test): guests called this every 6 s with no "Status:" line
++        // after it - one of these early exits fired and nothing said which. Each one says so now.
++        const auto* raw = static_cast<const u8*>(peerNpId);
++        LOG_WARNING(Lib_NpSignaling,
++                    "ActivateConnection refused: peer NpId is not a valid online id (first bytes "
++                    "{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x})",
++                    raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]);
+         return ORBIS_NP_SIGNALING_ERROR_INVALID_ARGUMENT;
+     }
+     const std::string peer_online_id_str = OnlineIdToString(peer_online_id);
+@@ -310,12 +318,18 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+         }
+         const auto ctx_it = g_contexts.find(ctxId);
+         if (ctx_it == g_contexts.end() || !ctx_it->second.active) {
++            LOG_WARNING(Lib_NpSignaling, "ActivateConnection refused: ctx {} not found or inactive "
++                        "(peer '{}')", ctxId, peer_online_id_str);
+             return ORBIS_NP_SIGNALING_ERROR_CTX_NOT_FOUND;
+         }
+         if (std::memcmp(&ctx_it->second.owner_npid, &peer_npid, sizeof(peer_npid)) == 0) {
++            LOG_WARNING(Lib_NpSignaling, "ActivateConnection refused: peer '{}' is ourselves",
++                        peer_online_id_str);
+             return ORBIS_NP_SIGNALING_ERROR_OWN_NP_ID;
+         }
+         if (!ConsumeActivationBudgetGatedLocked(ctx_it->second)) {
++            LOG_WARNING(Lib_NpSignaling, "ActivateConnection refused: rate limit (peer '{}', budget "
++                        "{} us)", peer_online_id_str, ctx_it->second.activate_budget_us);
+             return ORBIS_NP_SIGNALING_ERROR_EXCEED_RATE_LIMIT;
+         }
+ 
+@@ -329,11 +343,20 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+                 cid = existing_it->second;
+                 ConnectionInfo& ci = conn_it->second;
+                 const bool was_locally_activated = ci.locally_activated;
++                const bool was_lingering = ci.deactivate_lingering;
+                 ci.locally_activated = true;
+                 if (ci.state == ConnState::Established) {
+                     ClearLingerAndTimeoutLocked(cid);
+                     reused_established = true;
+                     start_handshake = false;
++                    if (was_lingering) {
++                        // BBSC rejoin fix (2026-10-12): deactivated before (the peer left with
++                        // the Silencing Blank) - before, this cancelled the linger timeout with
++                        // no keepalive left, so the dead connection stayed "established" forever
++                        // and the peer's next join was ignored (its Offers hit an established
++                        // connection). Check the peer first.
++                        BeginRevalidationLocked(cid);
++                    }
+                 } else {
+                     ClearLingerAndTimeoutLocked(cid);
+                     start_handshake = true;
+@@ -347,6 +370,8 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+         if (cid == 0) {
+             cid = AllocateConnectionIdLocked();
+             if (cid < 0) {
++                LOG_WARNING(Lib_NpSignaling, "ActivateConnection refused: no free connection id "
++                            "(peer '{}')", peer_online_id_str);
+                 return ORBIS_NP_SIGNALING_ERROR_OUT_OF_MEMORY;
+             }
+             ConnectionInfo ci{};
+@@ -370,9 +395,13 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+         if (queue_activation) {
+             QueueActivationLocked(cid, peer_online_id_str, start_handshake);
+         }
++        const auto logged = g_connections.find(cid);
++        const bool revalidating = logged != g_connections.end() && logged->second.revalidating;
+         LOG_INFO(Lib_NpSignaling, "ctxId={} peer='{}' connId={} Status: {}", ctxId,
+                  peer_online_id_str, cid,
+                  created_new          ? "queued, async"
++                 : revalidating       ? "deactivated connection activated again - checking the "
++                                        "peer is still there (10 s)"
+                  : reused_established ? "queued local activation on established connection"
+                  : queue_activation   ? "queued local activation on existing connection"
+                                       : "reused transient");
+@@ -386,7 +415,15 @@ s32 PS4_SYSV_ABI sceNpSignalingActivateConnection(OrbisNpSignalingContextId ctxI
+     }
+ 
+     if (reused_established) {
+-        EstablishConnection(cid, false);
++        bool revalidating = false;
++        {
++            SignalingMutexGuard lock;
++            const auto it = g_connections.find(cid);
++            revalidating = it != g_connections.end() && it->second.revalidating;
++        }
++        if (!revalidating) {
++            EstablishConnection(cid, false);
++        }
+     }
+     return ORBIS_OK;
+ }
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_bbsc.h b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_bbsc.h
+new file mode 100644
+index 0000000..01ed13d
+--- /dev/null
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_bbsc.h
+@@ -0,0 +1,40 @@
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++// BBSC packets on the np_signaling socket that the Bloodborne code also builds and reads. Kept out
++// of np_signaling_state.h, which pulls in the platform headers (their `near`/`far` macros break
++// bloodborne_re.cpp).
++
++#include <cstddef>
++
++#include "common/types.h"
++
++namespace Libraries::Np::NpSignaling {
++
++inline constexpr u8 kSignalingBbscWorldFlagsType = 0x22;
++
++// One chunk of a host world-flag snapshot: up to 8 event-flag groups (1000 flags, 125 bytes each)
++// of the host's current map block, in the fixed order of Core::Bloodborne's BbscWorldGroupKey.
++// ~1 KB, below the 1280-byte tunnel MTU (Tailscale) with the UDP and v-port headers.
++inline constexpr size_t kBbscWorldFlagGroupBytes = 125;
++inline constexpr size_t kBbscWorldFlagGroupsPerChunk = 8;
++
++#pragma pack(push, 1)
++struct SignalingBbscWorldFlags {
++    u8 magic[4] = {'S', 'H', 'A', 'D'};
++    u8 type = kSignalingBbscWorldFlagsType;
++    u8 version = 1;
++    u32 packed_map = 0;
++    u32 snapshot = 0;   // the host's snapshot counter: chunks of one snapshot belong together
++    u8 chunk = 0;       // index of this chunk
++    u8 chunk_count = 0; // chunks in the snapshot
++    u8 present = 0;     // bit n: group n of this chunk exists in the host's flag table
++    u8 group_count = 0; // groups carried (the last chunk may carry fewer than 8)
++    u8 groups[kBbscWorldFlagGroupsPerChunk][kBbscWorldFlagGroupBytes]{};
++};
++static_assert(sizeof(SignalingBbscWorldFlags) == 18 + 8 * 125);
++#pragma pack(pop)
++
++} // namespace Libraries::Np::NpSignaling
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.cpp b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.cpp
+index 441b098..ecbf63d 100644
+--- a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.cpp
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.cpp
+@@ -1,523 +1,594 @@
+-// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-#include <chrono>
+-#include <cstring>
+-
+-#include "common/alignment.h"
+-#include "common/logging/log.h"
+-#include "common/singleton.h"
+-#include "core/libraries/error_codes.h"
+-#include "core/libraries/kernel/kernel.h"
+-#include "core/libraries/kernel/memory.h"
+-#include "core/libraries/network/net.h"
+-#include "core/libraries/network/net_util.h"
+-#include "core/libraries/np/np_common.h"
+-#include "core/libraries/np/np_error.h"
+-#include "core/libraries/np/np_signaling/np_signaling_helpers.h"
+-#include "core/libraries/np/np_signaling/np_signaling_state.h"
+-#include "core/libraries/np/np_signaling/np_signaling_stubs.h"
+-
+-namespace Libraries::Np::NpSignaling::Helpers {
+-
+-namespace {
+-
+-constexpr s32 InferredNpAppType = 0;
+-
+-bool g_signaling_heap_initialized = false;
+-void* g_signaling_heap_base = nullptr;
+-s64 g_signaling_heap_size = 0;
+-SignalingRuntimeHooks g_runtime_hooks{};
+-bool g_runtime_hooks_registered = false;
+-u64 g_echo_probe_word2 = 0;
+-u64 g_echo_probe_word3 = 0;
+-u64 g_echo_thread_handle = static_cast<u64>(-1);
+-s32 g_echo_thread_status = -1;
+-
+-s32 GetInferredAppType(s32* app_type) {
+-    if (app_type == nullptr) {
+-        return ORBIS_NP_INT_ERROR_INVALID_ARGUMENT;
+-    }
+-
+-    *app_type = InferredNpAppType;
+-    return ORBIS_OK;
+-}
+-
+-s16 GetAppTypeStateGate() {
+-    return 0;
+-}
+-
+-void SetAppTypeMarker(u16 marker) {
+-    LOG_DEBUG(Lib_NpSignaling, "marker={:#x}", marker);
+-}
+-} // namespace
+-
+-void SetRuntimeHooks(const SignalingRuntimeHooks& hooks) {
+-    g_runtime_hooks = hooks;
+-    g_runtime_hooks_registered = true;
+-}
+-
+-s32 CheckInitializeAppType(u32* is_app_type_4) {
+-    s32 app_type = -1;
+-    const s32 rc = GetInferredAppType(&app_type);
+-    if (rc < 0) {
+-        return rc;
+-    }
+-
+-    if (is_app_type_4 != nullptr) {
+-        *is_app_type_4 = app_type == 4 ? 1u : 0u;
+-    }
+-
+-    return ORBIS_OK;
+-}
+-
+-s32 InitSignalingHeap(s64 pool_size) {
+-    LOG_DEBUG(Lib_NpSignaling, "pool_size={}", pool_size);
+-
+-    if (pool_size == 0 || g_signaling_heap_initialized) {
+-        return ORBIS_NP_SIGNALING_INTERNAL_ERROR_ALLOCATOR;
+-    }
+-
+-    const u64 aligned_size = Common::AlignUp(static_cast<u64>(pool_size), 0x4000);
+-
+-    void* heap_base = nullptr;
+-    const s32 rc = Libraries::Kernel::sceKernelMapNamedFlexibleMemory(&heap_base, aligned_size, 3,
+-                                                                      0, "SceNpSignaling");
+-    if (rc < 0) {
+-        return rc;
+-    }
+-
+-    g_signaling_heap_initialized = true;
+-    g_signaling_heap_base = heap_base;
+-    g_signaling_heap_size = static_cast<s64>(aligned_size);
+-    return ORBIS_OK;
+-}
+-
+-void ShutdownSignalingHeap() {
+-    if (!g_signaling_heap_initialized) {
+-        return;
+-    }
+-
+-    g_signaling_heap_initialized = false;
+-
+-    if (g_signaling_heap_base != nullptr) {
+-        Libraries::Kernel::sceKernelMunmap(g_signaling_heap_base,
+-                                           static_cast<u64>(g_signaling_heap_size));
+-        g_signaling_heap_base = nullptr;
+-        g_signaling_heap_size = 0;
+-    }
+-}
+-
+-s32 CheckAppType() {
+-    s32 app_type = -1;
+-    const s32 rc = GetInferredAppType(&app_type);
+-    if (rc < 0) {
+-        return rc;
+-    }
+-
+-    if (app_type == 5) {
+-        const s16 gate = GetAppTypeStateGate();
+-        if (gate != 0) {
+-            return ORBIS_OK;
+-        }
+-    }
+-
+-    SetAppTypeMarker(0x245a);
+-    return ORBIS_OK;
+-}
+-
+-s32 StartMainRuntime(s32 thread_priority, s32 cpu_affinity_mask, s64 thread_stack_size) {
+-    LOG_DEBUG(Lib_NpSignaling,
+-              "thread_priority={} cpu_affinity_mask={} "
+-              "thread_stack_size={}",
+-              thread_priority, cpu_affinity_mask, thread_stack_size);
+-
+-    if (!g_runtime_hooks_registered) {
+-        return ORBIS_NP_SIGNALING_INTERNAL_ERROR_NOT_INITIALIZED;
+-    }
+-
+-    const s32 priority = thread_priority;
+-    const u64 affinity = static_cast<u64>(static_cast<u32>(cpu_affinity_mask));
+-    const u64 stack_size = static_cast<u64>(thread_stack_size);
+-    if (g_runtime_hooks.start_dispatch != nullptr) {
+-        g_runtime_hooks.start_dispatch(priority, affinity, stack_size);
+-    }
+-    if (g_runtime_hooks.start_receive != nullptr) {
+-        g_runtime_hooks.start_receive(priority, affinity, stack_size);
+-    }
+-    if (g_runtime_hooks.start_ping != nullptr) {
+-        g_runtime_hooks.start_ping(priority, affinity, stack_size);
+-    }
+-
+-    return ORBIS_OK;
+-}
+-
+-s32 StartEchoRuntime(s32 thread_priority, s32 cpu_affinity_mask) {
+-    LOG_DEBUG(Lib_NpSignaling, "thread_priority={} cpu_affinity_mask={}", thread_priority,
+-              cpu_affinity_mask);
+-
+-    auto sock = Libraries::Net::sceNetSocket("SceNpSignalingIoctl", 2, 6, 0);
+-    if (sock < 0) {
+-        return sock;
+-    }
+-
+-    const s32 ioctl_rc = Libraries::Net::sceNetIoctl();
+-    Libraries::Net::sceNetSocketClose(sock);
+-
+-    g_echo_probe_word2 = 0;
+-    g_echo_probe_word3 = 0;
+-    g_echo_thread_handle = static_cast<u64>(-1);
+-    g_echo_thread_status = -1;
+-    return ioctl_rc;
+-}
+-
+-void ShutdownRuntime() {
+-    if (!g_runtime_hooks_registered) {
+-        g_echo_probe_word2 = 0;
+-        g_echo_probe_word3 = 0;
+-        g_echo_thread_handle = static_cast<u64>(-1);
+-        g_echo_thread_status = -1;
+-        return;
+-    }
+-
+-    if (g_runtime_hooks.stop_ping != nullptr) {
+-        g_runtime_hooks.stop_ping();
+-    }
+-    if (g_runtime_hooks.stop_receive != nullptr) {
+-        g_runtime_hooks.stop_receive();
+-    }
+-    if (g_runtime_hooks.stop_dispatch != nullptr) {
+-        g_runtime_hooks.stop_dispatch();
+-    }
+-
+-    g_echo_probe_word2 = 0;
+-    g_echo_probe_word3 = 0;
+-    g_echo_thread_handle = static_cast<u64>(-1);
+-    g_echo_thread_status = -1;
+-}
+-
+-} // namespace Libraries::Np::NpSignaling::Helpers
+-
+-namespace Libraries::Np::NpSignaling {
+-
+-using Libraries::Net::sceNetNtohs;
+-
+-static Kernel::PthreadT g_dispatch_thread{};
+-static Kernel::PthreadT g_receive_thread{};
+-static bool g_receive_stop = false;
+-static Kernel::PthreadT g_ping_thread{};
+-static bool g_ping_stop = false;
+-
+-static void HandleStunEcho(s32 ctx_id, const StunEcho& echo) {
+-    SignalingMutexGuard lock;
+-    const auto it = g_contexts.find(ctx_id);
+-    if (it == g_contexts.end() || !it->second.active) {
+-        return;
+-    }
+-    NpSignalingContext& ctx = it->second;
+-    ctx.ext_addr.store(echo.ext_ip);
+-    ctx.ext_port.store(echo.ext_port);
+-
+-    LOG_DEBUG(Lib_NpSignaling, "STUN echo: ctxId={} ext_addr={:#x} ext_port={}", ctx_id,
+-              echo.ext_ip, sceNetNtohs(echo.ext_port));
+-
+-    auto* netinfo = Common::Singleton<NetUtil::NetUtilInternal>::Instance();
+-    netinfo->SetExternalIp(echo.ext_ip);
+-
+-    ctx.stun_cv.notify_all();
+-}
+-
+-static bool HasSignalingMagic(const u8* buf, size_t nbytes) {
+-    return nbytes >= 5 && std::memcmp(buf, kSignalingMagic, sizeof(kSignalingMagic)) == 0;
+-}
+-
+-static void DrainControlPackets() {
+-    static constexpr u32 kBufSize = 256;
+-    u8 buf[kBufSize];
+-    for (;;) {
+-        u32 from_addr = 0;
+-        u16 from_port = 0;
+-        const int rc = Stubs::ControlRecvFrom(buf, kBufSize, &from_addr, &from_port);
+-        if (rc <= 0) {
+-            break;
+-        }
+-        const auto nbytes = static_cast<size_t>(rc);
+-        if (nbytes == sizeof(SignalingControl) && HasSignalingMagic(buf, nbytes) &&
+-            buf[4] == static_cast<u8>(SignalingPacketType::Control)) {
+-            SignalingControl ctrl{};
+-            std::memcpy(&ctrl, buf, sizeof(ctrl));
+-            HandleControlPacket(from_addr, from_port, ctrl);
+-        } else {
+-            LOG_WARNING(Lib_NpSignaling, "ReceiveThread: bad control packet (size={})", nbytes);
+-        }
+-    }
+-}
+-
+-static void ReceiveThreadMain() {
+-    static constexpr u32 kBufSize = 256;
+-    u8 buf[kBufSize];
+-
+-    while (!g_receive_stop) {
+-        DrainControlPackets();
+-
+-        u32 from_addr = 0;
+-        u16 from_port = 0;
+-
+-        const int rc = Stubs::SignalingRecvFrom(buf, kBufSize, &from_addr, &from_port);
+-        if (rc <= 0) {
+-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+-            continue;
+-        }
+-
+-        const auto nbytes = static_cast<size_t>(rc);
+-
+-        if (nbytes != sizeof(StunEcho)) {
+-            LOG_DEBUG(
+-                Lib_NpSignaling,
+-                "ReceiveThread DATA from {:#x}:{} size={} b0-4={:02x},{:02x},{:02x},{:02x},{:02x}",
+-                from_addr, sceNetNtohs(from_port), nbytes, buf[0], buf[1], buf[2], buf[3],
+-                nbytes >= 5 ? buf[4] : 0);
+-        }
+-
+-        if (nbytes == sizeof(StunEcho)) {
+-            s32 ctx_id = 0;
+-            {
+-                SignalingMutexGuard lock;
+-                for (const auto& [cid, ctx] : g_contexts) {
+-                    if (ctx.active) {
+-                        ctx_id = cid;
+-                        break;
+-                    }
+-                }
+-            }
+-            if (ctx_id == 0) {
+-                continue;
+-            }
+-            StunEcho echo{};
+-            std::memcpy(&echo, buf, sizeof(echo));
+-            HandleStunEcho(ctx_id, echo);
+-            continue;
+-        }
+-
+-        if (!HasSignalingMagic(buf, nbytes)) {
+-            LOG_WARNING(Lib_NpSignaling, "ReceiveThread: dropping non-SHAD packet (size={})",
+-                        nbytes);
+-            continue;
+-        }
+-        const u8 type = buf[4];
+-
+-        if (nbytes == sizeof(SignalingEchoPing) &&
+-            type == static_cast<u8>(SignalingPacketType::EchoPing)) {
+-            SignalingEchoPing ping{};
+-            std::memcpy(&ping, buf, sizeof(ping));
+-            SignalingEchoPong pong{};
+-            pong.conn_id = ping.conn_id;
+-            pong.orig_ts_us = ping.send_ts_us;
+-            Stubs::SignalingSendTo(&pong, sizeof(pong), from_addr, from_port);
+-            continue;
+-        }
+-        if (nbytes == sizeof(SignalingEchoPong) &&
+-            type == static_cast<u8>(SignalingPacketType::EchoPong)) {
+-            SignalingEchoPong pong{};
+-            std::memcpy(&pong, buf, sizeof(pong));
+-            const s64 now = NowUs();
+-            s32 rtt_us = static_cast<s32>(now - static_cast<s64>(pong.orig_ts_us));
+-            if (rtt_us < 0) {
+-                rtt_us = 0;
+-            }
+-            {
+-                SignalingMutexGuard lock;
+-                RecordRttSampleLocked(static_cast<s32>(pong.conn_id), rtt_us);
+-            }
+-            continue;
+-        }
+-        if (nbytes == sizeof(SignalingHandshake) &&
+-            type == static_cast<u8>(SignalingPacketType::Handshake)) {
+-            SignalingHandshake hs{};
+-            std::memcpy(&hs, buf, sizeof(hs));
+-            HandleHandshakePacket(from_addr, from_port, hs);
+-            continue;
+-        }
+-
+-        LOG_WARNING(Lib_NpSignaling, "ReceiveThread: unexpected SHAD packet type={} size={}", type,
+-                    nbytes);
+-    }
+-}
+-
+-static PS4_SYSV_ABI void* ReceiveThreadFunc(void*) {
+-    ReceiveThreadMain();
+-    return nullptr;
+-}
+-
+-static void StartReceiveThread(s32 priority, u64 affinity_mask, u64 stack_size) {
+-    g_receive_stop = false;
+-    if (!g_receive_thread) {
+-        NpCommon::sceNpCreateThread(&g_receive_thread, ReceiveThreadFunc, nullptr, priority,
+-                                    stack_size, affinity_mask, "SceNpSignalingRecv");
+-    }
+-}
+-
+-static void StopReceiveThread() {
+-    {
+-        SignalingMutexGuard lock;
+-        g_receive_stop = true;
+-    }
+-    if (g_receive_thread) {
+-        NpCommon::sceNpJoinThread(g_receive_thread, nullptr);
+-        g_receive_thread = {};
+-    }
+-}
+-
+-static void PingThreadMain() {
+-    while (!g_ping_stop) {
+-        if (!Stubs::EnsureTransport()) {
+-            std::this_thread::sleep_for(std::chrono::milliseconds(kSigRetryMs));
+-            continue;
+-        }
+-
+-        struct CtxSnapshot {
+-            s32 ctx_id;
+-            OrbisNpOnlineId online_id{};
+-            bool resolved;
+-        };
+-        std::vector<CtxSnapshot> contexts;
+-        {
+-            SignalingMutexGuard lock;
+-            for (const auto& [ctx_id, ctx] : g_contexts) {
+-                if (ctx.active) {
+-                    contexts.push_back({ctx_id, ctx.owner_online_id, ctx.ext_addr.load() != 0});
+-                }
+-            }
+-        }
+-
+-        if (Stubs::Matching2Enabled()) {
+-            const u32 server_addr = Stubs::MmServerAddr();
+-            const u16 server_port = Stubs::MmServerUdpPort();
+-
+-            for (const auto& cs : contexts) {
+-                if (server_addr == 0 || server_port == 0) {
+-                    break;
+-                }
+-                StunPing ping{};
+-                ping.cmd = 0x01;
+-                std::memcpy(ping.online_id, cs.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
+-                ping.local_ip = Stubs::AdvertisedAddr();
+-
+-                Stubs::SignalingSendTo(&ping, sizeof(ping), server_addr, server_port);
+-            }
+-        }
+-
+-        SendEchoPings();
+-
+-        const bool any_unresolved = std::any_of(contexts.begin(), contexts.end(),
+-                                                [](const auto& cs) { return !cs.resolved; });
+-        const u32 sleep_ms = any_unresolved ? kSigRetryMs : kSigPingMs;
+-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+-    }
+-}
+-
+-static PS4_SYSV_ABI void* PingThreadFunc(void*) {
+-    PingThreadMain();
+-    return nullptr;
+-}
+-
+-static void StartPingThread(s32 priority, u64 affinity_mask, u64 stack_size) {
+-    g_ping_stop = false;
+-    if (!g_ping_thread) {
+-        NpCommon::sceNpCreateThread(&g_ping_thread, PingThreadFunc, nullptr, priority, stack_size,
+-                                    affinity_mask, "SceNpSignalingPing");
+-    }
+-}
+-
+-static void StopPingThread() {
+-    g_ping_stop = true;
+-    if (g_ping_thread) {
+-        NpCommon::sceNpJoinThread(g_ping_thread, nullptr);
+-        g_ping_thread = {};
+-    }
+-}
+-
+-static void DispatchThreadMain() {
+-    for (;;) {
+-        ProcessPendingActivations();
+-
+-        QueuedDispatch dispatch;
+-        {
+-            std::unique_lock<std::mutex> lock(g_dispatch_mutex);
+-            for (;;) {
+-                if (g_dispatch_stop) {
+-                    return;
+-                }
+-                if (g_dispatch_queue.empty()) {
+-                    g_dispatch_cv.wait_for(lock, std::chrono::seconds(1), [] {
+-                        return g_dispatch_stop || !g_dispatch_queue.empty();
+-                    });
+-                    break;
+-                }
+-                const auto it = g_dispatch_queue.begin();
+-                const auto now = std::chrono::steady_clock::now();
+-                if (it->first > now) {
+-                    g_dispatch_cv.wait_until(lock, it->first);
+-                    break;
+-                }
+-                dispatch = std::move(it->second);
+-                g_dispatch_queue.erase(it);
+-                break;
+-            }
+-        }
+-
+-        if (dispatch.callback) {
+-            LOG_INFO(Lib_NpSignaling, "t={} ctxId={} connId={} event={}({}) delay={}ms", NowMs(),
+-                     dispatch.ctx_id, dispatch.conn_id, dispatch.event_type,
+-                     SignalingEventName(dispatch.event_type), dispatch.delay_ms);
+-            LOG_DEBUG(Lib_NpSignaling,
+-                      "INVOKE signaling_cb={} ctxId={} connId={} event={}({}) errorCode={} arg={}",
+-                      fmt::ptr(reinterpret_cast<void*>(dispatch.callback)), dispatch.ctx_id,
+-                      dispatch.conn_id, dispatch.event_type,
+-                      SignalingEventName(dispatch.event_type), dispatch.error_code,
+-                      fmt::ptr(dispatch.callback_arg));
+-            dispatch.callback(static_cast<u32>(dispatch.ctx_id), static_cast<u32>(dispatch.conn_id),
+-                              dispatch.event_type, dispatch.error_code, dispatch.callback_arg);
+-        }
+-    }
+-}
+-
+-static PS4_SYSV_ABI void* DispatchThreadFunc(void*) {
+-    DispatchThreadMain();
+-    return nullptr;
+-}
+-
+-static void StartDispatchThread(s32 priority, u64 affinity_mask, u64 stack_size) {
+-    std::lock_guard<std::mutex> lock(g_dispatch_mutex);
+-    g_dispatch_stop = false;
+-    if (!g_dispatch_thread) {
+-        NpCommon::sceNpCreateThread(&g_dispatch_thread, DispatchThreadFunc, nullptr, priority,
+-                                    stack_size, affinity_mask, "SceNpSignalingMain");
+-    }
+-}
+-
+-static void StopDispatchThread() {
+-    {
+-        std::lock_guard<std::mutex> lock(g_dispatch_mutex);
+-        g_dispatch_stop = true;
+-        g_dispatch_queue.clear();
+-    }
+-    g_dispatch_cv.notify_all();
+-    if (g_dispatch_thread) {
+-        NpCommon::sceNpJoinThread(g_dispatch_thread, nullptr);
+-        g_dispatch_thread = {};
+-    }
+-}
+-
+-void RegisterRuntimeHooks() {
+-    Helpers::SetRuntimeHooks({
+-        .start_dispatch = StartDispatchThread,
+-        .start_receive = StartReceiveThread,
+-        .start_ping = StartPingThread,
+-        .stop_ping = StopPingThread,
+-        .stop_receive = StopReceiveThread,
+-        .stop_dispatch = StopDispatchThread,
+-    });
+-}
+-
+-} // namespace Libraries::Np::NpSignaling
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#include <chrono>
++#include <cstring>
++#include <vector>
++
++#include "common/alignment.h"
++#include "common/logging/log.h"
++#include "common/singleton.h"
++#include "core/libraries/error_codes.h"
++#include "core/libraries/kernel/kernel.h"
++#include "core/libraries/kernel/memory.h"
++#include "core/libraries/network/net.h"
++#include "core/libraries/network/net_util.h"
++#include "core/libraries/network/sockets.h"
++#include "core/libraries/np/np_common.h"
++#include "core/libraries/np/np_error.h"
++#include "core/libraries/np/np_signaling/np_signaling_helpers.h"
++#include "core/libraries/np/np_signaling/np_signaling_state.h"
++#include "core/libraries/np/np_signaling/np_signaling_stubs.h"
++#include "core/bloodborne_re.h"
++
++namespace Libraries::Np::NpSignaling::Helpers {
++
++namespace {
++
++constexpr s32 InferredNpAppType = 0;
++
++bool g_signaling_heap_initialized = false;
++void* g_signaling_heap_base = nullptr;
++s64 g_signaling_heap_size = 0;
++SignalingRuntimeHooks g_runtime_hooks{};
++bool g_runtime_hooks_registered = false;
++u64 g_echo_probe_word2 = 0;
++u64 g_echo_probe_word3 = 0;
++u64 g_echo_thread_handle = static_cast<u64>(-1);
++s32 g_echo_thread_status = -1;
++
++s32 GetInferredAppType(s32* app_type) {
++    if (app_type == nullptr) {
++        return ORBIS_NP_INT_ERROR_INVALID_ARGUMENT;
++    }
++
++    *app_type = InferredNpAppType;
++    return ORBIS_OK;
++}
++
++s16 GetAppTypeStateGate() {
++    return 0;
++}
++
++void SetAppTypeMarker(u16 marker) {
++    LOG_DEBUG(Lib_NpSignaling, "marker={:#x}", marker);
++}
++} // namespace
++
++void SetRuntimeHooks(const SignalingRuntimeHooks& hooks) {
++    g_runtime_hooks = hooks;
++    g_runtime_hooks_registered = true;
++}
++
++s32 CheckInitializeAppType(u32* is_app_type_4) {
++    s32 app_type = -1;
++    const s32 rc = GetInferredAppType(&app_type);
++    if (rc < 0) {
++        return rc;
++    }
++
++    if (is_app_type_4 != nullptr) {
++        *is_app_type_4 = app_type == 4 ? 1u : 0u;
++    }
++
++    return ORBIS_OK;
++}
++
++s32 InitSignalingHeap(s64 pool_size) {
++    LOG_DEBUG(Lib_NpSignaling, "pool_size={}", pool_size);
++
++    if (pool_size == 0 || g_signaling_heap_initialized) {
++        return ORBIS_NP_SIGNALING_INTERNAL_ERROR_ALLOCATOR;
++    }
++
++    const u64 aligned_size = Common::AlignUp(static_cast<u64>(pool_size), 0x4000);
++
++    void* heap_base = nullptr;
++    const s32 rc = Libraries::Kernel::sceKernelMapNamedFlexibleMemory(&heap_base, aligned_size, 3,
++                                                                      0, "SceNpSignaling");
++    if (rc < 0) {
++        return rc;
++    }
++
++    g_signaling_heap_initialized = true;
++    g_signaling_heap_base = heap_base;
++    g_signaling_heap_size = static_cast<s64>(aligned_size);
++    return ORBIS_OK;
++}
++
++void ShutdownSignalingHeap() {
++    if (!g_signaling_heap_initialized) {
++        return;
++    }
++
++    g_signaling_heap_initialized = false;
++
++    if (g_signaling_heap_base != nullptr) {
++        Libraries::Kernel::sceKernelMunmap(g_signaling_heap_base,
++                                           static_cast<u64>(g_signaling_heap_size));
++        g_signaling_heap_base = nullptr;
++        g_signaling_heap_size = 0;
++    }
++}
++
++s32 CheckAppType() {
++    s32 app_type = -1;
++    const s32 rc = GetInferredAppType(&app_type);
++    if (rc < 0) {
++        return rc;
++    }
++
++    if (app_type == 5) {
++        const s16 gate = GetAppTypeStateGate();
++        if (gate != 0) {
++            return ORBIS_OK;
++        }
++    }
++
++    SetAppTypeMarker(0x245a);
++    return ORBIS_OK;
++}
++
++s32 StartMainRuntime(s32 thread_priority, s32 cpu_affinity_mask, s64 thread_stack_size) {
++    LOG_DEBUG(Lib_NpSignaling,
++              "thread_priority={} cpu_affinity_mask={} "
++              "thread_stack_size={}",
++              thread_priority, cpu_affinity_mask, thread_stack_size);
++
++    if (!g_runtime_hooks_registered) {
++        return ORBIS_NP_SIGNALING_INTERNAL_ERROR_NOT_INITIALIZED;
++    }
++
++    const s32 priority = thread_priority;
++    const u64 affinity = static_cast<u64>(static_cast<u32>(cpu_affinity_mask));
++    const u64 stack_size = static_cast<u64>(thread_stack_size);
++    if (g_runtime_hooks.start_dispatch != nullptr) {
++        g_runtime_hooks.start_dispatch(priority, affinity, stack_size);
++    }
++    if (g_runtime_hooks.start_receive != nullptr) {
++        g_runtime_hooks.start_receive(priority, affinity, stack_size);
++    }
++    if (g_runtime_hooks.start_ping != nullptr) {
++        g_runtime_hooks.start_ping(priority, affinity, stack_size);
++    }
++
++    return ORBIS_OK;
++}
++
++namespace {
++struct BbscPeer {
++    u32 addr;
++    u16 port;
++};
++
++std::vector<BbscPeer> EstablishedBbscPeers() {
++    std::vector<BbscPeer> peers;
++    SignalingMutexGuard lock;
++    peers.reserve(g_connections.size());
++    for (const auto& [conn_id, ci] : g_connections) {
++        if (ci.addr != 0 && ci.port != 0 && ci.state == ConnState::Established) {
++            peers.push_back({ci.addr, ci.port});
++        }
++    }
++    return peers;
++}
++} // namespace
++
++u32 SendBbscWorldFlagsToPeers(const void* packet, u32 size) {
++    u32 sent = 0;
++    for (const BbscPeer& peer : EstablishedBbscPeers()) {
++        if (Stubs::SignalingSendTo(packet, size, peer.addr, peer.port) > 0) {
++            ++sent;
++        }
++    }
++    return sent;
++}
++
++u32 SendBbscFollowToPeers(u32 packed_map, float x, float y, float z, float heading, u32 sequence,
++                          s32 lamp_point) {
++    const std::vector<BbscPeer> peers = EstablishedBbscPeers();
++    if (peers.empty()) {
++        return 0;
++    }
++    SignalingBbscFollow packet{};
++    packet.packed_map = packed_map;
++    packet.x = x;
++    packet.y = y;
++    packet.z = z;
++    packet.heading = heading;
++    packet.sequence = sequence;
++    packet.lamp_point = lamp_point;
++    u32 sent = 0;
++    for (const BbscPeer& peer : peers) {
++        if (Stubs::SignalingSendTo(&packet, sizeof(packet), peer.addr, peer.port) > 0) {
++            ++sent;
++        }
++    }
++    return sent;
++}
++
++s32 StartEchoRuntime(s32 thread_priority, s32 cpu_affinity_mask) {
++    LOG_DEBUG(Lib_NpSignaling, "thread_priority={} cpu_affinity_mask={}", thread_priority,
++              cpu_affinity_mask);
++
++    auto sock = Libraries::Net::sceNetSocket("SceNpSignalingIoctl", 2, 6, 0);
++    if (sock < 0) {
++        return sock;
++    }
++
++    const s32 ioctl_rc = Libraries::Net::sceNetIoctl();
++    Libraries::Net::sceNetSocketClose(sock);
++
++    g_echo_probe_word2 = 0;
++    g_echo_probe_word3 = 0;
++    g_echo_thread_handle = static_cast<u64>(-1);
++    g_echo_thread_status = -1;
++    return ioctl_rc;
++}
++
++void ShutdownRuntime() {
++    if (!g_runtime_hooks_registered) {
++        g_echo_probe_word2 = 0;
++        g_echo_probe_word3 = 0;
++        g_echo_thread_handle = static_cast<u64>(-1);
++        g_echo_thread_status = -1;
++        return;
++    }
++
++    if (g_runtime_hooks.stop_ping != nullptr) {
++        g_runtime_hooks.stop_ping();
++    }
++    if (g_runtime_hooks.stop_receive != nullptr) {
++        g_runtime_hooks.stop_receive();
++    }
++    if (g_runtime_hooks.stop_dispatch != nullptr) {
++        g_runtime_hooks.stop_dispatch();
++    }
++
++    g_echo_probe_word2 = 0;
++    g_echo_probe_word3 = 0;
++    g_echo_thread_handle = static_cast<u64>(-1);
++    g_echo_thread_status = -1;
++}
++
++} // namespace Libraries::Np::NpSignaling::Helpers
++
++namespace Libraries::Np::NpSignaling {
++
++using Libraries::Net::sceNetNtohs;
++
++static Kernel::PthreadT g_dispatch_thread{};
++static Kernel::PthreadT g_receive_thread{};
++static bool g_receive_stop = false;
++static Kernel::PthreadT g_ping_thread{};
++static bool g_ping_stop = false;
++
++static void HandleStunEcho(s32 ctx_id, const StunEcho& echo) {
++    SignalingMutexGuard lock;
++    const auto it = g_contexts.find(ctx_id);
++    if (it == g_contexts.end() || !it->second.active) {
++        return;
++    }
++    NpSignalingContext& ctx = it->second;
++    ctx.ext_addr.store(echo.ext_ip);
++    ctx.ext_port.store(echo.ext_port);
++
++    LOG_DEBUG(Lib_NpSignaling, "STUN echo: ctxId={} ext_addr={:#x} ext_port={}", ctx_id,
++              echo.ext_ip, sceNetNtohs(echo.ext_port));
++
++    auto* netinfo = Common::Singleton<NetUtil::NetUtilInternal>::Instance();
++    netinfo->SetExternalIp(echo.ext_ip);
++    Net::P2PRelaySetSelfEndpoint(echo.ext_ip, echo.ext_port);
++
++    ctx.stun_cv.notify_all();
++}
++
++static bool HasSignalingMagic(const u8* buf, size_t nbytes) {
++    return nbytes >= 5 && std::memcmp(buf, kSignalingMagic, sizeof(kSignalingMagic)) == 0;
++}
++
++static void DrainControlPackets() {
++    static constexpr u32 kBufSize = 256;
++    u8 buf[kBufSize];
++    for (;;) {
++        u32 from_addr = 0;
++        u16 from_port = 0;
++        const int rc = Stubs::ControlRecvFrom(buf, kBufSize, &from_addr, &from_port);
++        if (rc <= 0) {
++            break;
++        }
++        const auto nbytes = static_cast<size_t>(rc);
++        if (nbytes == sizeof(SignalingControl) && HasSignalingMagic(buf, nbytes) &&
++            buf[4] == static_cast<u8>(SignalingPacketType::Control)) {
++            SignalingControl ctrl{};
++            std::memcpy(&ctrl, buf, sizeof(ctrl));
++            HandleControlPacket(from_addr, from_port, ctrl);
++        } else {
++            LOG_WARNING(Lib_NpSignaling, "ReceiveThread: bad control packet (size={})", nbytes);
++        }
++    }
++}
++
++static void ReceiveThreadMain() {
++    // Large enough for SignalingBbscWorldFlags (~1 KB); every other packet here is < 0x40 bytes.
++    static constexpr u32 kBufSize = 2048;
++    u8 buf[kBufSize];
++
++    while (!g_receive_stop) {
++        DrainControlPackets();
++
++        u32 from_addr = 0;
++        u16 from_port = 0;
++
++        const int rc = Stubs::SignalingRecvFrom(buf, kBufSize, &from_addr, &from_port);
++        if (rc <= 0) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(5));
++            continue;
++        }
++
++        const auto nbytes = static_cast<size_t>(rc);
++
++        if (nbytes != sizeof(StunEcho)) {
++            LOG_DEBUG(
++                Lib_NpSignaling,
++                "ReceiveThread DATA from {:#x}:{} size={} b0-4={:02x},{:02x},{:02x},{:02x},{:02x}",
++                from_addr, sceNetNtohs(from_port), nbytes, buf[0], buf[1], buf[2], buf[3],
++                nbytes >= 5 ? buf[4] : 0);
++        }
++
++        if (nbytes == sizeof(StunEcho)) {
++            s32 ctx_id = 0;
++            {
++                SignalingMutexGuard lock;
++                for (const auto& [cid, ctx] : g_contexts) {
++                    if (ctx.active) {
++                        ctx_id = cid;
++                        break;
++                    }
++                }
++            }
++            if (ctx_id == 0) {
++                continue;
++            }
++            StunEcho echo{};
++            std::memcpy(&echo, buf, sizeof(echo));
++            HandleStunEcho(ctx_id, echo);
++            continue;
++        }
++
++        if (!HasSignalingMagic(buf, nbytes)) {
++            LOG_WARNING(Lib_NpSignaling, "ReceiveThread: dropping non-SHAD packet (size={})",
++                        nbytes);
++            continue;
++        }
++        const u8 type = buf[4];
++
++        if (nbytes == sizeof(SignalingEchoPing) &&
++            type == static_cast<u8>(SignalingPacketType::EchoPing)) {
++            SignalingEchoPing ping{};
++            std::memcpy(&ping, buf, sizeof(ping));
++            SignalingEchoPong pong{};
++            pong.conn_id = ping.conn_id;
++            pong.orig_ts_us = ping.send_ts_us;
++            Stubs::SignalingSendTo(&pong, sizeof(pong), from_addr, from_port);
++            continue;
++        }
++        if ((nbytes == sizeof(SignalingBbscFollow) || nbytes == kSignalingBbscFollowV1Size) &&
++            type == static_cast<u8>(SignalingPacketType::BbscFollow)) {
++            SignalingBbscFollow follow{}; // lamp_point stays -1 for an older build's packet
++            std::memcpy(&follow, buf, static_cast<size_t>(nbytes));
++            Core::Bloodborne::OnBbscHostFollowPacket(follow.packed_map, follow.x, follow.y,
++                                                     follow.z, follow.heading, follow.sequence,
++                                                     follow.lamp_point);
++            continue;
++        }
++        if (nbytes == sizeof(SignalingBbscWorldFlags) &&
++            type == static_cast<u8>(SignalingPacketType::BbscWorldFlags)) {
++            Core::Bloodborne::OnBbscWorldFlagsPacket(buf, static_cast<u32>(nbytes));
++            continue;
++        }
++        if (nbytes == sizeof(SignalingEchoPong) &&
++            type == static_cast<u8>(SignalingPacketType::EchoPong)) {
++            SignalingEchoPong pong{};
++            std::memcpy(&pong, buf, sizeof(pong));
++            const s64 now = NowUs();
++            s32 rtt_us = static_cast<s32>(now - static_cast<s64>(pong.orig_ts_us));
++            if (rtt_us < 0) {
++                rtt_us = 0;
++            }
++            {
++                SignalingMutexGuard lock;
++                RecordRttSampleLocked(static_cast<s32>(pong.conn_id), rtt_us);
++            }
++            continue;
++        }
++        if (nbytes == sizeof(SignalingHandshake) &&
++            type == static_cast<u8>(SignalingPacketType::Handshake)) {
++            SignalingHandshake hs{};
++            std::memcpy(&hs, buf, sizeof(hs));
++            HandleHandshakePacket(from_addr, from_port, hs);
++            continue;
++        }
++
++        LOG_WARNING(Lib_NpSignaling, "ReceiveThread: unexpected SHAD packet type={} size={}", type,
++                    nbytes);
++    }
++}
++
++static PS4_SYSV_ABI void* ReceiveThreadFunc(void*) {
++    ReceiveThreadMain();
++    return nullptr;
++}
++
++static void StartReceiveThread(s32 priority, u64 affinity_mask, u64 stack_size) {
++    g_receive_stop = false;
++    if (!g_receive_thread) {
++        NpCommon::sceNpCreateThread(&g_receive_thread, ReceiveThreadFunc, nullptr, priority,
++                                    stack_size, affinity_mask, "SceNpSignalingRecv");
++    }
++}
++
++static void StopReceiveThread() {
++    {
++        SignalingMutexGuard lock;
++        g_receive_stop = true;
++    }
++    if (g_receive_thread) {
++        NpCommon::sceNpJoinThread(g_receive_thread, nullptr);
++        g_receive_thread = {};
++    }
++}
++
++static void PingThreadMain() {
++    while (!g_ping_stop) {
++        if (!Stubs::EnsureTransport()) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(kSigRetryMs));
++            continue;
++        }
++
++        struct CtxSnapshot {
++            s32 ctx_id;
++            OrbisNpOnlineId online_id{};
++            bool resolved;
++        };
++        std::vector<CtxSnapshot> contexts;
++        {
++            SignalingMutexGuard lock;
++            for (const auto& [ctx_id, ctx] : g_contexts) {
++                if (ctx.active) {
++                    contexts.push_back({ctx_id, ctx.owner_online_id, ctx.ext_addr.load() != 0});
++                }
++            }
++        }
++
++        if (Stubs::Matching2Enabled()) {
++            const u32 server_addr = Stubs::MmServerAddr();
++            const u16 server_port = Stubs::MmServerUdpPort();
++
++            for (const auto& cs : contexts) {
++                if (server_addr == 0 || server_port == 0) {
++                    break;
++                }
++                StunPing ping{};
++                ping.cmd = 0x01;
++                std::memcpy(ping.online_id, cs.online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
++                ping.local_ip = Stubs::AdvertisedAddr();
++
++                Stubs::SignalingSendTo(&ping, sizeof(ping), server_addr, server_port);
++            }
++        }
++
++        SendEchoPings();
++
++        const bool any_unresolved = std::any_of(contexts.begin(), contexts.end(),
++                                                [](const auto& cs) { return !cs.resolved; });
++        const u32 sleep_ms = any_unresolved ? kSigRetryMs : kSigPingMs;
++        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
++    }
++}
++
++static PS4_SYSV_ABI void* PingThreadFunc(void*) {
++    PingThreadMain();
++    return nullptr;
++}
++
++static void StartPingThread(s32 priority, u64 affinity_mask, u64 stack_size) {
++    g_ping_stop = false;
++    if (!g_ping_thread) {
++        NpCommon::sceNpCreateThread(&g_ping_thread, PingThreadFunc, nullptr, priority, stack_size,
++                                    affinity_mask, "SceNpSignalingPing");
++    }
++}
++
++static void StopPingThread() {
++    g_ping_stop = true;
++    if (g_ping_thread) {
++        NpCommon::sceNpJoinThread(g_ping_thread, nullptr);
++        g_ping_thread = {};
++    }
++}
++
++static void DispatchThreadMain() {
++    for (;;) {
++        ProcessPendingActivations();
++
++        QueuedDispatch dispatch;
++        {
++            std::unique_lock<std::mutex> lock(g_dispatch_mutex);
++            for (;;) {
++                if (g_dispatch_stop) {
++                    return;
++                }
++                if (g_dispatch_queue.empty()) {
++                    g_dispatch_cv.wait_for(lock, std::chrono::seconds(1), [] {
++                        return g_dispatch_stop || !g_dispatch_queue.empty();
++                    });
++                    break;
++                }
++                const auto it = g_dispatch_queue.begin();
++                const auto now = std::chrono::steady_clock::now();
++                if (it->first > now) {
++                    g_dispatch_cv.wait_until(lock, it->first);
++                    break;
++                }
++                dispatch = std::move(it->second);
++                g_dispatch_queue.erase(it);
++                break;
++            }
++        }
++
++        if (dispatch.callback) {
++            LOG_INFO(Lib_NpSignaling, "t={} ctxId={} connId={} event={}({}) delay={}ms", NowMs(),
++                     dispatch.ctx_id, dispatch.conn_id, dispatch.event_type,
++                     SignalingEventName(dispatch.event_type), dispatch.delay_ms);
++            LOG_DEBUG(Lib_NpSignaling,
++                      "INVOKE signaling_cb={} ctxId={} connId={} event={}({}) errorCode={} arg={}",
++                      fmt::ptr(reinterpret_cast<void*>(dispatch.callback)), dispatch.ctx_id,
++                      dispatch.conn_id, dispatch.event_type,
++                      SignalingEventName(dispatch.event_type), dispatch.error_code,
++                      fmt::ptr(dispatch.callback_arg));
++            dispatch.callback(static_cast<u32>(dispatch.ctx_id), static_cast<u32>(dispatch.conn_id),
++                              dispatch.event_type, dispatch.error_code, dispatch.callback_arg);
++        }
++    }
++}
++
++static PS4_SYSV_ABI void* DispatchThreadFunc(void*) {
++    DispatchThreadMain();
++    return nullptr;
++}
++
++static void StartDispatchThread(s32 priority, u64 affinity_mask, u64 stack_size) {
++    std::lock_guard<std::mutex> lock(g_dispatch_mutex);
++    g_dispatch_stop = false;
++    if (!g_dispatch_thread) {
++        NpCommon::sceNpCreateThread(&g_dispatch_thread, DispatchThreadFunc, nullptr, priority,
++                                    stack_size, affinity_mask, "SceNpSignalingMain");
++    }
++}
++
++static void StopDispatchThread() {
++    {
++        std::lock_guard<std::mutex> lock(g_dispatch_mutex);
++        g_dispatch_stop = true;
++        g_dispatch_queue.clear();
++    }
++    g_dispatch_cv.notify_all();
++    if (g_dispatch_thread) {
++        NpCommon::sceNpJoinThread(g_dispatch_thread, nullptr);
++        g_dispatch_thread = {};
++    }
++}
++
++void RegisterRuntimeHooks() {
++    Helpers::SetRuntimeHooks({
++        .start_dispatch = StartDispatchThread,
++        .start_receive = StartReceiveThread,
++        .start_ping = StartPingThread,
++        .stop_ping = StopPingThread,
++        .stop_receive = StopReceiveThread,
++        .stop_dispatch = StopDispatchThread,
++    });
++}
++
++} // namespace Libraries::Np::NpSignaling
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.h b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.h
+index e1d4e9f..fa19499 100644
+--- a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.h
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_helpers.h
+@@ -1,34 +1,43 @@
+-// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-#pragma once
+-
+-#include "common/types.h"
+-
+-namespace Libraries::Np::NpSignaling::Helpers {
+-
+-struct SignalingRuntimeHooks {
+-    void (*start_dispatch)(s32 priority, u64 affinity_mask, u64 stack_size);
+-    void (*start_receive)(s32 priority, u64 affinity_mask, u64 stack_size);
+-    void (*start_ping)(s32 priority, u64 affinity_mask, u64 stack_size);
+-    void (*stop_ping)();
+-    void (*stop_receive)();
+-    void (*stop_dispatch)();
+-};
+-
+-void SetRuntimeHooks(const SignalingRuntimeHooks& hooks);
+-s32 CheckInitializeAppType(u32* is_app_type_4);
+-s32 InitSignalingHeap(s64 pool_size);
+-void ShutdownSignalingHeap();
+-s32 CheckAppType();
+-s32 StartMainRuntime(s32 thread_priority, s32 cpu_affinity_mask, s64 thread_stack_size);
+-s32 StartEchoRuntime(s32 thread_priority, s32 cpu_affinity_mask);
+-void ShutdownRuntime();
+-
+-} // namespace Libraries::Np::NpSignaling::Helpers
+-
+-namespace Libraries::Np::NpSignaling {
+-
+-void RegisterRuntimeHooks();
+-
+-}
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#include "common/types.h"
++
++namespace Libraries::Np::NpSignaling::Helpers {
++
++struct SignalingRuntimeHooks {
++    void (*start_dispatch)(s32 priority, u64 affinity_mask, u64 stack_size);
++    void (*start_receive)(s32 priority, u64 affinity_mask, u64 stack_size);
++    void (*start_ping)(s32 priority, u64 affinity_mask, u64 stack_size);
++    void (*stop_ping)();
++    void (*stop_receive)();
++    void (*stop_dispatch)();
++};
++
++void SetRuntimeHooks(const SignalingRuntimeHooks& hooks);
++s32 CheckInitializeAppType(u32* is_app_type_4);
++s32 InitSignalingHeap(s64 pool_size);
++void ShutdownSignalingHeap();
++s32 CheckAppType();
++s32 StartMainRuntime(s32 thread_priority, s32 cpu_affinity_mask, s64 thread_stack_size);
++s32 StartEchoRuntime(s32 thread_priority, s32 cpu_affinity_mask);
++void ShutdownRuntime();
++
++// BBSC: send one "the host is in this map" packet to every established signaling peer. Called
++// from the game thread; takes the signaling mutex only long enough to copy the peer addresses.
++// Returns how many peers it went to.
++u32 SendBbscFollowToPeers(u32 packed_map, float x, float y, float z, float heading, u32 sequence,
++                          s32 lamp_point);
++// BBSC: send one world-flag chunk (SignalingBbscWorldFlags, filled in by the caller) to every
++// established signaling peer. Same threading as SendBbscFollowToPeers.
++u32 SendBbscWorldFlagsToPeers(const void* packet, u32 size);
++
++} // namespace Libraries::Np::NpSignaling::Helpers
++
++namespace Libraries::Np::NpSignaling {
++
++void RegisterRuntimeHooks();
++
++}
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.cpp b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.cpp
+index 38ef90b..6cd9b21 100644
+--- a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.cpp
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.cpp
+@@ -15,6 +15,7 @@
+ #include "core/libraries/kernel/process.h"
+ #include "core/libraries/network/net.h"
+ #include "core/libraries/network/net_util.h"
++#include "core/libraries/network/sockets.h"
+ #include "core/libraries/np/np_error.h"
+ #include "core/libraries/np/np_signaling/np_signaling_state.h"
+ #include "core/libraries/np/np_signaling/np_signaling_stubs.h"
+@@ -702,6 +703,7 @@ void DispatchPeerActivatedEvent(s32 conn_id) {
+ 
+ void CloseConnectionAndDispatchDead(s32 conn_id, s32 error_code) {
+     bool fire = false;
++    std::string peer;
+     {
+         SignalingMutexGuard lock;
+         const auto it = g_connections.find(conn_id);
+@@ -712,14 +714,19 @@ void CloseConnectionAndDispatchDead(s32 conn_id, s32 error_code) {
+         if (ci.state == ConnState::Inactive || ci.dead_fired) {
+             return;
+         }
++        peer = OnlineIdToString(ci.online_id);
+         SetConnStateLocked(ci, ConnState::Inactive);
+         ci.dead_fired = true;
+         CancelAllCalloutsLocked(ci);
+         fire = true;
+     }
+     if (fire) {
+-        LOG_DEBUG(Lib_NpSignaling, "Connection {} -> DEAD (errorCode={:#x})", conn_id,
+-                  static_cast<u32>(error_code));
++        LOG_INFO(Lib_NpSignaling, "Connection {} to '{}' -> DEAD (errorCode={:#x}{})", conn_id,
++                 peer, static_cast<u32>(error_code),
++                 static_cast<u32>(error_code) == static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TIMEOUT) ? ": no answer"
++                 : static_cast<u32>(error_code) == static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TERMINATED_BY_PEER) ? ": closed by the peer"
++                 : static_cast<u32>(error_code) == static_cast<u32>(ORBIS_NP_SIGNALING_ERROR_TERMINATED_BY_MYSELF) ? ": closed by us"
++                                                                                : "");
+         DispatchConnectionEvent(conn_id, ORBIS_NP_SIGNALING_EVENT_DEAD, error_code);
+         SignalingMutexGuard lock;
+         RemoveConnectionLocked(conn_id);
+@@ -787,8 +794,9 @@ void EstablishConnection(s32 conn_id, bool peer_activated_hint) {
+         Stubs::ControlSendTo(&established_pkt, sizeof(established_pkt), peer_addr, peer_port);
+     }
+     if (first_establish) {
+-        LOG_DEBUG(Lib_NpSignaling, "Connection {} -> ESTABLISHED ({})", conn_id,
+-                  fire_established ? "owner" : "answerer/non-owner");
++        LOG_INFO(Lib_NpSignaling, "Connection {} -> ESTABLISHED ({}) peer at {:#x}:{}", conn_id,
++                 fire_established ? "owner" : "answerer/non-owner", peer_addr,
++                 sceNetNtohs(peer_port));
+     }
+     if (fire_peer_activated) {
+         DispatchPeerActivatedEvent(conn_id);
+@@ -898,6 +906,49 @@ void StartHandshakeInitiator(OrbisNpSignalingConnectionId conn_id) {
+     }
+ }
+ 
++void BeginRevalidationLocked(OrbisNpSignalingConnectionId conn_id) {
++    const auto it = g_connections.find(conn_id);
++    if (it == g_connections.end()) {
++        return;
++    }
++    ConnectionInfo& ci = it->second;
++    ci.revalidating = true;
++    ci.revalidate_since_us = NowUs();
++    // The events fire again once the peer answers (EstablishConnection's first-establish part).
++    ci.established_fired = false;
++    ci.established_event_fired = false;
++    ci.mutual_fired = false; // peer_established stays: a peer that answers is still established
++    if (ci.addr != 0 && ci.port != 0) {
++        SignalingHandshake check = MakeHandshakeLocked(ci, HandshakeKind::Check);
++        check.nonce = static_cast<u64>(ci.revalidate_since_us);
++        SendHandshakeLocked(ci, check);
++    }
++    ArmStepCalloutLocked(ci, 1'000'000);
++    LOG_INFO(Lib_NpSignaling, "Connection {} to '{}': activated again after a deactivate - "
++                              "checking the peer is still there",
++             conn_id, OnlineIdToString(ci.online_id));
++}
++
++// A peer that started its connection over (it left and came back, or restarted the game) while
++// ours still counts as established: start the handshake again as if new. Before (2026-10-12
++// relay test), its Offers hit the established connection, got no answer and every rejoin died.
++static void RestartHandshakeLocked(ConnectionInfo& ci, u32 new_peer_conn, const char* why) {
++    LOG_INFO(Lib_NpSignaling,
++             "Connection {} to '{}': {} (its connection {} -> {}) - handshake again", ci.conn_id,
++             OnlineIdToString(ci.online_id), why, ci.peer_conn_id, new_peer_conn);
++    CancelAllCalloutsLocked(ci);
++    ci.established_fired = false;
++    ci.established_event_fired = false;
++    ci.mutual_fired = false;
++    ci.peer_established = false;
++    ci.peer_activated_fired = false;
++    ci.revalidating = false;
++    ci.deactivate_lingering = false;
++    ci.peer_conn_id = new_peer_conn;
++    SetConnStateLocked(ci, ConnState::WaitOffer);
++    ArmTimeoutCalloutLocked(ci, kHandshakeConnectTimeoutMs * 1000);
++}
++
+ void QueueActivationLocked(OrbisNpSignalingConnectionId conn_id, std::string_view peer_online_id,
+                            bool start_handshake) {
+     g_pending_activations.push_back({conn_id, std::string(peer_online_id), start_handshake});
+@@ -943,7 +994,8 @@ void ProcessPendingActivations() {
+             it->second.addr = peer_addr;
+             it->second.port = peer_port;
+             SendActivationRequestLocked(it->second);
+-            already_established = it->second.state == ConnState::Established;
++            already_established =
++                it->second.state == ConnState::Established && !it->second.revalidating;
+             LOG_INFO(Lib_NpSignaling, "connection {} sent local activation to '{}' at {:#x}:{}{}",
+                      act.conn_id, act.peer_online_id, peer_addr, sceNetNtohs(peer_port),
+                      act.start_handshake ? "" : " (existing connection)");
+@@ -987,9 +1039,21 @@ void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshak
+ 
+         if (kind == HandshakeKind::Offer) {
+             if (conn_id == 0) {
++                LOG_INFO(Lib_NpSignaling,
++                         "Handshake Offer from '{}' (its connection {}) ignored: no connection to "
++                         "it here (not activated on this side yet)",
++                         from_id, pkt.from_conn_id);
+                 return;
+             }
+             ConnectionInfo& ci = g_connections[conn_id];
++            if (ci.state == ConnState::Established && pkt.from_conn_id != 0 &&
++                (ci.revalidating ||
++                 (ci.peer_conn_id != 0 && pkt.from_conn_id != ci.peer_conn_id))) {
++                RestartHandshakeLocked(ci, pkt.from_conn_id, "the peer started over");
++            }
++            if (pkt.from_conn_id != 0) {
++                ci.peer_conn_id = pkt.from_conn_id;
++            }
+             ci.addr = from_addr;
+             ci.port = from_port;
+             ci.peer_activated = true;
+@@ -1010,6 +1074,9 @@ void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshak
+             return;
+         } else if (kind == HandshakeKind::Accept) {
+             ConnectionInfo& ci = g_connections[conn_id];
++            if (pkt.from_conn_id != 0 && ci.state != ConnState::Established) {
++                ci.peer_conn_id = pkt.from_conn_id;
++            }
+             ci.peer_activated = true;
+             if (pkt.mapped_addr != 0) {
+                 ci.addr = pkt.mapped_addr;
+@@ -1028,6 +1095,9 @@ void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshak
+             }
+         } else if (kind == HandshakeKind::Check) {
+             ConnectionInfo& ci = g_connections[conn_id];
++            if (ci.peer_conn_id == 0 && pkt.from_conn_id != 0) {
++                ci.peer_conn_id = pkt.from_conn_id;
++            }
+             reply = MakeHandshakeLocked(ci, HandshakeKind::CheckAck);
+             reply.nonce = pkt.nonce;
+             send_reply = true;
+@@ -1041,7 +1111,15 @@ void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshak
+             if (rtt_us >= 0) {
+                 RecordRttSampleLocked(conn_id, static_cast<s32>(rtt_us));
+             }
+-            if (ci.state != ConnState::Established) {
++            if (ci.peer_conn_id == 0 && pkt.from_conn_id != 0) {
++                ci.peer_conn_id = pkt.from_conn_id;
++            }
++            if (ci.revalidating) {
++                ci.revalidating = false;
++                LOG_INFO(Lib_NpSignaling, "Connection {} to '{}': the peer answered - kept",
++                         conn_id, from_id);
++                establish_conn = conn_id;
++            } else if (ci.state != ConnState::Established) {
+                 establish_conn = conn_id;
+             }
+         }
+@@ -1095,10 +1173,29 @@ static void PS4_SYSV_ABI StepCalloutHandler(u64 arg) {
+         ci.step_callout_armed = false;
+         const s64 now_us = NowUs();
+ 
+-        if (ci.state == ConnState::Established) {
++        if (ci.state == ConnState::Established && ci.revalidating) {
++            if (now_us - ci.revalidate_since_us >= 10'000'000) {
++                LOG_INFO(Lib_NpSignaling,
++                         "Connection {} to '{}': no answer in 10 s after activating it again - "
++                         "the peer is gone",
++                         conn_id, OnlineIdToString(ci.online_id));
++                liveness_dead = true;
++            } else {
++                if (ci.addr != 0 && ci.port != 0) {
++                    SignalingHandshake pkt = MakeHandshakeLocked(ci, HandshakeKind::Check);
++                    pkt.nonce = static_cast<u64>(now_us);
++                    SendHandshakeLocked(ci, pkt);
++                }
++                ArmStepCalloutLocked(ci, 1'000'000);
++            }
++        } else if (ci.state == ConnState::Established) {
+             if (!ci.deactivate_lingering && ci.addr != 0 && ci.port != 0) {
+                 if (ci.last_peer_rx_us != 0 &&
+                     now_us - ci.last_peer_rx_us >= kEstablishedLivenessTimeoutMs * 1000) {
++                    LOG_INFO(Lib_NpSignaling,
++                             "Connection {} to '{}': nothing heard for {} s - the peer is gone",
++                             conn_id, OnlineIdToString(ci.online_id),
++                             (now_us - ci.last_peer_rx_us) / 1'000'000);
+                     liveness_dead = true;
+                 } else {
+                     SignalingHandshake pkt = MakeHandshakeLocked(ci, HandshakeKind::Check);
+@@ -1240,6 +1337,21 @@ void HandleControlPacket(u32 from_addr, u16 from_port, const SignalingControl& p
+                          from_id, conn_id);
+             }
+             ConnectionInfo& ci = g_connections[conn_id];
++            if (ci.state == ConnState::Established && pkt.from_conn_id != 0 &&
++                ci.peer_conn_id != 0 && pkt.from_conn_id != ci.peer_conn_id) {
++                // It started over and waits for our Offer (we were the initiator before).
++                RestartHandshakeLocked(ci, pkt.from_conn_id, "activation request on a new connection");
++                start_handshake_conn = conn_id;
++            } else {
++                LOG_INFO(Lib_NpSignaling,
++                         "Control: ActivationRequest from '{}' (its connection {}) on connection {} "
++                         "(state {}{})",
++                         from_id, pkt.from_conn_id, conn_id, static_cast<s32>(ci.state),
++                         ci.revalidating ? ", checking the peer" : "");
++            }
++            if (pkt.from_conn_id != 0 && ci.state != ConnState::Established) {
++                ci.peer_conn_id = pkt.from_conn_id;
++            }
+             ci.peer_activated = true;
+             ci.addr = pkt.mapped_addr != 0 ? pkt.mapped_addr : from_addr;
+             ci.port = from_port;
+@@ -1336,6 +1448,7 @@ void SendStunPing(s32 ctx_id) {
+     ping.cmd = 0x01;
+     std::memcpy(ping.online_id, online_id.data, ORBIS_NP_ONLINEID_MAX_LENGTH);
+     ping.local_ip = Stubs::AdvertisedAddr();
++    Net::P2PRelaySetLocalId(OnlineIdToString(online_id));
+ 
+     LOG_DEBUG(Lib_NpSignaling, "ctxId={} online_id='{}' server={:#x}:{} local_ip={:#x}", ctx_id,
+               OnlineIdToString(online_id), server_addr, sceNetNtohs(server_udp), ping.local_ip);
+diff --git a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.h b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.h
+index b3c0c82..de85617 100644
+--- a/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.h
++++ b/gpu/shadps4/core/libraries/np/np_signaling/np_signaling_state.h
+@@ -1,357 +1,399 @@
+-// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-#pragma once
+-
+-#include <atomic>
+-#include <chrono>
+-#include <condition_variable>
+-#include <cstring>
+-#include <map>
+-#include <mutex>
+-#include <string>
+-#include <unordered_map>
+-#include <vector>
+-
+-#include "common/types.h"
+-#include "core/libraries/kernel/threads.h"
+-#include "core/libraries/np/np_common.h"
+-#include "core/libraries/np/np_signaling/np_signaling.h"
+-#include "core/libraries/np/np_types.h"
+-
+-namespace Libraries::Np::NpSignaling {
+-
+-extern NpCommon::OrbisNpCalloutContext g_callout_ctx;
+-extern bool g_callout_ctx_active;
+-
+-constexpr s64 kActivateCooldownUs = 6'000'000;
+-constexpr s64 kActivateBudgetMaxUs = 600'000'000;
+-constexpr u32 kSigRetryMs = 500;
+-constexpr u32 kSigPingMs = 5'000;
+-
+-#pragma pack(push, 1)
+-struct StunPing {
+-    u8 cmd = 0x01;
+-    u8 online_id[16]{};
+-    u32 local_ip = 0;
+-};
+-static_assert(sizeof(StunPing) == 21, "StunPing must be exactly 21 bytes");
+-#pragma pack(pop)
+-
+-#pragma pack(push, 1)
+-struct StunEcho {
+-    u32 ext_ip = 0;
+-    u16 ext_port = 0;
+-};
+-static_assert(sizeof(StunEcho) == 6, "StunEcho must be exactly 6 bytes");
+-#pragma pack(pop)
+-
+-inline constexpr u8 kSignalingMagic[4] = {'S', 'H', 'A', 'D'};
+-
+-enum class SignalingPacketType : u8 {
+-    EchoPing = 0x05,
+-    EchoPong = 0x06,
+-    Handshake = 0x07,
+-    Control = 0x10,
+-};
+-
+-#pragma pack(push, 1)
+-struct SignalingEchoPing {
+-    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
+-    u8 type = static_cast<u8>(SignalingPacketType::EchoPing);
+-    u32 conn_id = 0;
+-    u64 send_ts_us = 0;
+-};
+-static_assert(sizeof(SignalingEchoPing) == 17);
+-struct SignalingEchoPong {
+-    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
+-    u8 type = static_cast<u8>(SignalingPacketType::EchoPong);
+-    u32 conn_id = 0;
+-    u64 orig_ts_us = 0;
+-};
+-static_assert(sizeof(SignalingEchoPong) == 17);
+-#pragma pack(pop)
+-
+-#pragma pack(push, 1)
+-struct SignalingHandshake {
+-    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
+-    u8 type = static_cast<u8>(SignalingPacketType::Handshake);
+-    u8 kind = 0;
+-    u8 online_id_from[16]{};
+-    u8 online_id_to[16]{};
+-    u32 from_conn_id = 0;
+-    u32 to_conn_id = 0;
+-    u32 mapped_addr = 0;
+-    u16 mapped_port = 0;
+-    u16 reserved = 0;
+-    u64 nonce = 0;
+-};
+-static_assert(sizeof(SignalingHandshake) == 0x3e);
+-#pragma pack(pop)
+-
+-enum class HandshakeKind : u8 {
+-    Offer = 1,
+-    Accept = 2,
+-    Check = 3,
+-    CheckAck = 4,
+-};
+-
+-#pragma pack(push, 1)
+-struct SignalingControl {
+-    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
+-    u8 type = static_cast<u8>(SignalingPacketType::Control);
+-    u8 kind = 0;
+-    u8 online_id_from[16]{};
+-    u8 online_id_to[16]{};
+-    u32 from_conn_id = 0;
+-    u32 mapped_addr = 0;
+-    u16 mapped_port = 0;
+-    u16 reason = 0;
+-};
+-static_assert(sizeof(SignalingControl) == 0x32);
+-#pragma pack(pop)
+-
+-enum class ControlKind : u8 {
+-    ActivationRequest = 1,
+-    ActivationAck = 2,
+-    Close = 3,
+-    Established = 4,
+-};
+-
+-enum class ControlReason : u16 {
+-    Terminate = 0,
+-    Deactivate = 1,
+-};
+-
+-enum class ConnState : s32 {
+-    Inactive = 0,
+-    SendingOffer = 5,
+-    WaitOffer = 6,
+-    ConnCheck = 7,
+-    SendingAccept = 8,
+-    WaitAccept = 9,
+-    Established = 10,
+-};
+-
+-struct ConnectionInfo {
+-    OrbisNpSignalingConnectionId conn_id = 0;
+-    OrbisNpSignalingContextId ctx_id = 0;
+-
+-    u32 addr = 0;
+-    u16 port = 0;
+-
+-    u32 local_addr = 0;
+-    u16 local_port = 0;
+-
+-    s32 status = ORBIS_NP_SIGNALING_CONN_STATUS_INACTIVE;
+-
+-    OrbisNpId npid{};
+-    OrbisNpOnlineId online_id{};
+-
+-    s32 activation_mode = 0;
+-
+-    static constexpr u32 kProbeSampleCount = 6;
+-    s32 probe_rtt_samples[kProbeSampleCount] = {-1, -1, -1, -1, -1, -1};
+-    u32 probe_sample_write_index = 0;
+-
+-    s64 last_echo_ping_us = 0;
+-
+-    s64 last_peer_rx_us = 0;
+-
+-    ConnState state = ConnState::Inactive;
+-    bool established_fired = false;
+-    bool established_event_fired = false;
+-    bool peer_activated = false;
+-    bool locally_activated = false;
+-    bool peer_activated_fired = false;
+-    bool peer_established = false;
+-    bool mutual_fired = false;
+-    bool dead_fired = false;
+-    bool is_initiator = false;
+-    s64 last_handshake_send_us = 0;
+-
+-    NpCommon::OrbisNpCalloutEntry timeout_callout{};
+-    bool timeout_callout_armed = false;
+-    NpCommon::OrbisNpCalloutEntry step_callout{};
+-    bool step_callout_armed = false;
+-    bool deactivate_lingering = false;
+-
+-    u32 echo_derived_value = 0;
+-};
+-
+-struct NpSignalingContext {
+-    OrbisNpSignalingHandler callback{nullptr};
+-    void* callback_arg{nullptr};
+-    bool active{false};
+-
+-    u32 flags{0};
+-
+-    u32 compiled_sdk_version{0};
+-
+-    u64 account_id{0};
+-    u32 platform_type{0};
+-
+-    OrbisNpId owner_npid{};
+-    OrbisNpOnlineId owner_online_id{};
+-
+-    u16 bound_port{0};
+-
+-    std::atomic<u32> ext_addr{0};
+-    std::atomic<u16> ext_port{0};
+-    std::mutex stun_mutex{};
+-    std::condition_variable stun_cv{};
+-
+-    s64 activate_budget_us{0};
+-    s64 activate_last_update_us{0};
+-};
+-
+-struct CtxNpIdKey {
+-    OrbisNpSignalingContextId ctx_id = 0;
+-    OrbisNpId npid{};
+-};
+-
+-struct CtxNpIdKeyHash {
+-    size_t operator()(const CtxNpIdKey& key) const noexcept {
+-        size_t hash = static_cast<size_t>(key.ctx_id);
+-        const auto* bytes = reinterpret_cast<const u8*>(&key.npid);
+-        for (size_t i = 0; i < sizeof(key.npid); ++i) {
+-            hash ^= static_cast<size_t>(bytes[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+-        }
+-        return hash;
+-    }
+-};
+-
+-inline bool operator==(const CtxNpIdKey& lhs, const CtxNpIdKey& rhs) {
+-    return lhs.ctx_id == rhs.ctx_id && std::memcmp(&lhs.npid, &rhs.npid, sizeof(lhs.npid)) == 0;
+-}
+-
+-struct QueuedDispatch {
+-    std::chrono::steady_clock::time_point fire_at{};
+-    u32 delay_ms = 0;
+-    OrbisNpSignalingContextId ctx_id = 0;
+-    OrbisNpSignalingConnectionId conn_id = 0;
+-    u32 event_type = 0;
+-    u32 error_code = 0;
+-    OrbisNpSignalingHandler callback = nullptr;
+-    void* callback_arg = nullptr;
+-};
+-
+-constexpr u32 kPeerNetInfoRequestIdPrefix = 0x21000000;
+-
+-struct PeerNetInfoResult {
+-    OrbisNpSignalingContextId ctx_id = 0;
+-    OrbisNpSignalingConnectionId conn_id = 0;
+-    u32 local_ipv4 = 0;
+-    u32 external_ipv4 = 0;
+-    u32 nat_route_kind = 0;
+-};
+-
+-extern std::unordered_map<s32, NpSignalingContext> g_contexts;
+-extern std::unordered_map<s32, ConnectionInfo> g_connections;
+-extern std::unordered_map<CtxNpIdKey, s32, CtxNpIdKeyHash> g_npid_to_conn;
+-extern std::unordered_map<s32, PeerNetInfoResult> g_peer_netinfo_results;
+-struct PendingActivation {
+-    OrbisNpSignalingConnectionId conn_id = 0;
+-    std::string peer_online_id;
+-    bool start_handshake = true;
+-};
+-extern std::vector<PendingActivation> g_pending_activations;
+-extern u32 g_peer_netinfo_next_id;
+-extern u32 g_peak_connection_count;
+-extern u32 g_last_assigned_context_id;
+-extern u32 g_connection_id_seed;
+-extern bool g_initialized;
+-
+-extern Libraries::Kernel::PthreadMutexT g_mutex_storage;
+-
+-struct SignalingMutexGuard {
+-    SignalingMutexGuard();
+-    ~SignalingMutexGuard();
+-    SignalingMutexGuard(const SignalingMutexGuard&) = delete;
+-    SignalingMutexGuard& operator=(const SignalingMutexGuard&) = delete;
+-};
+-
+-void InitSignalingMutex();
+-void DestroySignalingMutex();
+-
+-extern std::multimap<std::chrono::steady_clock::time_point, QueuedDispatch> g_dispatch_queue;
+-extern std::mutex g_dispatch_mutex;
+-extern std::condition_variable g_dispatch_cv;
+-extern bool g_dispatch_stop;
+-
+-long long NowMs();
+-s64 NowUs();
+-std::string OnlineIdToString(const OrbisNpOnlineId& online_id_in);
+-std::string OnlineIdFromNpId(const OrbisNpId& np_id);
+-OrbisNpId NpIdFromOnlineId(const OrbisNpOnlineId& online_id);
+-bool OnlineIdEqualsString(const OrbisNpOnlineId& online_id, std::string_view value);
+-bool IsValidNpId(const OrbisNpId& np_id);
+-s32 NormalizeNpId(const void* np_id, OrbisNpId* out_npid, OrbisNpOnlineId* out_online_id = nullptr);
+-CtxNpIdKey MakeCtxNpIdKey(OrbisNpSignalingContextId ctx_id, const OrbisNpId& npid);
+-
+-bool IsContextValidLocked(OrbisNpSignalingContextId ctx_id);
+-OrbisNpSignalingContextId AllocateContextIdLocked();
+-OrbisNpSignalingConnectionId AllocateConnectionIdLocked();
+-void RemoveConnectionLocked(OrbisNpSignalingConnectionId conn_id);
+-void RemoveContextConnectionsLocked(OrbisNpSignalingContextId ctx_id);
+-
+-s32 ConnectionStateFromStatus(s32 status);
+-
+-u32 CaptureCompiledSdkVersion();
+-
+-u32 ParseIpv4Nbo(const std::string& dotted);
+-
+-s32 GetConnectionInfoInternal(OrbisNpSignalingContextId ctx_id,
+-                              OrbisNpSignalingConnectionId conn_id, s32 info_code, void* out_a,
+-                              void* out_b);
+-
+-bool ConsumeActivationBudgetGatedLocked(NpSignalingContext& ctx);
+-
+-void SnapshotConnectionStatisticsLocked(u32* out_peak, u32* out_active, u32* out_transient,
+-                                        u32* out_established);
+-
+-OrbisNpSignalingRequestId StagePeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id);
+-bool TakePeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id, s32 req_or_conn_id,
+-                                 PeerNetInfoResult* out);
+-bool DropPeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id, s32 req_or_conn_id);
+-
+-void RecordRttSampleLocked(OrbisNpSignalingConnectionId conn_id, s32 rtt_us);
+-void SendEchoPings();
+-
+-void DispatchConnectionEvent(OrbisNpSignalingConnectionId conn_id, s32 event_type, s32 event_data);
+-
+-void DispatchPeerActivatedEvent(OrbisNpSignalingConnectionId conn_id);
+-
+-void CloseConnectionAndDispatchDead(OrbisNpSignalingConnectionId conn_id, s32 error_code);
+-
+-void EstablishConnection(OrbisNpSignalingConnectionId conn_id, bool peer_activated_hint);
+-
+-void DeactivateConnectionFaithful(OrbisNpSignalingConnectionId conn_id);
+-
+-void TerminateConnectionFaithful(OrbisNpSignalingConnectionId conn_id);
+-
+-void StartHandshakeInitiator(OrbisNpSignalingConnectionId conn_id);
+-
+-void QueueActivationLocked(OrbisNpSignalingConnectionId conn_id, std::string_view peer_online_id,
+-                           bool start_handshake = true);
+-void ProcessPendingActivations();
+-
+-void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshake& pkt);
+-
+-void ArmConnectTimeoutLocked(OrbisNpSignalingConnectionId conn_id);
+-void ClearLingerAndTimeoutLocked(OrbisNpSignalingConnectionId conn_id);
+-
+-void SendActivationRequestLocked(const ConnectionInfo& ci);
+-
+-void SendControlCloseLocked(const ConnectionInfo& ci, ControlReason reason);
+-
+-void HandleControlPacket(u32 from_addr, u16 from_port, const SignalingControl& pkt);
+-
+-const char* SignalingEventName(u32 event_type);
+-bool ConsumeActivationBudgetLocked(NpSignalingContext& ctx);
+-void SendStunPing(OrbisNpSignalingContextId ctx_id);
+-void ClearActiveDeadlines();
+-void ClearConnectionDeadlineForPeer(std::string_view npid);
+-void SetRoomLeft();
+-
+-} // namespace Libraries::Np::NpSignaling
++// SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#include <atomic>
++#include <chrono>
++#include <condition_variable>
++#include <cstring>
++#include <map>
++#include <mutex>
++#include <string>
++#include <unordered_map>
++#include <vector>
++
++#include "common/types.h"
++#include "core/libraries/kernel/threads.h"
++#include "core/libraries/np/np_common.h"
++#include "core/libraries/np/np_signaling/np_signaling.h"
++#include "core/libraries/np/np_signaling/np_signaling_bbsc.h"
++#include "core/libraries/np/np_types.h"
++
++namespace Libraries::Np::NpSignaling {
++
++extern NpCommon::OrbisNpCalloutContext g_callout_ctx;
++extern bool g_callout_ctx_active;
++
++constexpr s64 kActivateCooldownUs = 6'000'000;
++constexpr s64 kActivateBudgetMaxUs = 600'000'000;
++constexpr u32 kSigRetryMs = 500;
++constexpr u32 kSigPingMs = 5'000;
++
++#pragma pack(push, 1)
++struct StunPing {
++    u8 cmd = 0x01;
++    u8 online_id[16]{};
++    u32 local_ip = 0;
++};
++static_assert(sizeof(StunPing) == 21, "StunPing must be exactly 21 bytes");
++#pragma pack(pop)
++
++#pragma pack(push, 1)
++struct StunEcho {
++    u32 ext_ip = 0;
++    u16 ext_port = 0;
++};
++static_assert(sizeof(StunEcho) == 6, "StunEcho must be exactly 6 bytes");
++#pragma pack(pop)
++
++inline constexpr u8 kSignalingMagic[4] = {'S', 'H', 'A', 'D'};
++
++enum class SignalingPacketType : u8 {
++    EchoPing = 0x05,
++    EchoPong = 0x06,
++    Handshake = 0x07,
++    Control = 0x10,
++    // BBSC, not part of the PS4 protocol: the host tells its co-op partners which map it is in,
++    // so a guest can follow it through a lamp warp. Bloodborne itself never carries this - when a
++    // host changes stage the game simply ends the session - so there is nothing to piggyback on.
++    // Only BBSC builds send it, and any other build drops it as an unknown packet.
++    BbscFollow = 0x20,
++    // BBSC: the host's event flags for the map block it is in, so a guest following it there loads
++    // the host's world state (bosses, doors, shortcuts) instead of whatever its own flags say.
++    // 0x21 is taken (Matching2 frames, see P2PTransport::ClassifyInternal).
++    BbscWorldFlags = 0x22,
++};
++static_assert(static_cast<u8>(SignalingPacketType::BbscWorldFlags) == kSignalingBbscWorldFlagsType);
++
++#pragma pack(push, 1)
++struct SignalingEchoPing {
++    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
++    u8 type = static_cast<u8>(SignalingPacketType::EchoPing);
++    u32 conn_id = 0;
++    u64 send_ts_us = 0;
++};
++static_assert(sizeof(SignalingEchoPing) == 17);
++struct SignalingEchoPong {
++    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
++    u8 type = static_cast<u8>(SignalingPacketType::EchoPong);
++    u32 conn_id = 0;
++    u64 orig_ts_us = 0;
++};
++static_assert(sizeof(SignalingEchoPong) == 17);
++#pragma pack(pop)
++
++#pragma pack(push, 1)
++struct SignalingHandshake {
++    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
++    u8 type = static_cast<u8>(SignalingPacketType::Handshake);
++    u8 kind = 0;
++    u8 online_id_from[16]{};
++    u8 online_id_to[16]{};
++    u32 from_conn_id = 0;
++    u32 to_conn_id = 0;
++    u32 mapped_addr = 0;
++    u16 mapped_port = 0;
++    u16 reserved = 0;
++    u64 nonce = 0;
++};
++static_assert(sizeof(SignalingHandshake) == 0x3e);
++#pragma pack(pop)
++
++enum class HandshakeKind : u8 {
++    Offer = 1,
++    Accept = 2,
++    Check = 3,
++    CheckAck = 4,
++};
++
++#pragma pack(push, 1)
++struct SignalingControl {
++    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
++    u8 type = static_cast<u8>(SignalingPacketType::Control);
++    u8 kind = 0;
++    u8 online_id_from[16]{};
++    u8 online_id_to[16]{};
++    u32 from_conn_id = 0;
++    u32 mapped_addr = 0;
++    u16 mapped_port = 0;
++    u16 reason = 0;
++};
++static_assert(sizeof(SignalingControl) == 0x32);
++#pragma pack(pop)
++
++#pragma pack(push, 1)
++struct SignalingBbscFollow {
++    u8 magic[4] = {kSignalingMagic[0], kSignalingMagic[1], kSignalingMagic[2], kSignalingMagic[3]};
++    u8 type = static_cast<u8>(SignalingPacketType::BbscFollow);
++    u8 kind = 0; // 0: "I am the host, this is where I am"
++    u32 packed_map = 0;
++    float x = 0.0f;
++    float y = 0.0f;
++    float z = 0.0f;
++    float heading = 0.0f;
++    u32 sequence = 0;
++    // The host's last lamp respawn point (global+0x1528), -1 if none. Added 2026-09-24: a dead
++    // guest respawns at the host's lamp. Older builds sent the 0x1E-byte packet without it.
++    s32 lamp_point = -1;
++};
++static_assert(sizeof(SignalingBbscFollow) == 0x22);
++inline constexpr size_t kSignalingBbscFollowV1Size = 0x1E;
++
++#pragma pack(pop)
++
++enum class ControlKind : u8 {
++    ActivationRequest = 1,
++    ActivationAck = 2,
++    Close = 3,
++    Established = 4,
++};
++
++enum class ControlReason : u16 {
++    Terminate = 0,
++    Deactivate = 1,
++};
++
++enum class ConnState : s32 {
++    Inactive = 0,
++    SendingOffer = 5,
++    WaitOffer = 6,
++    ConnCheck = 7,
++    SendingAccept = 8,
++    WaitAccept = 9,
++    Established = 10,
++};
++
++struct ConnectionInfo {
++    OrbisNpSignalingConnectionId conn_id = 0;
++    OrbisNpSignalingContextId ctx_id = 0;
++
++    u32 addr = 0;
++    u16 port = 0;
++
++    u32 local_addr = 0;
++    u16 local_port = 0;
++
++    s32 status = ORBIS_NP_SIGNALING_CONN_STATUS_INACTIVE;
++
++    OrbisNpId npid{};
++    OrbisNpOnlineId online_id{};
++
++    s32 activation_mode = 0;
++
++    static constexpr u32 kProbeSampleCount = 6;
++    s32 probe_rtt_samples[kProbeSampleCount] = {-1, -1, -1, -1, -1, -1};
++    u32 probe_sample_write_index = 0;
++
++    s64 last_echo_ping_us = 0;
++
++    s64 last_peer_rx_us = 0;
++
++    ConnState state = ConnState::Inactive;
++    bool established_fired = false;
++    bool established_event_fired = false;
++    bool peer_activated = false;
++    bool locally_activated = false;
++    bool peer_activated_fired = false;
++    bool peer_established = false;
++    bool mutual_fired = false;
++    bool dead_fired = false;
++    bool is_initiator = false;
++    s64 last_handshake_send_us = 0;
++
++    NpCommon::OrbisNpCalloutEntry timeout_callout{};
++    bool timeout_callout_armed = false;
++    NpCommon::OrbisNpCalloutEntry step_callout{};
++    bool step_callout_armed = false;
++    bool deactivate_lingering = false;
++
++    // BBSC rejoin fix (2026-10-12): the peer's connection id from its handshake packets - a new
++    // one on an established connection means the peer started over (left and came back).
++    u32 peer_conn_id = 0;
++    // Re-activated after a deactivate: established again only when the peer answers a Check
++    // (10 s, else DEAD) - a peer that had left must not keep the connection "active" forever.
++    bool revalidating = false;
++    s64 revalidate_since_us = 0;
++
++    u32 echo_derived_value = 0;
++};
++
++struct NpSignalingContext {
++    OrbisNpSignalingHandler callback{nullptr};
++    void* callback_arg{nullptr};
++    bool active{false};
++
++    u32 flags{0};
++
++    u32 compiled_sdk_version{0};
++
++    u64 account_id{0};
++    u32 platform_type{0};
++
++    OrbisNpId owner_npid{};
++    OrbisNpOnlineId owner_online_id{};
++
++    u16 bound_port{0};
++
++    std::atomic<u32> ext_addr{0};
++    std::atomic<u16> ext_port{0};
++    std::mutex stun_mutex{};
++    std::condition_variable stun_cv{};
++
++    s64 activate_budget_us{0};
++    s64 activate_last_update_us{0};
++};
++
++struct CtxNpIdKey {
++    OrbisNpSignalingContextId ctx_id = 0;
++    OrbisNpId npid{};
++};
++
++struct CtxNpIdKeyHash {
++    size_t operator()(const CtxNpIdKey& key) const noexcept {
++        size_t hash = static_cast<size_t>(key.ctx_id);
++        const auto* bytes = reinterpret_cast<const u8*>(&key.npid);
++        for (size_t i = 0; i < sizeof(key.npid); ++i) {
++            hash ^= static_cast<size_t>(bytes[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
++        }
++        return hash;
++    }
++};
++
++inline bool operator==(const CtxNpIdKey& lhs, const CtxNpIdKey& rhs) {
++    return lhs.ctx_id == rhs.ctx_id && std::memcmp(&lhs.npid, &rhs.npid, sizeof(lhs.npid)) == 0;
++}
++
++struct QueuedDispatch {
++    std::chrono::steady_clock::time_point fire_at{};
++    u32 delay_ms = 0;
++    OrbisNpSignalingContextId ctx_id = 0;
++    OrbisNpSignalingConnectionId conn_id = 0;
++    u32 event_type = 0;
++    u32 error_code = 0;
++    OrbisNpSignalingHandler callback = nullptr;
++    void* callback_arg = nullptr;
++};
++
++constexpr u32 kPeerNetInfoRequestIdPrefix = 0x21000000;
++
++struct PeerNetInfoResult {
++    OrbisNpSignalingContextId ctx_id = 0;
++    OrbisNpSignalingConnectionId conn_id = 0;
++    u32 local_ipv4 = 0;
++    u32 external_ipv4 = 0;
++    u32 nat_route_kind = 0;
++};
++
++extern std::unordered_map<s32, NpSignalingContext> g_contexts;
++extern std::unordered_map<s32, ConnectionInfo> g_connections;
++extern std::unordered_map<CtxNpIdKey, s32, CtxNpIdKeyHash> g_npid_to_conn;
++extern std::unordered_map<s32, PeerNetInfoResult> g_peer_netinfo_results;
++struct PendingActivation {
++    OrbisNpSignalingConnectionId conn_id = 0;
++    std::string peer_online_id;
++    bool start_handshake = true;
++};
++extern std::vector<PendingActivation> g_pending_activations;
++extern u32 g_peer_netinfo_next_id;
++extern u32 g_peak_connection_count;
++extern u32 g_last_assigned_context_id;
++extern u32 g_connection_id_seed;
++extern bool g_initialized;
++
++extern Libraries::Kernel::PthreadMutexT g_mutex_storage;
++
++struct SignalingMutexGuard {
++    SignalingMutexGuard();
++    ~SignalingMutexGuard();
++    SignalingMutexGuard(const SignalingMutexGuard&) = delete;
++    SignalingMutexGuard& operator=(const SignalingMutexGuard&) = delete;
++};
++
++void InitSignalingMutex();
++void DestroySignalingMutex();
++
++extern std::multimap<std::chrono::steady_clock::time_point, QueuedDispatch> g_dispatch_queue;
++extern std::mutex g_dispatch_mutex;
++extern std::condition_variable g_dispatch_cv;
++extern bool g_dispatch_stop;
++
++long long NowMs();
++s64 NowUs();
++std::string OnlineIdToString(const OrbisNpOnlineId& online_id_in);
++std::string OnlineIdFromNpId(const OrbisNpId& np_id);
++OrbisNpId NpIdFromOnlineId(const OrbisNpOnlineId& online_id);
++bool OnlineIdEqualsString(const OrbisNpOnlineId& online_id, std::string_view value);
++bool IsValidNpId(const OrbisNpId& np_id);
++s32 NormalizeNpId(const void* np_id, OrbisNpId* out_npid, OrbisNpOnlineId* out_online_id = nullptr);
++CtxNpIdKey MakeCtxNpIdKey(OrbisNpSignalingContextId ctx_id, const OrbisNpId& npid);
++
++bool IsContextValidLocked(OrbisNpSignalingContextId ctx_id);
++OrbisNpSignalingContextId AllocateContextIdLocked();
++OrbisNpSignalingConnectionId AllocateConnectionIdLocked();
++void RemoveConnectionLocked(OrbisNpSignalingConnectionId conn_id);
++void RemoveContextConnectionsLocked(OrbisNpSignalingContextId ctx_id);
++
++s32 ConnectionStateFromStatus(s32 status);
++
++u32 CaptureCompiledSdkVersion();
++
++u32 ParseIpv4Nbo(const std::string& dotted);
++
++s32 GetConnectionInfoInternal(OrbisNpSignalingContextId ctx_id,
++                              OrbisNpSignalingConnectionId conn_id, s32 info_code, void* out_a,
++                              void* out_b);
++
++bool ConsumeActivationBudgetGatedLocked(NpSignalingContext& ctx);
++
++void SnapshotConnectionStatisticsLocked(u32* out_peak, u32* out_active, u32* out_transient,
++                                        u32* out_established);
++
++OrbisNpSignalingRequestId StagePeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id);
++bool TakePeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id, s32 req_or_conn_id,
++                                 PeerNetInfoResult* out);
++bool DropPeerNetInfoResultLocked(OrbisNpSignalingContextId ctx_id, s32 req_or_conn_id);
++
++void RecordRttSampleLocked(OrbisNpSignalingConnectionId conn_id, s32 rtt_us);
++void SendEchoPings();
++
++void DispatchConnectionEvent(OrbisNpSignalingConnectionId conn_id, s32 event_type, s32 event_data);
++
++void DispatchPeerActivatedEvent(OrbisNpSignalingConnectionId conn_id);
++
++void CloseConnectionAndDispatchDead(OrbisNpSignalingConnectionId conn_id, s32 error_code);
++
++void EstablishConnection(OrbisNpSignalingConnectionId conn_id, bool peer_activated_hint);
++
++void DeactivateConnectionFaithful(OrbisNpSignalingConnectionId conn_id);
++
++void TerminateConnectionFaithful(OrbisNpSignalingConnectionId conn_id);
++
++void StartHandshakeInitiator(OrbisNpSignalingConnectionId conn_id);
++
++void QueueActivationLocked(OrbisNpSignalingConnectionId conn_id, std::string_view peer_online_id,
++                           bool start_handshake = true);
++void ProcessPendingActivations();
++
++void HandleHandshakePacket(u32 from_addr, u16 from_port, const SignalingHandshake& pkt);
++
++void ArmConnectTimeoutLocked(OrbisNpSignalingConnectionId conn_id);
++void ClearLingerAndTimeoutLocked(OrbisNpSignalingConnectionId conn_id);
++// BBSC rejoin fix: the game activates a connection it deactivated before - check the peer is
++// still there before it counts as established again.
++void BeginRevalidationLocked(OrbisNpSignalingConnectionId conn_id);
++
++void SendActivationRequestLocked(const ConnectionInfo& ci);
++
++void SendControlCloseLocked(const ConnectionInfo& ci, ControlReason reason);
++
++void HandleControlPacket(u32 from_addr, u16 from_port, const SignalingControl& pkt);
++
++const char* SignalingEventName(u32 event_type);
++bool ConsumeActivationBudgetLocked(NpSignalingContext& ctx);
++void SendStunPing(OrbisNpSignalingContextId ctx_id);
++void ClearActiveDeadlines();
++void ClearConnectionDeadlineForPeer(std::string_view npid);
++void SetRoomLeft();
++
++} // namespace Libraries::Np::NpSignaling
+diff --git a/gpu/shadps4/core/libraries/np/np_utility.cpp b/gpu/shadps4/core/libraries/np/np_utility.cpp
+new file mode 100644
+index 0000000..aae8fe1
+--- /dev/null
++++ b/gpu/shadps4/core/libraries/np/np_utility.cpp
+@@ -0,0 +1,85 @@
++// SPDX-FileCopyrightText: Copyright 2026 CLS_AMG
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++// libSceNpUtility's NP lookup (online id -> NpId).
++//
++// 2026-10-06 (4-player test): every guest that joined a room which already held another guest
++// called sceNpLookupNpId for that other player, got nothing back (the call was an unresolved stub),
++// passed the empty NpId to sceNpSignalingActivateConnection ("peer NpId is not a valid online id
++// (first bytes 00 ...)"), and left the room. With one guest there is nobody to look up, which is
++// why two players always worked. On shadnet an NpId is just the online id in its handle, so the
++// lookup answers at once; the async request reports "finished" on the first poll.
++
++#include <atomic>
++#include <cstring>
++#include "common/logging/log.h"
++#include "core/libraries/error_codes.h"
++#include "core/libraries/libs.h"
++#include "core/libraries/np/np_types.h"
++#include "core/libraries/np/np_utility.h"
++
++namespace Libraries::Np::NpUtility {
++
++constexpr s32 ORBIS_NP_LOOKUP_ERROR_INVALID_ARGUMENT = static_cast<s32>(0x80550702);
++constexpr s32 PollAsyncFinished = 0;
++
++std::atomic<s32> g_next_id{1};
++
++s32 PS4_SYSV_ABI sceNpLookupCreateTitleCtx(const void* /*title_id*/, const OrbisNpId* /*self*/) {
++    const s32 id = g_next_id++;
++    LOG_INFO(Lib_NpManager, "lookup title ctx {}", id);
++    return id;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupDeleteTitleCtx(s32 /*ctx_id*/) {
++    return ORBIS_OK;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupCreateAsyncRequest(s32 /*ctx_id*/) {
++    return g_next_id++;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupNpId(s32 req_id, const OrbisNpOnlineId* online_id, OrbisNpId* np_id,
++                                 void* /*option*/) {
++    if (online_id == nullptr || np_id == nullptr) {
++        return ORBIS_NP_LOOKUP_ERROR_INVALID_ARGUMENT;
++    }
++    std::memset(np_id, 0, sizeof(*np_id));
++    std::memcpy(np_id->handle.data, online_id->data, sizeof(np_id->handle.data));
++    np_id->handle.term = 0;
++    LOG_INFO(Lib_NpManager, "lookup {}: NpId for '{}'", req_id,
++             std::string(np_id->handle.data, strnlen(np_id->handle.data,
++                                                     sizeof(np_id->handle.data))));
++    return ORBIS_OK;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupPollAsync(s32 /*req_id*/, s32* result) {
++    if (result != nullptr) {
++        *result = ORBIS_OK;
++    }
++    return PollAsyncFinished;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupAbortRequest(s32 /*req_id*/) {
++    return ORBIS_OK;
++}
++
++s32 PS4_SYSV_ABI sceNpLookupDeleteRequest(s32 /*req_id*/) {
++    return ORBIS_OK;
++}
++
++void RegisterLib(Core::Loader::SymbolsResolver* sym) {
++    LIB_FUNCTION("8533Q+LU7EQ", "libSceNpUtility", 1, "libSceNpUtility",
++                 sceNpLookupCreateTitleCtx);
++    LIB_FUNCTION("mtqDK9zkoIE", "libSceNpUtility", 1, "libSceNpUtility",
++                 sceNpLookupDeleteTitleCtx);
++    LIB_FUNCTION("JA4+sS39GMs", "libSceNpUtility", 1, "libSceNpUtility",
++                 sceNpLookupCreateAsyncRequest);
++    LIB_FUNCTION("T6tnM1Uti4g", "libSceNpUtility", 1, "libSceNpUtility", sceNpLookupNpId);
++    LIB_FUNCTION("V4EVrruHuy8", "libSceNpUtility", 1, "libSceNpUtility", sceNpLookupPollAsync);
++    LIB_FUNCTION("eYz4v5Uek9U", "libSceNpUtility", 1, "libSceNpUtility", sceNpLookupAbortRequest);
++    LIB_FUNCTION("wLaxchvEEnk", "libSceNpUtility", 1, "libSceNpUtility",
++                 sceNpLookupDeleteRequest);
++};
++
++} // namespace Libraries::Np::NpUtility
+diff --git a/gpu/shadps4/core/libraries/np/np_utility.h b/gpu/shadps4/core/libraries/np/np_utility.h
+new file mode 100644
+index 0000000..7a3f18a
+--- /dev/null
++++ b/gpu/shadps4/core/libraries/np/np_utility.h
+@@ -0,0 +1,15 @@
++// SPDX-FileCopyrightText: Copyright 2026 CLS_AMG
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#pragma once
++
++#include "common/types.h"
++
++namespace Core::Loader {
++class SymbolsResolver;
++}
++
++namespace Libraries::Np::NpUtility {
++
++void RegisterLib(Core::Loader::SymbolsResolver* sym);
++} // namespace Libraries::Np::NpUtility
+diff --git a/gpu/shim/core/bloodborne_re.h b/gpu/shim/core/bloodborne_re.h
+index d19ae7a..6a9e573 100644
+--- a/gpu/shim/core/bloodborne_re.h
++++ b/gpu/shim/core/bloodborne_re.h
+@@ -11,4 +11,9 @@ std::optional<std::string> GetSeamlessHostPlacementHeader();
+ bool SetSeamlessHostPlacementHeader(std::string_view value);
+ void ClearSeamlessHostPlacementHeader();
+ void TraceMatching2LeaveRoom(std::uintptr_t return_address, std::uint64_t room_id);
++// bbsc: BBSC frames in signaling packets (host follow / world flags) are handled by the BBSC
++// mod DLL through the relay and its own P2P channel; the emulator side only ignores them.
++inline void OnBbscHostFollowPacket(std::uint32_t, float, float, float, float, std::uint32_t,
++                                   std::int32_t) {}
++inline void OnBbscWorldFlagsPacket(const void*, std::uint32_t) {}
+ } // namespace Core::Bloodborne
