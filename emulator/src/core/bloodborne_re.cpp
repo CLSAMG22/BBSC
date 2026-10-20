@@ -12803,33 +12803,44 @@ void TickBbscMessages() {
     }
 }
 
-// The leave script (global_event.lua LeaveMessage, run by event 4046 when a player leaves with
-// the Parting Blank) shows 30/20000430 to the one who left and 30/20000435 (with the leaving
-// player's name tag, TAG_IDX_leaveChara) to the others. Neither id is in the game's English text
-// (20000423..20000449 is a gap), so the game showed its "?ActionEventInfo?" placeholder (test
-// 2026-10-20 01:30, on the host). There is no table entry to point elsewhere, so the lookup itself
-// is redirected: its entry gets the id in ecx (category in edx), and the hook swaps the two ids for
-// the game's own lines 20000403 "Returning to own world." and 20000402 "Cooperator <?leaveName?>
-// returned to their own world." before the lookup runs. The callers try category 101 first and
-// then 30, so only 30 is touched.
+// Texts the game's scripts (global_event.lua) show but its English text does not have: the game
+// shows its "?ActionEventInfo?" placeholder instead (test 2026-10-20, on the host: 01:30 and 10:02,
+// when the guest left). There is no table entry to point elsewhere, so the lookup itself is
+// redirected: its entry gets the id in ecx (category in edx), and the hook swaps the id for the
+// game's closest own line before the lookup runs (BbscMissingTexts). The callers try category 101
+// first and then 30, so only 30 is touched. Missing ids with no fitting line (sign deletion,
+// summon time-outs, OnReviveMagic) are left alone.
 constexpr u64 MsgLookupOffset = 0x00F6F340;
-std::atomic<bool> bbsc_leave_text_logged{false};
+// {missing id, shown instead}, script in global_event.lua
+constexpr std::array<std::pair<u32, u32>, 9> BbscMissingTexts{{
+    {20001020, 20000402}, // OnLeavePlayer: a player left -> "Cooperator <?leaveName?> returned ..."
+    {20000435, 20000402}, // LeaveMessage, the others (Parting Blank) -> the same line
+    {20000430, 20000403}, // LeaveMessage, the one leaving -> "Returning to own world."
+    {20000425, 20000400}, // OnKickOut -> "Sent cooperator <?leaveName?> back to their own world."
+    {20001005, 20001001}, // OnLanCutError -> "Exiting session due to unstable connection..."
+    {20001015, 20001001}, // OnP2PTimeOut -> the same
+    {20001003, 20001000}, // OnFailedCreateSession -> "Session lost."
+    {20001004, 20001000}, // OnFailedJoinSession -> the same
+    {20001010, 20001000}, // OnNpServerSignOut -> the same
+}};
+std::atomic<u32> bbsc_missing_text_logged{0}; // the last id logged, so each swap is logged once
 
 void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers) {
     if (registers == nullptr || static_cast<u32>(registers->rdx) != 30) {
         return;
     }
     const u32 id = static_cast<u32>(registers->rcx);
-    const u32 to = id == 20000435 ? 20000402 : id == 20000430 ? 20000403 : 0;
-    if (to == 0) {
+    const auto found = std::ranges::find(BbscMissingTexts, id, &std::pair<u32, u32>::first);
+    if (found == BbscMissingTexts.end()) {
         return;
     }
+    const u32 to = found->second;
     // The trampoline loads the registers back from the snapshot, so this changes the argument.
     auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
     changed->rcx = (changed->rcx & ~0xFFFF'FFFFull) | to;
-    if (!bbsc_leave_text_logged.exchange(true)) {
-        LOG_INFO(Debug, "BBSC messages: leave text 30/{} (not in the game's text) shown as 30/{}",
-                 id, to);
+    if (bbsc_missing_text_logged.exchange(id) != id) {
+        LOG_INFO(Debug, "BBSC messages: text 30/{} (not in the game's text) shown as 30/{}", id,
+                 to);
     }
 }
 
@@ -12842,7 +12853,10 @@ void InstallBbscLeaveTextHook() {
     if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + MsgLookupOffset),
                               std::span<const u8>{Entry}, 0, BbscMsgLookupHook)) {
         LOG_ERROR(Debug, "BBSC messages: failed to hook the text lookup {:#x}", MsgLookupOffset);
+        return;
     }
+    LOG_INFO(Debug, "BBSC messages: {} texts the game lacks are shown as its own closest lines",
+             BbscMissingTexts.size());
 }
 
 // ---- Boss battle line with the boss's name (2026-10-07) -----------------------------------------
