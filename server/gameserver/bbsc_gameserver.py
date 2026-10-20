@@ -873,6 +873,9 @@ class Handler(BaseHTTPRequestHandler):
         is_local = caller in LOCAL_ADDRESSES or (ARGS.advertise and caller == ARGS.advertise)
         path = self.path.split("?", 1)[0]
         length = int(self.headers.get("Content-Length") or 0)
+        if path.startswith("/bbsc/"):
+            self._bbsc_logs(path, caller, is_local, length)
+            return
         payload = self.rfile.read(length).decode("utf-8", "replace") if length else ""
 
         bbhost = ARGS.bbhost and bbhost_service.is_bbhost(self.headers)
@@ -936,6 +939,31 @@ class Handler(BaseHTTPRequestHandler):
             if payload:
                 print("      body: {}".format(payload[:400]), flush=True)
         self._send(body, "application/json")
+
+    def _bbsc_logs(self, path, caller, is_local, length):
+        """Client logs for debugging (see "Client logs" below)."""
+        query = dict(part.split("=", 1) for part in (self.path.split("?", 1) + [""])[1].split("&")
+                     if "=" in part)
+        if path == "/bbsc/request_logs":
+            if not is_local:
+                self._send(b'{"error": "only from this PC"}', "application/json", 403)
+                return
+            request, players = request_client_logs()
+            reply = {"request": request, "players": players, "folder": client_log_folder()}
+            self._send(json.dumps(reply).encode("utf-8"), "application/json")
+            return
+        if path == "/bbsc/client_log":
+            body = self.rfile.read(length) if 0 < length <= CLIENT_LOG_MAX_BYTES else b""
+            if length and not body:
+                self.close_connection = True  # the unread body must not be taken for a request
+            status, note = save_client_log(caller, query.get("request", ""), query.get("file", ""),
+                                           body, length)
+            print("[{}] {} logs: {} - {}".format(stamp(), caller, query.get("file", "?"), note),
+                  flush=True)
+            self._send(json.dumps({"saved": status == 200}).encode("utf-8"), "application/json",
+                       status)
+            return
+        self._send(b"{}", "application/json", 404)
 
     do_GET = do_POST = do_PUT = do_DELETE = do_HEAD = _handle
 
@@ -1354,6 +1382,65 @@ def _relay_client(conn, address):
         print("      relay: {} left after {} frames, {:.0f} s ({}) ({} player(s))".format(
             name, frames, time.time() - started, reason, left), flush=True)
         _relay_announce()
+
+
+# ---- Client logs (2026-10-20) ---------------------------------------------------------------------
+# Debugging co-op needs every player's BBSC log. GET /bbsc/request_logs (from this PC only) sends
+# relay frame 0x7E + u32 request id to every player connected to the relay; a player who allows it
+# (share-logs.on next to their bbsc.dll, see bbsc_logshare.cpp) POSTs its newest logs to
+# /bbsc/client_log?request=<id>&file=<name>. Only a request this server made in the last
+# CLIENT_LOG_WINDOW seconds, from an address connected to the relay, and a bbsc-mod-*.log name are
+# accepted. They go to <log dir>\clients\<request time>\<address>\<file>.
+CLIENT_LOG_WINDOW = 15 * 60
+CLIENT_LOG_MAX_BYTES = 64 * 1024 * 1024
+CLIENT_LOG_NAME = re.compile(r"^bbsc-mod-[0-9-]+\.log$")
+LOG_REQUESTS = {}  # request id -> time asked
+
+
+def client_log_folder():
+    return os.path.join(ARGS.log_dir, "clients")
+
+
+def request_client_logs():
+    request = int(time.time())
+    LOG_REQUESTS[request] = time.time()
+    payload = bytes([0x7E]) + struct.pack("<I", request & 0xFFFFFFFF)
+    with RELAY_LOCK:
+        clients = list(RELAY_CLIENTS.items())
+    sent = []
+    for conn, name in clients:
+        try:
+            _relay_send(conn, payload)
+            sent.append(name)
+        except OSError:
+            pass
+    print("[{}] logs: asked {} player(s) for their logs (request {}): {}".format(
+        stamp(), len(sent), request, ", ".join(sent) or "nobody connected"), flush=True)
+    return request, sent
+
+
+def save_client_log(caller, request, name, body, length):
+    try:
+        asked = LOG_REQUESTS.get(int(request))
+    except ValueError:
+        asked = None
+    if asked is None or time.time() - asked > CLIENT_LOG_WINDOW:
+        return 403, "refused (no request of ours)"
+    with RELAY_LOCK:
+        relay_addresses = {name.rsplit(":", 1)[0] for name in RELAY_CLIENTS.values()}
+    if caller not in relay_addresses and caller not in LOCAL_ADDRESSES:
+        return 403, "refused (not a relay player)"
+    if not CLIENT_LOG_NAME.match(name):
+        return 400, "refused (not a BBSC log name)"
+    if not body:
+        return 413 if length else 400, "refused ({} bytes)".format(length)
+    stamp_dir = datetime.datetime.fromtimestamp(int(request)).strftime("%Y%m%d-%H%M%S")
+    folder = os.path.join(client_log_folder(), stamp_dir, caller.replace(":", "_"))
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name)
+    with open(path, "wb") as handle:
+        handle.write(body)
+    return 200, "saved {} KB to {}".format(len(body) // 1024, path)
 
 
 def _recv_exact(conn, size):
