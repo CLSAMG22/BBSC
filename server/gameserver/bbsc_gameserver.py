@@ -448,8 +448,19 @@ def blood_exist(req):
             user, erased), flush=True)
         if THD is not None:
             THD.remove(erased)
-    return ok("BloodMessSearchAddResponse", BloodMessEvaluationList=evaluations,
+    return ok("BloodMessSearchAddResponse", BloodMessEvaluationList=_with_thd_ratings(evaluations),
               LostBloodMessIdList=lost)
+
+def _with_thd_ratings(evaluations):
+    """The host's posted messages also get the ratings The Hunter's Dream players gave them."""
+    if THD is None or not getattr(_CALLER, "local", False):
+        return evaluations
+    theirs = THD.ratings_for([e["BloodMessId"] for e in evaluations])
+    for entry in evaluations:
+        plus, minus = theirs.get(entry["BloodMessId"], (0, 0))
+        entry["EvaluatePlus"] += plus
+        entry["EvaluateMinus"] += minus
+    return evaluations
 
 def blood_get_evaluation(req):
     body = _request(req)
@@ -458,7 +469,8 @@ def blood_get_evaluation(req):
         evaluations = [_evaluation(messages[str(i)])
                        for i in _ids(body, "BloodMessIdList", "BloodMessId")
                        if str(i) in messages]
-    return empty("BloodMessGetEvaluateResponse", BloodMessEvaluationList=evaluations)
+    return empty("BloodMessGetEvaluateResponse",
+                 BloodMessEvaluationList=_with_thd_ratings(evaluations))
 
 def blood_evaluate(req):
     body = _request(req)

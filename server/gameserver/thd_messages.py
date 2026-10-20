@@ -45,6 +45,7 @@ ACCOUNT_NAME = "thd-account.json"          # {"account", "token"} from --thd-sig
 POSTED_NAME = "thd-messages-posted.json"   # our message id -> its id on The Hunter's Dream
 POST_TRIES = 3
 POST_RETRY_SECONDS = 60
+RATINGS_SECONDS = 300
 LAUNCHER_SETTINGS = os.path.expandvars(r"%APPDATA%\bbport-launcher\settings.json")
 
 
@@ -92,8 +93,12 @@ class HuntersDreamMessages:
         self.pending = set()
         self.jobs = queue.Queue()
         self.last_error = 0.0
+        self.ratings = {}     # their id -> (plus, minus), see ratings_for
+        self.ratings_at = 0.0
         if self.enabled:
             threading.Thread(target=self._worker, daemon=True).start()
+            if self.write and self.posted:
+                self.jobs.put(("ratings",))  # warm before the host's game asks at its login
 
     @classmethod
     def from_settings(cls, flag, data_dir):
@@ -152,6 +157,19 @@ class HuntersDreamMessages:
         """The host wrote messages (our ids, in the order of body's BloodMessList): post them."""
         if self.write and our_ids:
             self.jobs.put(("create", body, list(our_ids), 1))
+
+    def ratings_for(self, our_ids):
+        """Ratings The Hunter's Dream players gave the host's posted messages: {our id: (plus,
+        minus)}, from the cache only. A refresh is queued when the cache is older than
+        RATINGS_SECONDS, so the game never waits; the host's game asks at every login."""
+        if not self.write:
+            return {}
+        with self.lock:
+            if time.time() - self.ratings_at > RATINGS_SECONDS and self.posted:
+                self.ratings_at = time.time()
+                self.jobs.put(("ratings",))
+            return {i: self.ratings[self.posted[str(i)]] for i in our_ids
+                    if str(i) in self.posted and self.posted[str(i)] in self.ratings}
 
     def remove(self, our_ids):
         """Messages deleted here: delete the ones we had posted."""
@@ -213,10 +231,37 @@ class HuntersDreamMessages:
             json.dump(self.posted, handle)
         os.replace(temp, self.posted_path)
 
+    def _ratings_job(self):
+        with self.lock:
+            theirs = sorted(set(self.posted.values()))
+        if not theirs:
+            return
+        # Their API wants the ids as objects (2026-10-20: a plain number gave HTTP 422).
+        reply = self._call("/blood_messenger/evaluation", {
+            "MessageId": "BloodMessGetEvaluateRequest",
+            "BloodMessIdList": [{"BloodMessId": i} for i in theirs]})
+        found = {}
+        for entry in reply.get("BloodMessEvaluationList") or []:
+            if isinstance(entry, dict):
+                ids = _their_ids({"BloodMessIdList": [entry.get("BloodMessId")]})
+                if ids:
+                    found[ids[0]] = (int(entry.get("EvaluatePlus") or 0),
+                                     int(entry.get("EvaluateMinus") or 0))
+        with self.lock:
+            self.ratings = found
+            self.ratings_at = time.time()
+        print("      THD messages: ratings for {} of {} posted message(s): {}".format(
+            len(found), len(theirs), found), flush=True)
+
     def _write_job(self, job):
+        if job[0] == "ratings":
+            self._ratings_job()
+            return
         if job[0] == "create":
             _, body, our_ids, _tries = job
             reply = self._call("/blood_messenger/create", body)
+            print("      THD messages: their reply to the post: {}".format(json.dumps(reply)[:300]),
+                  flush=True)
             # From here on the message is posted: nothing below may fail the job, or the retry
             # would post it again (test 2026-10-20: their reply's ids were not plain numbers, the
             # bookkeeping raised, and every retry posted another copy).
@@ -252,6 +297,8 @@ class HuntersDreamMessages:
             print("      THD messages: removed {} there".format(theirs), flush=True)
 
     def _retry_later(self, job):
+        if job[0] == "ratings":
+            return  # asked again at the next login
         if job[-1] >= POST_TRIES:
             print("      THD messages: gave up on {} {} after {} tries".format(
                 job[0], job[2] if job[0] == "create" else job[1], job[-1]), flush=True)
