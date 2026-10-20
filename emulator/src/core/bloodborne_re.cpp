@@ -6957,6 +6957,7 @@ struct BbscCurtainState {
 };
 BbscCurtainState bbsc_curtain;
 bool BbscRespawnInPlace(std::string_view why); // below
+size_t BbscCureStatusAfterRevive(); // see "The X lock after a revive in place"
 void BbscRestockFromStorage(std::string_view why); // below
 s64 bbsc_inplace_respawn_ms = 0; // last BbscRespawnInPlace revive
 
@@ -7587,6 +7588,11 @@ bool BbscRespawnInPlace(std::string_view why) {
              why, GetCharacterHp(player), ReadValue<s32>(player, 0x78), where, position[0],
              position[1], position[2]);
     bbsc_inplace_respawn_ms = SteadyNowMs();
+    if (const size_t cured = BbscCureStatusAfterRevive(); cured != 0) {
+        LOG_INFO(Debug, "BBSC respawn in place ({}): {} poison / toxic effect(s) taken off, as the "
+                        "reload of a normal death would",
+                 why, cured);
+    }
     BbscRestockFromStorage(why);
     if (where == "host's last lamp") {
         BbscAnnounceAfterCurtain(u"You respawned at the host's lamp.",
@@ -14796,6 +14802,35 @@ bool BbscEraseLocalEffect(s32 id) {
 // game puts on a dead player and which a normal death's reload throws away. A revive in place has
 // no reload, so it stayed. It was absent whenever X worked (the Amelia kill at 01:03, the host). For
 // BbscDeathMarkWatchMs after a revive in place, a living local player carrying it has it taken off.
+// Poison and toxic still on the player at the revive (2026-10-20 17:47: the guest was revived
+// poisoned and went down again; a normal death's reload throws every such effect away). An
+// effect node's game data is at +0x48 and its stateInfo at +0x156 of that (as 0x018C6600 reads
+// it): 2 is poison, 5 toxic (SpEffectParam). Taken off once, at the revive.
+size_t BbscCureStatusAfterRevive() {
+    const u64 player = GetLocalPlayerCharacter();
+    const u64 effects = ReadablePointer(player, 0x1D0) ? ReadValue<u64>(player, 0x1C8) : 0;
+    if (!ReadablePointer(effects, 0x10)) {
+        return 0;
+    }
+    std::vector<s32> ids;
+    u64 entry = ReadValue<u64>(effects, 0x08);
+    for (int guard = 0; entry != 0 && guard < 256 && ReadablePointer(entry, 0x60); ++guard) {
+        const u64 data = ReadValue<u64>(entry, 0x48);
+        if (ReadablePointer(data, 0x158)) {
+            const u16 state = ReadValue<u16>(data, 0x156);
+            if (state == 2 || state == 5) {
+                ids.push_back(ReadValue<s32>(entry, 0x40));
+            }
+        }
+        entry = ReadValue<u64>(entry, 0x58);
+    }
+    size_t cured = 0;
+    for (const s32 id : ids) {
+        cured += BbscEraseLocalEffect(id) ? 1 : 0;
+    }
+    return cured;
+}
+
 constexpr s32 BbscDeathMarkEffectId = 2;
 constexpr s64 BbscDeathMarkWatchMs = 30'000;
 void TickBbscDeathMarkClear() {
