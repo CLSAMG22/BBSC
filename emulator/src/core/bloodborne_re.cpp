@@ -3306,8 +3306,16 @@ std::atomic<u32> bbsc_tick_map{0};
 void BbscLeaveItemUsed(std::string_view event); // see "Silencing Blank" below
 void SuspendBbscPersistenceOnce(std::string_view why); // see "quit to title" below
 
+// Text lookups traced for a while after a join or leave event, see BbscMsgLookupHook.
+std::atomic<s64> bbsc_text_trace_until_ms{0};
+s64 SteadyNowMs();
+
 void WriteLuaSessionEvent(std::ostream& out, const GuestRegisterSnapshot& registers) {
     const std::string name = ReadGuestAscii(registers.rsi, 64);
+    if (name.find("Leave") != std::string::npos || name.find("Room") != std::string::npos ||
+        name.find("Kick") != std::string::npos || name.find("Join") != std::string::npos) {
+        bbsc_text_trace_until_ms = SteadyNowMs() + 15'000;
+    }
     const u64 return_address = ReadValue<u64>(registers.rsp, 0);
     out << ",\"lua_event\":{\"name\":\"" << name << "\",\"caller_offset\":\"0x" << std::hex
         << (return_address >= image_base ? return_address - image_base : 0) << std::dec << "\"}";
@@ -12826,7 +12834,31 @@ constexpr std::array<std::pair<u32, u32>, 9> BbscMissingTexts{{
 std::atomic<u32> bbsc_missing_text_logged{0}; // the last id logged, so each swap is logged once
 
 void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers) {
-    if (registers == nullptr || static_cast<u32>(registers->rdx) != 30) {
+    if (registers == nullptr) {
+        return;
+    }
+    // 2026-10-21: a ?ActionEventInfo? box at a leave, and no swap and no missing id logged on
+    // either side, so that box's text does not come through here as 30/<mapped id>. For 15 s
+    // after a join or leave event every lookup is logged (category, id, caller) to find it.
+    if (SteadyNowMs() < bbsc_text_trace_until_ms.load()) {
+        static std::mutex trace_mutex;
+        static std::vector<u64> traced;
+        static s64 window = 0;
+        const u64 key = (registers->rdx << 32) | static_cast<u32>(registers->rcx);
+        std::scoped_lock lock{trace_mutex};
+        if (window != bbsc_text_trace_until_ms.load()) {
+            window = bbsc_text_trace_until_ms.load();
+            traced.clear();
+        }
+        if (traced.size() < 60 && std::ranges::find(traced, key) == traced.end()) {
+            traced.push_back(key);
+            const u64 ret = ReadValue<u64>(registers->rsp, 0);
+            LOG_INFO(Debug, "BBSC text trace: lookup {}/{} (caller {:#x})",
+                     static_cast<u32>(registers->rdx), static_cast<u32>(registers->rcx),
+                     ret >= image_base ? ret - image_base : 0);
+        }
+    }
+    if (static_cast<u32>(registers->rdx) != 30) {
         return;
     }
     const u32 id = static_cast<u32>(registers->rcx);
