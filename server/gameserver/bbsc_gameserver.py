@@ -412,17 +412,42 @@ def blood_area(req):
         len(found), user, ",".join(areas) or "-", ",".join(stored) or "-"), flush=True)
     return empty("BloodMessGetListResponse", BloodMessList=found)
 
+ERASED_MIN_AGE = 60  # seconds, see blood_exist
+
+
 def blood_exist(req):
     """The game checks the messages it knows about: ratings for those that exist, 'lost' for
     those deleted here. Ids this server never saw (written before it stored anything) are left
     alone rather than reported lost, so nobody's own messages vanish."""
     body = _request(req)
+    user = _as_int(body.get("UserId"))
+    erased = []
     with STORE.lock:
         ids = _ids(body, "BloodMessIdList", "BloodMessId")
         messages = STORE.data["messages"]
         deleted = set(STORE.data["deleted"])
         evaluations = [_evaluation(messages[str(i)]) for i in ids if str(i) in messages]
         lost = [i for i in ids if i in deleted]
+        # The game never sends a delete when its player erases a message (test 2026-10-20: an
+        # erase in game, no request at all); its next check simply leaves the message out. For
+        # the host, a message of theirs stored here and missing from the list is taken as erased:
+        # it goes here and on The Hunter's Dream. ERASED_MIN_AGE keeps a message written moments
+        # before the check.
+        if user and getattr(_CALLER, "local", False):
+            listed = set(ids)
+            erased = [int(key) for key, msg in messages.items()
+                      if msg.get("UserId") == user and int(key) not in listed
+                      and time.time() - msg.get("Created", 0) > ERASED_MIN_AGE]
+            for msg_id in erased:
+                del messages[str(msg_id)]
+            if erased:
+                STORE.data["deleted"] = (STORE.data["deleted"] + erased)[-1000:]
+                STORE.save()
+    if erased:
+        print("      messages: user {} no longer has {} (erased in game) - removed".format(
+            user, erased), flush=True)
+        if THD is not None:
+            THD.remove(erased)
     return ok("BloodMessSearchAddResponse", BloodMessEvaluationList=evaluations,
               LostBloodMessIdList=lost)
 
