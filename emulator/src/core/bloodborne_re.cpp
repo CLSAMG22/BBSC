@@ -14772,7 +14772,7 @@ void TickBbscCommunion() {
             bbsc_communion_this_session = true;
             SendBbscCommunionPacket(1, {});
             LOG_INFO(Debug, "BBSC communion bell: rung as a guest - asking the host");
-            BbscAnnounce(u"Communion Bell rung.\nAsking the host for its progress...",
+            BbscAnnounce(u"Communion begun.\nSharing in the host's progress...",
                          "communion asked");
         } else {
             // Not a guest: show what a guest would get from us (for a test alone or as host).
@@ -14796,8 +14796,13 @@ void TickBbscCommunion() {
                             "ringing it in our world would get our {} key item(s) [{}] and our "
                             "progress ({} of {} boss flags set here)",
                      state, held, ids, boss_flags, BbscProgressFlags.size());
-            BbscAnnounce(u"Ring the Communion Bell as a guest\nin another hunter's world.",
-                         "communion alone");
+            if (state == 3) {
+                BbscAnnounce(u"Your progress is ready to share.\nA guest must ring the bell to receive it.",
+                             "communion as host");
+            } else {
+                BbscAnnounce(u"No one to commune with.\nRing it as a guest in another hunter's world.",
+                             "communion alone");
+            }
         }
     }
     rung_was = rung;
@@ -14815,6 +14820,7 @@ void TickBbscCommunion() {
         }
         SendBbscCommunionPacket(2, have);
         LOG_INFO(Debug, "BBSC communion bell: a guest asked - sent our {} key item(s)", have.size());
+        BbscAnnounce(u"A guest shares in your progress.", "communion shared");
     }
     // Guest: give the key items we lack.
     std::vector<u32> got;
@@ -14851,8 +14857,8 @@ void TickBbscCommunion() {
                     "trip home",
              got.size(), given);
     const std::string text =
-        fmt::format("Communion: {} key item(s) received.\nThe host's progress joins your world\n"
-                    "when you return home.",
+        fmt::format("Communion complete: {} key item(s) received.\nThe host's world joins yours"
+                    "\non your return.",
                     given);
     static std::u16string announce;
     announce.assign(text.begin(), text.end());
