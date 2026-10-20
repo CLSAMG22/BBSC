@@ -12897,6 +12897,52 @@ void TickBbscGuestBlank() {
     reinterpret_cast<MarkSlotsLeaving>(image_base + 0x014EB860)();
 }
 
+// The host quit the game (2026-10-21, the user: "when host exit game and have a session, it should
+// kill session"). The kept-session patches keep the guest's room alive, so the guest stayed in a
+// world with no host. The host sends its position every second while hosting (TickBbscFollow-
+// Broadcast) and only goes quiet during its own loads. A living guest that has heard nothing from
+// its host for BbscHostGoneMs leaves the way a Parting Blank does (OnLeaveMagic, as
+// TickBbscGuestBlank) and goes home. A crash on the host's side ends the same way.
+constexpr s64 BbscHostGoneMs = 45'000;
+
+void TickBbscHostGone() {
+    static s64 left_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (image_base == 0 || GetSessionState() != 6 || GetLocalPlayerType() != 1 ||
+        !BbscWarpTogetherEnabled()) {
+        left_ms = 0;
+        return;
+    }
+    s64 heard_ms = 0;
+    {
+        std::scoped_lock lock{bbsc_follow_mutex};
+        heard_ms = bbsc_follow_latest.received_ms;
+    }
+    if (heard_ms == 0 || now - heard_ms < BbscHostGoneMs) {
+        return; // never heard from this host (older build?), or it is still there
+    }
+    if (left_ms != 0 && now - left_ms < 15'000) {
+        return; // asked already, the leave is under way
+    }
+    const u64 global = GetGlobalState();
+    const u64 player = GetLocalPlayerCharacter();
+    const u64 lua_holder = ReadValue<u64>(image_base + 0x0553B0C8, 0);
+    const u64 lua = ReadablePointer(lua_holder, 0x10) ? ReadValue<u64>(lua_holder, 8) : 0;
+    if (lua == 0 || !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0 ||
+        player == 0 || GetCharacterHp(player) <= 0) {
+        return; // loading or dead: the death and wipe logic first, then this
+    }
+    left_ms = now;
+    LOG_WARNING(Debug, "BBSC leave: nothing from the host for {} s (it quit or lost its game) - the "
+                       "co-op ends, BBSC raises OnLeaveMagic",
+                (now - heard_ms) / 1000);
+    BbscAnnounce(u"The host has left.\nReturning to your own world.", "host gone");
+    using LuaEvent = void PS4_SYSV_ABI (*)(u64 lua, u64 name);
+    using MarkSlotsLeaving = void PS4_SYSV_ABI (*)();
+    reinterpret_cast<LuaEvent>(image_base + 0x01339870)(lua, image_base + 0x0492EA75);
+    reinterpret_cast<MarkSlotsLeaving>(image_base + 0x014EB860)();
+}
+
 void SendBbscPvpPacket(u8 kind, bool on) {
     static u32 sequence = 0;
     struct {
@@ -13667,6 +13713,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscSessionEnd();
         TickBbscStrayForcedWarp();
         TickBbscGuestBlank();
+        TickBbscHostGone();
         TickBbscDeadWatchdog();
         TickBbscDeathCurtain();
         TickBbscStageWatch();
