@@ -5710,6 +5710,7 @@ bool BbscHostDreamStateReady() {
            SteadyNowMs() - bbsc_dream_ready.complete_ms < BbscWorldFlagsFreshMs;
 }
 
+constexpr size_t BbscJoinRebuildBytes = 64; // see the end of ApplyBbscHostDreamState
 // Guest side: the host's Dream state into our live table (see "The host's Hunter's Dream").
 void ApplyBbscHostDreamState(std::string_view why) {
     if (!BbscWorldSyncEnabled() || !BbscDreamEnabled() || image_base == 0) {
@@ -5762,6 +5763,18 @@ void ApplyBbscHostDreamState(std::string_view why) {
              "differed from ours (snapshot {} ms old); shops keep our own unlocks and stock ({} "
              "flags differed from the host's)",
              why, written, changed_bytes, SteadyNowMs() - host.complete_ms, shop_bits);
+    // A summon into the host's Dream: its load starts before the host's Dream state arrives, so
+    // the Dream was built with our own flags and these were written after. Many differing bytes
+    // can switch map parts under the guest (2026-10-20 16:03: 336 bytes, the guest fell through
+    // the floor twice; the follow loads, written before the load, had 8 to 10). The join then
+    // reloads once like a cross-map join, so the Dream is rebuilt with the host's flags.
+    if (why == "load created the character" && changed_bytes > BbscJoinRebuildBytes &&
+        GetSessionState() == 6 && !bbsc_join_teleport_done) {
+        bbsc_cross_map_join.store(true, std::memory_order_release);
+        LOG_INFO(Debug, "BBSC Dream state: {} bytes differed at the join load - the join reloads "
+                        "once so the Dream is built with the host's flags",
+                 changed_bytes);
+    }
 }
 
 // Guest side: our own Dream groups back, keeping whatever the game changed since we wrote.
