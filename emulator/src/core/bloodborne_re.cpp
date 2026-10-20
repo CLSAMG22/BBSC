@@ -10806,6 +10806,8 @@ bool BbscSharedProgressEnabled() {
 
 bool BackupBbscSaves(); // see "The BBSC hunter's kit"
 
+// The Communion Bell was rung in this session (guest): collect NPC / object states too.
+std::atomic<bool> bbsc_communion_this_session{false};
 std::mutex bbsc_progress_mutex;
 std::vector<u32> bbsc_progress_host_flags;                         // guest: host's boss flags seen
 std::map<u32, std::array<u8, BbscWorldGroupBytes>> bbsc_progress_groups; // guest: kind 1, OR-ed
@@ -11085,7 +11087,9 @@ void TickBbscSharedProgress() {
             if (snap.map == BbscDreamStateMap) {
                 continue;
             }
-            for (size_t i = 0; i < 10; ++i) {
+            // Kinds 1, 6 and 7 once the Communion Bell was rung in this session, else kind 1 only.
+            const size_t kinds_end = bbsc_communion_this_session ? BbscWorldAppliedGroups : 10;
+            for (size_t i = 0; i < kinds_end; ++i) {
                 if ((snap.present & (u64{1} << i)) == 0) {
                     continue;
                 }
@@ -14005,6 +14009,34 @@ std::atomic<int> bbsc_pvp_host_state{-1}; // guest side: the host's last state (
 std::atomic<s64> bbsc_pvp_host_state_ms{0};
 std::map<u64, u32> bbsc_pvp_original_team; // character -> its team before PvP
 
+// ---- The Communion Bell (2026-10-20) -----------------------------------------------------------
+// The user: an item a guest rings to take over the host's key items, lamps, world and boss progress
+// and NPC quest steps (never levels, Insight, echoes or equipment). Pieces:
+//   * Item: goods 201, the Beckoning Bell's "ringing" form, which nothing uses since the kit retired
+//     the vanilla bells; it is the only free goods slot with name / info / caption text slots. Set
+//     up like the Duel Bell (refCategory 2, its own SpEffect, the bell animation), with the
+//     Pthumeru Chalice's icon (192).
+//   * Effect: SpEffect 190001, a row no param, event script, Lua or game code refers to; a copy of
+//     the Beckoning Bell's 9000 without its sign (stateInfo 0) that lasts 1 s.
+//   * Key items: the goods rows with goodsType 1 (54 in the game, the kit's slots left out). The
+//     guest asks the host (relay "SHAD" 0x28 kind 1), the host answers with the ones it carries or
+//     stores (kind 2: u16 count + u32 ids), and the guest gets those it lacks, one each.
+//   * Lamps, world and boss progress: shared progress already collects them (kind 1 groups, the
+//     boss flags) and merges them into the guest's own world at its next trip home.
+//   * NPC quest steps: once the bell was rung in a session, shared progress also collects the NPC
+//     and object states (kinds 6 and 7). They are OR-ed in like the rest, so a quest can end up
+//     further along than either player had it.
+constexpr u32 BbscCommunionGoodsId = 201;
+constexpr u32 BbscCommunionEffectId = 190001;
+constexpr u8 BbscCommunionType = 0x28;
+std::atomic<bool> bbsc_communion_ready{false};
+std::vector<u64> bbsc_communion_effect_rows; // SpEffect 190001 rows (every table copy)
+std::vector<u32> bbsc_key_goods_ids;         // goodsType 1 rows, filled once with the kit tables
+std::atomic<bool> bbsc_communion_requested{false}; // host side: a guest rang the bell
+std::mutex bbsc_communion_mutex;
+std::vector<u32> bbsc_communion_received; // guest side: the host's key items, to give
+bool bbsc_communion_received_ready = false;
+
 // ---- The BBSC hunter's kit (2026-10-05) ---------------------------------------------------------
 // The user: "our own stuff - summoning, joining, pvp, invading - with our rules, including no insight
 // cost", given to every character (new ones too) into the carried items, vanilla bells hidden.
@@ -14028,6 +14060,7 @@ constexpr BbscKitItem BbscKit[] = {
     {11201, 225, 70, 240012, u"Bloodlust Bell"}, // Sinister Resonant Bell (9025: invader sign)
     {4313, 0, 7, 240013, u"Duel Bell"},          // own row, see PrepareBbscDuelBell
     {11251, 111, 9, 240014, u"Parting Blank"},   // Silencing Blank (SpEffect 7: leave)
+    {201, 0, 192, 240015, u"Communion Bell"},    // own row, see "The Communion Bell"
 };
 constexpr u32 BbscHiddenVanilla[] = {200, 205, 225, 111};
 constexpr size_t GoodsRowSize = 108;
@@ -14085,6 +14118,7 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
     std::vector<u64> effects;
     std::vector<u64> blanks;
     std::vector<u64> maidens;
+    std::vector<u64> communion_effects;
     for (const u64 table : speffect_tables) {
         if (const u64 blank = BbscParamRow(table, 7); blank != 0) {
             blanks.push_back(blank);
@@ -14103,8 +14137,30 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
         WriteValue<float>(effect, 8, 1.0f); // effectEndurance: 1 s
         WriteValue<u16>(effect, 0x156, 0);  // stateInfo: no summon sign
         effects.push_back(effect);
+        if (const u64 communion = BbscParamRow(table, BbscCommunionEffectId, SpEffectRowSize)) {
+            std::memcpy(reinterpret_cast<void*>(communion), row.data(), row.size());
+            WriteValue<float>(communion, 8, 1.0f);
+            WriteValue<u16>(communion, 0x156, 0);
+            communion_effects.push_back(communion);
+        }
     }
+    std::vector<u32> keys;
     for (const u64 table : goods_tables) {
+        // The key items, before the kit rows change some of them (once is enough: every copy of
+        // the table has the same rows).
+        if (keys.empty() && ReadablePointer(table, 0x40)) {
+            const u16 count = ReadValue<u16>(table, 0x0A);
+            for (u16 i = 0; i < count && ReadablePointer(table + 0x40 + i * 0x18, 0x18); ++i) {
+                const u32 id = ReadValue<u32>(table, 0x40 + i * 0x18);
+                const u64 offset = ReadValue<u64>(table, 0x48 + i * 0x18);
+                const bool kit = std::ranges::any_of(
+                    BbscKit, [id](const BbscKitItem& item) { return item.id == id; });
+                if (!kit && ReadablePointer(table + offset, GoodsRowSize) &&
+                    ReadValue<u8>(table + offset, 58) == 1) {
+                    keys.push_back(id);
+                }
+            }
+        }
         PrepareBbscKitRows(table);
         const u64 row = BbscParamRow(table, BbscDuelBellGoodsId, GoodsRowSize);
         if (row == 0) {
@@ -14125,6 +14181,14 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
         WriteValue<s32>(row, 100, -1);     // replaceItemId_bySpEffect
         WriteValue<s32>(row, 104, -1);     // replaceTriggerSpEffectId
         ++goods;
+        if (const u64 bell = BbscParamRow(table, BbscCommunionGoodsId, GoodsRowSize)) {
+            std::array<u8, GoodsRowSize> copy{};
+            std::memcpy(copy.data(), reinterpret_cast<const void*>(row), copy.size());
+            std::memcpy(reinterpret_cast<void*>(bell), copy.data(), copy.size());
+            WriteValue<s32>(bell, 0, static_cast<s32>(BbscCommunionEffectId)); // refId
+            WriteValue<s32>(bell, 28, 240015); // sortId: with the kit
+            WriteValue<u16>(bell, 44, 192);    // iconId: the Pthumeru Chalice's
+        }
     }
     const bool ok = goods != 0 && !effects.empty();
     LOG_INFO(Debug, "BBSC duel bell ({}): goods {} in {} of {} table(s), SpEffect {} in {} "
@@ -14133,6 +14197,13 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
              effects.size(), ok ? "" : " - NOT READY, no PvP bell");
     // Review 2026-10-08: the game thread reads these vectors; they are filled only once, here, by
     // this (scan) thread, and published by the ready flag - never replaced while being read.
+    if (publish && ok && !communion_effects.empty() && !bbsc_communion_ready) {
+        bbsc_communion_effect_rows = std::move(communion_effects);
+        bbsc_key_goods_ids = std::move(keys);
+        LOG_INFO(Debug, "BBSC communion bell: goods {}, SpEffect {}, {} key item(s) known",
+                 BbscCommunionGoodsId, BbscCommunionEffectId, bbsc_key_goods_ids.size());
+        bbsc_communion_ready.store(true, std::memory_order_release);
+    }
     if (publish && ok && !bbsc_duel_bell_ready) {
         bbsc_duel_bell_effect_rows = std::move(effects);
         bbsc_blank_effect_rows = std::move(blanks);
@@ -14535,7 +14606,7 @@ void TickBbscDuelBellGive() {
         LOG_INFO(Debug, "BBSC kit: the Dream messenger's vanilla Beckoning Bell marked as given "
                         "(flag 6622) - the kit's Hunt Bell replaces it");
     }
-    static constexpr u32 Retired[] = {200, 201, 205, 206, 225, 226, 111};
+    static constexpr u32 Retired[] = {200, 205, 206, 225, 226, 111}; // 201: the Communion Bell
     bool retire = false;
     for (const u32 id : Retired) {
         retire = retire || has(id);
@@ -14667,6 +14738,105 @@ bool BbscLocalEffectActive(const std::vector<u64>& rows) {
 bool BbscDuelBellEffectActive() {
     return bbsc_duel_bell_ready.load(std::memory_order_acquire) &&
            BbscLocalEffectActive(bbsc_duel_bell_effect_rows);
+}
+
+// Relay "SHAD" 0x28: kind 1 (a guest asks), kind 2 + u16 count + u32 key item ids (the host).
+void SendBbscCommunionPacket(u8 kind, const std::vector<u32>& ids) {
+    std::vector<u8> packet{'S', 'H', 'A', 'D', BbscCommunionType, kind, 0, 0};
+    const u16 count = static_cast<u16>(std::min<size_t>(ids.size(), 1024));
+    std::memcpy(packet.data() + 6, &count, 2);
+    for (u16 i = 0; i < count; ++i) {
+        const size_t at = packet.size();
+        packet.resize(at + 4);
+        std::memcpy(packet.data() + at, &ids[i], 4);
+    }
+    Libraries::Np::NpSignaling::Helpers::SendBbscWorldFlagsToPeers(
+        packet.data(), static_cast<u32>(packet.size()));
+}
+
+void TickBbscCommunion() {
+    if (!bbsc_communion_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+    const s32 state = GetSessionState();
+    static s32 last_state = -1;
+    if (state == 6 && last_state != 6) {
+        bbsc_communion_this_session = false; // a new session: NPC states only once rung in it
+    }
+    last_state = state;
+    // The ring.
+    static bool rung_was = false;
+    const bool rung = BbscLocalEffectActive(bbsc_communion_effect_rows);
+    if (rung && !rung_was) {
+        if (state == 6) {
+            bbsc_communion_this_session = true;
+            SendBbscCommunionPacket(1, {});
+            LOG_INFO(Debug, "BBSC communion bell: rung as a guest - asking the host");
+            BbscAnnounce(u"Communion Bell rung.\nAsking the host for its progress...",
+                         "communion asked");
+        } else {
+            LOG_INFO(Debug, "BBSC communion bell: rung outside a guest's session (state {})", state);
+            BbscAnnounce(u"Ring the Communion Bell as a guest\nin another hunter's world.",
+                         "communion alone");
+        }
+    }
+    rung_was = rung;
+    // Host: answer with the key items we have.
+    if (state == 3 && bbsc_communion_requested.exchange(false)) {
+        const u64 carried = BbscCarriedInventory();
+        const u64 storage = BbscStorageInventory();
+        std::vector<u32> have;
+        for (const u32 id : bbsc_key_goods_ids) {
+            const u32 code = 0x40000000u | id;
+            if ((carried != 0 && BbscInventoryHas(carried, code)) ||
+                (storage != 0 && BbscInventoryHas(storage, code))) {
+                have.push_back(id);
+            }
+        }
+        SendBbscCommunionPacket(2, have);
+        LOG_INFO(Debug, "BBSC communion bell: a guest asked - sent our {} key item(s)", have.size());
+    }
+    // Guest: give the key items we lack.
+    std::vector<u32> got;
+    {
+        std::scoped_lock lock{bbsc_communion_mutex};
+        if (!bbsc_communion_received_ready) {
+            return;
+        }
+        bbsc_communion_received_ready = false;
+        got.swap(bbsc_communion_received);
+    }
+    const u64 carried = BbscCarriedInventory();
+    const u64 storage = BbscStorageInventory();
+    if (carried == 0 || state != 6) {
+        return;
+    }
+    size_t given = 0;
+    for (const u32 id : got) {
+        if (std::ranges::find(bbsc_key_goods_ids, id) == bbsc_key_goods_ids.end()) {
+            continue; // only key items, whatever the packet says
+        }
+        const u32 code = 0x40000000u | id;
+        if (BbscInventoryHas(carried, code) || (storage != 0 && BbscInventoryHas(storage, code))) {
+            continue;
+        }
+        BbscBossGoodsLot lot{0, id, 1, 0};
+        if (GiveBbscBossGoods(lot)) {
+            ++given;
+        }
+    }
+    WriteBbscPendingProgress(); // the progress collected so far is on disk now, crash or not
+    LOG_INFO(Debug, "BBSC communion bell: the host has {} key item(s), {} new to us now given; "
+                    "lamps, world and boss progress and NPC states join our own world at the next "
+                    "trip home",
+             got.size(), given);
+    const std::string text =
+        fmt::format("Communion: {} key item(s) received.\nThe host's progress joins your world\n"
+                    "when you return home.",
+                    given);
+    static std::u16string announce;
+    announce.assign(text.begin(), text.end());
+    BbscAnnounce(announce.c_str(), "communion done");
 }
 
 // Silencing Blank used by the HOST (test 2026-10-05: the guest was kicked, froze and got "session
@@ -15018,6 +15188,7 @@ void TickBbscPvp() {
     }
     StartBbscDuelBell();
     TickBbscDuelBellGive();
+    TickBbscCommunion();
     TickBbscHostBlank();
     TickBbscInvadable();
     const s32 state = GetSessionState();
@@ -16862,6 +17033,28 @@ void OnBbscPvpPacket(std::uint8_t kind, std::uint8_t on) {
         bbsc_pvp_request = on != 0 ? 1 : 0;
         LOG_INFO(Debug, "BBSC PvP: a guest rang the Duel Bell and asks for {}", on ? "on" : "off");
     }
+}
+
+// Relay thread: the Communion Bell's request (kind 1, host side) or the host's answer (kind 2).
+void OnBbscCommunionPacket(std::uint8_t kind, const void* data, std::uint32_t size) {
+    if (kind == 1) {
+        bbsc_communion_requested = true;
+        return;
+    }
+    if (kind != 2 || data == nullptr || size < 2) {
+        return;
+    }
+    u16 count = 0;
+    std::memcpy(&count, data, 2);
+    std::vector<u32> ids;
+    for (u32 i = 0; i < count && 2 + (i + 1) * 4 <= size; ++i) {
+        u32 id = 0;
+        std::memcpy(&id, static_cast<const u8*>(data) + 2 + i * 4, 4);
+        ids.push_back(id);
+    }
+    std::scoped_lock lock{bbsc_communion_mutex};
+    bbsc_communion_received = std::move(ids);
+    bbsc_communion_received_ready = true;
 }
 
 // Arrives on the signaling receive thread, so it does no game-memory work at all: it records the
