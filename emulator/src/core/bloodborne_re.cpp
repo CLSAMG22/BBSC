@@ -14758,6 +14758,26 @@ void TickBbscStateSnapshot() {
         }
     }
     const bool loading = !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0;
+    // HP and the character's flag bytes, for "hit but no damage" (2026-10-20 15:47: the host took
+    // no damage from Rom while the guest was dead).
+    const u64 modules = ReadablePointer(player, 0x3B8) ? ReadValue<u64>(player, 0x3B0) : 0;
+    const u64 stats = ReadablePointer(modules, 0x28) ? ReadValue<u64>(modules, 0x20) : 0;
+    std::string chr_bytes;
+    if (ReadablePointer(player, 0x1F0)) {
+        for (size_t at = 0x1E0; at < 0x1F0; ++at) {
+            chr_bytes += fmt::format("{:02x}", ReadValue<u8>(player, at));
+        }
+    }
+    std::string control_bytes;
+    if (ReadablePointer(control, 0x120)) {
+        for (size_t at = 0x110; at < 0x120; ++at) {
+            control_bytes += fmt::format("{:02x}", ReadValue<u8>(control, at));
+        }
+    }
+    LOG_INFO(Debug, "BBSC state snapshot: hp {} of {}, chr +0x1E0..0x1EF {}, control +0x110..0x11F {}",
+             ReadablePointer(stats, 0x100) ? ReadValue<s32>(stats, 0xF8) : -1,
+             ReadablePointer(stats, 0x100) ? ReadValue<s32>(stats, 0xFC) : -1, chr_bytes,
+             control_bytes);
     LOG_INFO(Debug,
              "BBSC state snapshot: session state {}, player type {}, hp {}, loading {}; flags "
              "4047={} 4000={} 4092={}; mission-clear menu (+0x2F0) {}, menu brake (+0x2DC) {}, "
