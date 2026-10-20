@@ -57,6 +57,22 @@ def _read_json(path):
         return {}
 
 
+def _their_ids(reply):
+    """The message ids in a create reply: plain numbers, or {"BloodMessId": n} entries."""
+    raw = reply.get("BloodMessIdList")
+    if not isinstance(raw, list):
+        raw = [reply.get("BloodMessId")]
+    ids = []
+    for item in raw:
+        if isinstance(item, dict):
+            item = item.get("BloodMessId")
+        if isinstance(item, str) and item.isdigit():
+            item = int(item)
+        if isinstance(item, int) and not isinstance(item, bool) and item:
+            ids.append(item)
+    return ids
+
+
 class HuntersDreamMessages:
     def __init__(self, enabled, token, account, ruleset, url, write=False, data_dir=None):
         self.enabled = enabled and bool(token)
@@ -201,13 +217,27 @@ class HuntersDreamMessages:
         if job[0] == "create":
             _, body, our_ids, _tries = job
             reply = self._call("/blood_messenger/create", body)
-            theirs = [i for i in (reply.get("BloodMessIdList") or [reply.get("BloodMessId")]) if i]
-            with self.lock:
-                for ours, their in zip(our_ids, theirs):
-                    self.posted[str(ours)] = their
-                    self.own_ids.add(their)
-            self._save_posted()
-            print("      THD messages: posted {} there as {}".format(our_ids, theirs), flush=True)
+            # From here on the message is posted: nothing below may fail the job, or the retry
+            # would post it again (test 2026-10-20: their reply's ids were not plain numbers, the
+            # bookkeeping raised, and every retry posted another copy).
+            try:
+                theirs = _their_ids(reply)
+                with self.lock:
+                    for ours, their in zip(our_ids, theirs):
+                        self.posted[str(ours)] = their
+                        self.own_ids.add(their)
+                self._save_posted()
+            except Exception as error:  # noqa: BLE001 - see above
+                theirs = []
+                print("      THD messages: posted, but not recorded ({}: {})".format(
+                    type(error).__name__, error), flush=True)
+            if theirs:
+                print("      THD messages: posted {} there as {}".format(our_ids, theirs),
+                      flush=True)
+            else:
+                print("      THD messages: posted {} there, but their id is not in the reply, so "
+                      "deleting it here won't delete it there: {}".format(
+                          our_ids, json.dumps(reply)[:300]), flush=True)
         else:
             _, our_ids, _tries = job
             with self.lock:
