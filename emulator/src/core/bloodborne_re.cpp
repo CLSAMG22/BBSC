@@ -3288,6 +3288,9 @@ void EndBbscLoadCover(std::string_view how);
 // The host's world state for a follow load, see "World state when warping together".
 bool BbscHostWorldFlagsReady(u32 packed_map);
 bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why);
+// The map blocks given the host's flags since the last load (ApplyBbscHostWorldFlags), see
+// "A map the host's flags never reached".
+std::vector<u32> bbsc_world_written_maps;
 void LogBbscHostWorldFlagsDiff(u32 packed_map, std::string_view why);
 void ApplyBbscGuestLootView(u32 packed_map, std::string_view why); // see "Guest loot view"
 void KeepBbscOwnWorldGroup(u32 key, const u8* live); // see "Own world journal"
@@ -4991,7 +4994,19 @@ void TickBbscFollowHost() {
     // The host's map when both were last in the same one: a different map later means the HOST
     // went somewhere. If only the guest walked off, the host's map is still this one.
     static u32 shared_host_map = 0;
-    if (!IsUsablePackedMap(here) || here == host.packed_map) {
+    // A map the host's flags never reached (2026-10-21 00:12, guest log): the guest walked from
+    // the host's area into Central Yharnam with no load, and the host came after. The flags are
+    // written at a load, for the map and the rest of its area, so that map was still the guest's
+    // own world: the clinic door and the Oedon gate shut that the host had opened, and the
+    // area's boss events ran a "Prey Slaughtered" on the guest with no boss anywhere. Writing the
+    // flags now would not open a door that is already built, so the guest reloads once into the
+    // host's spot with the host's flags, as a follow does. Not in a boss fight, not in the Dream
+    // (it has its own state).
+    const bool catch_up =
+        IsUsablePackedMap(here) && here == host.packed_map && here != BbscDreamStateMap &&
+        std::ranges::find(bbsc_world_written_maps, here) == bbsc_world_written_maps.end() &&
+        BbscHostWorldFlagsReady(here) && !BossFightActive();
+    if (!IsUsablePackedMap(here) || (here == host.packed_map && !catch_up)) {
         mismatch_since_ms = 0;
         shared_host_map = host.packed_map;
         return; // same map as the host: nothing to follow
@@ -5010,7 +5025,7 @@ void TickBbscFollowHost() {
     // host who changed map since they last shared one.
     const bool host_moved = shared_host_map != 0 && host.packed_map != shared_host_map;
     const bool same_area = (here >> 24) == (host.packed_map >> 24);
-    if (!host_loaded_there && (same_area || !host_moved)) {
+    if (!catch_up && !host_loaded_there && (same_area || !host_moved)) {
         static u32 apart_logged = 0;
         if (apart_logged != (here ^ host.packed_map)) {
             apart_logged = here ^ host.packed_map;
@@ -5022,7 +5037,7 @@ void TickBbscFollowHost() {
         mismatch_since_ms = 0;
         return;
     }
-    if (!host_loaded_there && BbscMapResident(host.packed_map)) {
+    if (!catch_up && !host_loaded_there && BbscMapResident(host.packed_map)) {
         static u32 walk_logged = 0;
         if (walk_logged != host.packed_map) {
             walk_logged = host.packed_map;
@@ -5088,11 +5103,20 @@ void TickBbscFollowHost() {
     }
     world_wait_map = 0;
     ++attempts;
-    LOG_INFO(Debug,
-             "BBSC warp together: host moved to map {:#x} (we are in {:#x}), following "
-             "(attempt {} of {}; {}; maps loaded here: {})",
-             host.packed_map, here, attempts, BbscFollowMaxAttempts,
-             host_loaded_there ? "host arrived by a load" : "host walked", BbscResidentMapsText());
+    if (catch_up) {
+        LOG_INFO(Debug,
+                 "BBSC warp together: we are in the host's map {:#x}, but it was never loaded with "
+                 "the host's flags (we walked in) - one reload into the host's world (attempt {} "
+                 "of {})",
+                 here, attempts, BbscFollowMaxAttempts);
+    } else {
+        LOG_INFO(Debug,
+                 "BBSC warp together: host moved to map {:#x} (we are in {:#x}), following "
+                 "(attempt {} of {}; {}; maps loaded here: {})",
+                 host.packed_map, here, attempts, BbscFollowMaxAttempts,
+                 host_loaded_there ? "host arrived by a load" : "host walked",
+                 BbscResidentMapsText());
+    }
     BBSC_TIMELINE("FOLLOW", "warp together: host moved to map {:#x} (we are in {:#x}), following "
              "(attempt {} of {}; {}; maps loaded here: {})",
              host.packed_map, here, attempts, BbscFollowMaxAttempts,
@@ -5531,6 +5555,10 @@ bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why) {
     size_t changed_bytes = 0;
     size_t missing = 0;
     const size_t written = write_block(host, changed_bytes, missing);
+    if (written != 0 && std::ranges::find(bbsc_world_written_maps, packed_map) ==
+                            bbsc_world_written_maps.end()) {
+        bbsc_world_written_maps.push_back(packed_map);
+    }
     LOG_INFO(Debug,
              "BBSC world state ({}): host's flags for map {:#x} written ({} groups, {} bytes "
              "differed, {} groups missing here, snapshot {} is {} ms old)",
@@ -5566,6 +5594,10 @@ bool ApplyBbscHostWorldFlags(u32 packed_map, std::string_view why) {
         size_t other_changed = 0;
         size_t other_missing = 0;
         const size_t n = write_block(snap, other_changed, other_missing);
+        if (n != 0 && std::ranges::find(bbsc_world_written_maps, snap.map) ==
+                          bbsc_world_written_maps.end()) {
+            bbsc_world_written_maps.push_back(snap.map);
+        }
         if (BbscMapArea(snap.map) == BbscMapArea(packed_map)) {
             LOG_INFO(Debug,
                      "BBSC world state ({}): host's flags for the neighbouring block {:#x} written "
@@ -5840,6 +5872,7 @@ void ApplyBbscHostWorldFlagsAtLoad() {
         return;
     }
     LogBbscHostWorldFlagsDiff(map, "load created the character, before writing");
+    bbsc_world_written_maps.clear(); // a new load: only what is written now counts
     ApplyBbscHostWorldFlags(map, "load created the character");
     ApplyBbscHostTime("load created the character");
     if (map == BbscDreamStateMap) {
