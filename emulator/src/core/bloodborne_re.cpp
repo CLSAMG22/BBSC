@@ -14060,7 +14060,7 @@ constexpr BbscKitItem BbscKit[] = {
     {11201, 225, 70, 240012, u"Bloodlust Bell"}, // Sinister Resonant Bell (9025: invader sign)
     {4313, 0, 7, 240013, u"Duel Bell"},          // own row, see PrepareBbscDuelBell
     {11251, 111, 9, 240014, u"Parting Blank"},   // Silencing Blank (SpEffect 7: leave)
-    {201, 0, 192, 240015, u"Communion Bell"},    // own row, see "The Communion Bell"
+    {201, 0, 192, 240015, u"Communion Chalice"}, // own row, see "The Communion Bell"
 };
 constexpr u32 BbscHiddenVanilla[] = {200, 205, 225, 111};
 constexpr size_t GoodsRowSize = 108;
@@ -14188,6 +14188,7 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
             WriteValue<s32>(bell, 0, static_cast<s32>(BbscCommunionEffectId)); // refId
             WriteValue<s32>(bell, 28, 240015); // sortId: with the kit
             WriteValue<u16>(bell, 44, 192);    // iconId: the Pthumeru Chalice's
+            WriteValue<u8>(bell, 62, 26);      // goodsUseAnim: drink, as a Blood Vial
         }
     }
     const bool ok = goods != 0 && !effects.empty();
@@ -14797,10 +14798,10 @@ void TickBbscCommunion() {
                             "progress ({} of {} boss flags set here)",
                      state, held, ids, boss_flags, BbscProgressFlags.size());
             if (state == 3) {
-                BbscAnnounce(u"Your progress is ready to share.\nA guest must ring the bell to receive it.",
+                BbscAnnounce(u"Your progress is ready to share.\nA guest must drink from the chalice to receive it.",
                              "communion as host");
             } else {
-                BbscAnnounce(u"No one to commune with.\nRing it as a guest in another hunter's world.",
+                BbscAnnounce(u"No one to commune with.\nDrink it as a guest in another hunter's world.",
                              "communion alone");
             }
         }

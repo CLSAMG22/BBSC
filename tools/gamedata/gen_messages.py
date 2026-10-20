@@ -211,10 +211,10 @@ replace(200, r'.', 'No longer used. Use the Hunt Bell.', category=20)
 replace(205, r'.', 'No longer used. Use the Kin Bell.', category=20)
 replace(225, r'.', 'No longer used. Use the Bloodlust Bell.', category=20)
 replace(111, r'.', 'No longer used. Use the Parting Blank.', category=20)
-fill(201, 'Communion Bell', 10)
-fill(201, "Ring as a guest in co-op to receive the host's\nkey items, lamps and progress.", 20)
-fill(201, "A bell with a deep, warm tone, cast to call\nhunters to a shared communion of blood.\n\n"
-     "Ring it in another hunter's world, and what\nthat hunter has found and done passes to you:\n"
+fill(201, 'Communion Chalice', 10)
+fill(201, "Drink as a guest in co-op to receive the host's\nkey items, lamps and progress.", 20)
+fill(201, "A chalice of the Healing Church, from which\nhunters share in a communion of blood.\n\n"
+     "Drink from it in another hunter's world, and what\nthat hunter has found and done passes to you:\n"
      "their keys, the lamps they lit, the beasts they\nslew. Your own strength remains your own.", 24)
 fill(4313, 'Duel Bell', 10)
 fill(4313, 'Ring in co-op to turn on PvP between players.\nRing again to turn it off.', 20)
