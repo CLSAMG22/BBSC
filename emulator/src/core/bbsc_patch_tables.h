@@ -296,7 +296,7 @@ struct WideEdit {
     Group group;
 };
 
-constexpr std::array<WideEdit, 11> WideEdits{{
+constexpr std::array<WideEdit, 13> WideEdits{{
     // Every blood echo reward the local player receives is computed by 0x01335400 and left in a
     // float at [[0x0553B130]+8]+0xF8. Halfway through:
     //     MOV EAX, dword ptr [R15 + 0x78]    ; the local player's character type
@@ -360,6 +360,18 @@ constexpr std::array<WideEdit, 11> WideEdits{{
     // (The Kin Bell already works in the Dream through the general path - left as it is.)
     {"KitBells.HuntBellChecks", 0x0157F857, {0xC8, 0x00, 0x00, 0x00}, {0xB0, 0x0F, 0x00, 0x00},
      Group::KitBells},
+    // The same for the other two kit bells (test 2026-10-20 08:08: the Kin Bell greyed out with the
+    // "not available in this area" cross in m28_00, whose boss was dead, while it rang in m24_01 a
+    // minute before). The Small Resonant / Sinister Bell branch, where ResponderBell* lets them ring
+    // anywhere, is picked by the resolved goods id:
+    //     CMP R12D, 0xCD   (41 81 FC CD000000 at 0x0157F686)
+    //     CMP R12D, 0xE1   (41 81 FC E1000000 at 0x0157F691)
+    // The kit's Kin Bell is 4121 and its Bloodlust Bell 11201, so they took the general path and its
+    // area rule. Their ids go into the compares (the vanilla bells are taken away by the kit).
+    {"KitBells.KinBellChecks", 0x0157F689, {0xCD, 0x00, 0x00, 0x00}, {0x19, 0x10, 0x00, 0x00},
+     Group::KitBells},
+    {"KitBells.BloodlustBellChecks", 0x0157F694, {0xE1, 0x00, 0x00, 0x00},
+     {0xC1, 0x2B, 0x00, 0x00}, Group::KitBells},
     // Three players, 2026-10-08 (host hardwater, guest cls_amg; abood's game had crashed but his
     // sign was still listed): the host summoned the dead sign and sat in CreateWait for 6 minutes,
     // then its own game raised "OnIrregularLeaveSession" (0x017897DA) and ended the session for the

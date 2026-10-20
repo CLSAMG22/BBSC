@@ -561,11 +561,9 @@ constexpr auto Sites = std::to_array<TraceSite>({
      TraceKind::BellAvailability,
      {0x89, 0x85, 0x10, 0xFE, 0xFF, 0xFF},
      6},
-    {"ResponderBell.Availability.Entry",
-     0x0157F686,
-     TraceKind::ResponderBellAvailability,
-     {0x41, 0x81, 0xFC, 0xCD, 0x00, 0x00, 0x00},
-     7},
+    // ResponderBell.Availability.Entry (0x0157F686) is gone: KitBells.KinBellChecks patches the
+    // compare's immediate there, and the mod rewrites patch sites that change, which would break a
+    // hook's jump over it. FinalResult below still logs every bell check's result.
     {"ResponderBell.Availability.FinalResult",
      0x015800D1,
      TraceKind::ResponderBellAvailability,
