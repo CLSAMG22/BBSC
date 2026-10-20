@@ -7104,6 +7104,7 @@ struct BbscLoadCoverState {
     bool own_screen = false;       // BBSC opened the loading screen (between / after the loads)
     s64 started_ms = 0;
     s64 load_over_ms = 0;          // the game's loading screen closed and no load is running
+    s64 real_load_over_ms = 0;     // no load running (global+8), whatever the loading screen says
     s64 no_session_since_ms = 0;
     std::string why;
 };
@@ -7172,12 +7173,30 @@ void TickBbscLoadCover() {
     // map, so no follow load ran - and only the follow's arrival ended the cover. The loading screen
     // stayed up 75 s ("infinite loading screen unless you teleport"). A wipe cover ends once its
     // load is over and the respawn after it is done (curtain closed, alive), or 20 s after the load.
+    // Test 2026-10-21 01:04 (guest): the wipe reload was over and the guest revived at the host's
+    // lamp, but the loading screen's state stayed up after the death curtain had forced it closed,
+    // so this waited on it until the session ended 50 s later ("stuck on the Bloodborne screen").
+    // The loading screen only counts for 8 s after the real load is over; then it is closed here.
     if (bbsc_load_cover.why == "wipe" && bbsc_load_cover.game_screen_seen) {
         const u64 global = GetGlobalState();
         const u64 menu = ReadValue<u64>(image_base + MenuManPointerOffset, 0);
-        const bool loading = (ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) != 0) ||
-                             (ReadablePointer(menu, 0x810) && ReadValue<s32>(menu, 0x804) != 0 &&
-                              !bbsc_load_cover.own_screen);
+        const bool real_load = ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) != 0;
+        const bool menu_screen = ReadablePointer(menu, 0x810) && ReadValue<s32>(menu, 0x804) != 0 &&
+                                 !bbsc_load_cover.own_screen;
+        if (real_load) {
+            bbsc_load_cover.real_load_over_ms = 0;
+        } else if (bbsc_load_cover.real_load_over_ms == 0) {
+            bbsc_load_cover.real_load_over_ms = now;
+        }
+        const bool screen_stuck = menu_screen && bbsc_load_cover.real_load_over_ms != 0 &&
+                                  now - bbsc_load_cover.real_load_over_ms >= 8'000;
+        if (screen_stuck && !bbsc_load_cover.own_screen) {
+            LOG_INFO(Debug, "BBSC load cover: no load for 8 s but the loading screen is still up "
+                            "(state {}) - closing it with the cover",
+                     ReadValue<s32>(menu, 0x804));
+            bbsc_load_cover.own_screen = true; // EndBbscLoadCover closes it
+        }
+        const bool loading = real_load || (menu_screen && !screen_stuck);
         if (loading) {
             bbsc_load_cover.load_over_ms = 0;
         } else if (bbsc_load_cover.load_over_ms == 0) {
