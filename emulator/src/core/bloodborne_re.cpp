@@ -7383,6 +7383,7 @@ bool BbscDiedRightAfterRespawn(std::string_view why) {
     return true;
 }
 
+constexpr float BbscLampNearHostM = 150.0f; // see "A lamp far from the host" below
 bool BbscRespawnInPlace(std::string_view why) {
     // Replicates the local-player branch of the game's event revive 0x013CBAD0(10000, ...)
     // (CONFIRMED statically), in the same order, WITHOUT its final CSMultiPlayMan::Stop call:
@@ -7466,8 +7467,43 @@ bool BbscRespawnInPlace(std::string_view why) {
                 where = "partner";
             }
         }
+        // A lamp far from the host can be in a part of the map that is not loaded here: the guest
+        // revived there and died again 18 s later, death cause 7 (a fall; 2026-10-20 09:58, the
+        // lamp about 290 m from the host). Beside the host instead, where the world is loaded.
+        if (target.has_value() && where == "host's last lamp" && partner_here) {
+            if (const u64 partner = FindLivingPartnerCharacter()) {
+                if (const auto host = ReadCharacterTransform(partner)) {
+                    const float dx = target->position[0] - host->position[0];
+                    const float dy = target->position[1] - host->position[1];
+                    const float dz = target->position[2] - host->position[2];
+                    const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+                    if (distance > BbscLampNearHostM) {
+                        LOG_INFO(Debug, "BBSC respawn: the host's last lamp is {:.0f} m from the "
+                                        "host (over {:.0f}), maybe not loaded here - beside the "
+                                        "host instead",
+                                 distance, BbscLampNearHostM);
+                        target = host;
+                        target->position[0] += 1.0f;
+                        where = "partner";
+                    }
+                }
+            }
+        }
     } else {
         target = ResolveLastLampTransform();
+    }
+    // Revived because the boss died while we were down: come back beside the hunter who survived,
+    // not at the lamp (2026-10-20, the user: the guest died at the boss, the host killed it, and
+    // the guest came back at the previous lamp). The boss is dead, so its arena is safe now, and
+    // the survivor's map is the one loaded here.
+    if (why == "boss killed" && partner_here) {
+        if (const u64 partner = FindLivingPartnerCharacter()) {
+            if (auto beside = ReadCharacterTransform(partner)) {
+                beside->position[0] += 1.0f; // not inside them, as the wipe warp does
+                target = beside;
+                where = "survivor";
+            }
+        }
     }
     if (!target.has_value()) {
         if (const auto body = ReadCharacterTransform(player)) {
@@ -7590,6 +7626,9 @@ bool BbscRespawnInPlace(std::string_view why) {
     if (where == "host's last lamp") {
         BbscAnnounceAfterCurtain(u"You respawned at the host's lamp.",
                                  "respawn at the host's lamp");
+    } else if (where == "survivor") {
+        BbscAnnounceAfterCurtain(u"You respawned next to the hunter who survived.",
+                                 "respawn beside the survivor");
     } else if (where == "partner") {
         BbscAnnounceAfterCurtain(u"You respawned next to the host.",
                                  "respawn beside the host");
