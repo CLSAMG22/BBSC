@@ -14741,6 +14741,33 @@ bool BbscDuelBellEffectActive() {
            BbscLocalEffectActive(bbsc_duel_bell_effect_rows);
 }
 
+// The drink itself. The Blood Vial's drinking animation (goodsUseAnim 26) never put the chalice's
+// SpEffect on the player (test 2026-10-20: the animation played, 190001 never showed), so the use is
+// seen in the item-use code instead, where it stores the goods id being used: 0x018F754C
+// mov [r13+0x478], eax (41 89 85 78 04 00 00), r13 the character, just after the trace's
+// ChrAction.UseItem.ResolvedGoods. Any animation works that way.
+constexpr u64 ItemUseStoreOffset = 0x018F754C;
+std::atomic<bool> bbsc_communion_drunk{false};
+
+void PS4_SYSV_ABI BbscItemUseHook(u64, const GuestRegisterSnapshot* registers) {
+    if (registers != nullptr && static_cast<u32>(registers->rax) == BbscCommunionGoodsId &&
+        registers->r13 == GetLocalPlayerCharacter()) {
+        bbsc_communion_drunk = true;
+    }
+}
+
+void InstallBbscItemUseHook() {
+    if (image_base == 0) {
+        return;
+    }
+    static constexpr std::array<u8, 7> Store{0x41, 0x89, 0x85, 0x78, 0x04, 0x00, 0x00};
+    if (!InstallGuestCodeHook(reinterpret_cast<void*>(image_base + ItemUseStoreOffset),
+                              std::span<const u8>{Store}, 0, BbscItemUseHook)) {
+        LOG_ERROR(Debug, "BBSC communion chalice: failed to hook the item use {:#x}",
+                  ItemUseStoreOffset);
+    }
+}
+
 // Relay "SHAD" 0x28: kind 1 (a guest asks), kind 2 + u16 count + u32 key item ids (the host).
 void SendBbscCommunionPacket(u8 kind, const std::vector<u32>& ids) {
     std::vector<u8> packet{'S', 'H', 'A', 'D', BbscCommunionType, kind, 0, 0};
@@ -14767,7 +14794,8 @@ void TickBbscCommunion() {
     last_state = state;
     // The ring.
     static bool rung_was = false;
-    const bool rung = BbscLocalEffectActive(bbsc_communion_effect_rows);
+    const bool rung =
+        bbsc_communion_drunk.exchange(false) || BbscLocalEffectActive(bbsc_communion_effect_rows);
     if (rung && !rung_was) {
         if (state == 6) {
             bbsc_communion_this_session = true;
@@ -18032,6 +18060,7 @@ void InstallReverseEngineeringTrace() {
     InstallBbscQuitHook();
     InstallBbscDeathTraceHooks();
     InstallBbscBannerHook();
+    InstallBbscItemUseHook();
 }
 
 BbscPresence GetBbscPresence() {
