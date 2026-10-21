@@ -39,6 +39,7 @@ namespace BbscMod {
 void LogPlain(const char* text);
 void OnHostPlacement(const std::string& placement, u32 sender);
 void OnAimedHostPlacement(s64 target_user, const std::string& placement, u32 sender);
+void OnLogRequest(u32 request, const std::string& server, u16 http_port); // bbsc_logshare.cpp
 bool IsPublicServerAddress(const std::string& url_or_host); // bbsc_http.cpp
 std::vector<std::wstring> HostOverridesFiles();              // bbsc_http.cpp
 u32 P2PChannelSend(const void* data, u32 size);             // bbsc_channel.cpp
@@ -58,6 +59,8 @@ constexpr u8 PvpType = 0x25;    // "SHAD" 0x25 + u8 kind (0 host state, 1 guest 
 constexpr u8 ProgressType = 0x26; // "SHAD" 0x26 + u8 count + count x u32 the host's boss flags
 constexpr u8 HostBossType = 0x27; // "SHAD" 0x27 + s32 the boss on the host's boss bar (-1 none)
 constexpr u8 PeersType = 0x7F; // server -> client: "N other players are connected", 1 byte count
+constexpr u8 LogRequestType = 0x7E; // server -> client: "send your BBSC logs", u32 request id
+constexpr u16 DefaultHttpPort = 20443;
 // Every frame since 2026-10-06: "SHAD" 0x40 + u32 sender + u32 session (the host's sender id, 0 = in
 // no session) + the packet above. The server sends each frame to everyone connected to it, so the
 // receiver keeps only its own session's packets (see "Relay sessions" in bloodborne_re.cpp).
@@ -99,6 +102,8 @@ std::atomic<int> peers{0};
 std::atomic<bool> started{false};
 u32 own_id = 0; // set once in StartRelay, never 0
 std::atomic<bool> logged_old_sender{false};
+std::string server_host;               // the relay's server, for uploads (bbsc_logshare.cpp)
+std::atomic<u16> server_http_port{DefaultHttpPort};
 
 void Log(const std::string& text) {
     BbscMod::LogPlain(("Relay: " + text).c_str());
@@ -131,6 +136,23 @@ std::string HostFromOverrides(const std::string& json) {
     return url.substr(0, url.find_first_of(":/"));
 }
 
+// The same entry's port: "http://26.1.2.3:20443" -> 20443 (the game server's HTTP port).
+u16 HttpPortFromOverrides(const std::string& json) {
+    const size_t key = json.find("ss4.scej-network.jp");
+    const size_t open = key == std::string::npos ? key : json.find('"', json.find(':', json.find('"', key + 1) + 1));
+    const size_t close = open == std::string::npos ? open : json.find('"', open + 1);
+    if (close == std::string::npos) {
+        return DefaultHttpPort;
+    }
+    std::string url = json.substr(open + 1, close - open - 1);
+    if (const size_t scheme = url.find("://"); scheme != std::string::npos) {
+        url = url.substr(scheme + 3);
+    }
+    const size_t colon = url.find(':');
+    const int port = colon == std::string::npos ? 0 : std::atoi(url.c_str() + colon + 1);
+    return port > 0 && port < 65536 ? static_cast<u16>(port) : DefaultHttpPort;
+}
+
 bool FindServer(std::string& host, u16& port) {
     port = DefaultRelayPort;
     if (const char* env = std::getenv("BBSC_RELAY"); env != nullptr && env[0] != '\0') {
@@ -143,8 +165,10 @@ bool FindServer(std::string& host, u16& port) {
         return true;
     }
     for (const auto& path : BbscMod::HostOverridesFiles()) {
-        host = HostFromOverrides(ReadFile(path));
+        const std::string json = ReadFile(path);
+        host = HostFromOverrides(json);
         if (!host.empty()) {
+            server_http_port = HttpPortFromOverrides(json);
             return true;
         }
     }
@@ -257,6 +281,12 @@ DWORD WINAPI WriterThread(void*) {
 void Dispatch(const std::vector<u8>& wrapped) {
     if (wrapped.size() == 2 && wrapped[0] == PeersType) {
         peers = wrapped[1];
+        return;
+    }
+    if (wrapped.size() == 5 && wrapped[0] == LogRequestType) {
+        u32 request = 0;
+        std::memcpy(&request, wrapped.data() + 1, 4);
+        BbscMod::OnLogRequest(request, server_host, server_http_port.load());
         return;
     }
     if (wrapped.size() < 5 || std::memcmp(wrapped.data(), "SHAD", 4) != 0) {
@@ -412,6 +442,7 @@ DWORD WINAPI RelayThread(void*) {
             dropped_frames = 0;
         }
         last_problem.clear();
+        server_host = host; // only this thread writes it, and Dispatch runs on it for the relay
         Log("connected to " + host + ":" + std::to_string(port));
         const u64 connected_at = GetTickCount64();
         u64 frames_in = 0;
@@ -484,6 +515,9 @@ bool GameServerIsPublic(std::string* host_out) {
 
 // Frames the P2P channel received (same format as the relay's, without the length).
 void RelayDispatch(const std::vector<u8>& wrapped) {
+    if (!wrapped.empty() && wrapped[0] == LogRequestType) {
+        return; // only the game server asks for logs, and only over the relay
+    }
     std::scoped_lock lock{dispatch_mutex};
     Dispatch(wrapped);
 }

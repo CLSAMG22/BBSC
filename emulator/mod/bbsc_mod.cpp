@@ -547,6 +547,10 @@ bool WriteSlotSafely(u64 address, u64 value) {
     return written;
 }
 
+std::filesystem::path ModDir() {
+    return mod_dir;
+}
+
 // Import slots the DLL swapped for its wrappers (bbsc_http.cpp, bbsc_channel.cpp). The official
 // shadPS4 links the eboot's imports again when the game loads a library later (2026-10-10: no
 // wrapper ever ran on the nightly - the slots were written back to the emulator's functions), so a
