@@ -887,11 +887,128 @@ void InstallPadWrapper() {
     LOG_WARNING(Mod, "Pad: scePadReadState slot never filled - F1 camera keyboard only");
 }
 
-// The XInput fallback (2026-10-21, the user: "when dead I cannot freelook with my controller"; no
-// L3 + R3 toggle was ever logged). When the game has not read the pad through the wrapper for
-// 500 ms, the camera reads the first XInput controller itself: Xbox pads, and most others through
-// Steam Input. The game still gets that controller's input then (the hunter is dead when the camera
-// comes on by itself). Called with cine_mutex held.
+// The controller fallback (2026-10-21, the user: "when dead I cannot freelook with my controller").
+// The wrapper above never sees a read on BBport (log: "0 game pad read(s) so far, the last never"),
+// so when the game has not read the pad through it for 500 ms, the camera reads the controller
+// itself: first through SDL3, which BBport reads the controller with (bin\SDL3.dll, already loaded
+// in this process: any controller the game sees, DualShock and DualSense included), then through
+// XInput (Xbox pads, Steam Input). The game still gets that controller's input then (the hunter is
+// dead when the camera comes on by itself). Called with cine_mutex held.
+void ApplyCinePadLocked(u32 buttons, float lx, float ly, float rx, float ry, float l2, float r2,
+                        const char* source) {
+    const u32 pressed = buttons & ~cine_pad.last_buttons;
+    cine_pad.last_buttons = buttons;
+    if ((buttons & (PadL3 | PadR3)) == (PadL3 | PadR3) && (pressed & (PadL3 | PadR3)) != 0) {
+        const bool enabled = !cine_state.enabled;
+        cine_state = CinematicInput{};
+        cine_state.enabled = enabled;
+        LOG_INFO(Debug, "BBSC cinematic camera: {} (L3 + R3, {})", enabled ? "on" : "off", source);
+    }
+    if (!cine_state.enabled) {
+        return;
+    }
+    cine_pad.buttons = buttons;
+    cine_pad.lx = lx;
+    cine_pad.ly = ly; // the PS4 pad's y grows downwards
+    cine_pad.rx = rx;
+    cine_pad.ry = ry;
+    cine_pad.l2 = l2;
+    cine_pad.r2 = r2;
+    cine_pad.speed_steps += ((pressed & PadUp) ? 1 : 0) - ((pressed & PadDown) ? 1 : 0);
+    cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
+    cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
+}
+
+float StickAxis(float v) {
+    constexpr float Dead = 0.15f;
+    return std::abs(v) < Dead ? 0.0f : std::clamp((v - std::copysign(Dead, v)) / (1.0f - Dead), -1.0f, 1.0f);
+}
+
+// SDL3, looked up by name in the SDL3.dll BBport loaded (nothing linked, nothing loaded by us).
+struct SdlPadApi {
+    using GetGamepadsFn = u32* (*)(int* count);
+    using FreeFn = void (*)(void* memory);
+    using OpenGamepadFn = void* (*)(u32 instance_id);
+    using GetAxisFn = s16 (*)(void* gamepad, int axis);
+    using GetButtonFn = bool (*)(void* gamepad, int button);
+    GetGamepadsFn get_gamepads = nullptr;
+    FreeFn free = nullptr;
+    OpenGamepadFn open = nullptr;
+    GetAxisFn axis = nullptr;
+    GetButtonFn button = nullptr;
+};
+
+bool PollSdlPadLocked() {
+    static SdlPadApi sdl = [] {
+        SdlPadApi api;
+        HMODULE module = GetModuleHandleA("SDL3.dll");
+        if (module == nullptr) {
+            LOG_INFO(Mod, "Pad: SDL3 is not loaded here - the F1 camera falls back to XInput");
+            return api;
+        }
+        api.get_gamepads = reinterpret_cast<SdlPadApi::GetGamepadsFn>(GetProcAddress(module, "SDL_GetGamepads"));
+        api.free = reinterpret_cast<SdlPadApi::FreeFn>(GetProcAddress(module, "SDL_free"));
+        api.open = reinterpret_cast<SdlPadApi::OpenGamepadFn>(GetProcAddress(module, "SDL_OpenGamepad"));
+        api.axis = reinterpret_cast<SdlPadApi::GetAxisFn>(GetProcAddress(module, "SDL_GetGamepadAxis"));
+        api.button = reinterpret_cast<SdlPadApi::GetButtonFn>(GetProcAddress(module, "SDL_GetGamepadButton"));
+        const bool ok = api.get_gamepads && api.free && api.open && api.axis && api.button;
+        if (!ok) {
+            api = SdlPadApi{};
+        }
+        LOG_INFO(Mod, "Pad: SDL3 controller fallback for the F1 camera {}", ok ? "ready" : "missing functions");
+        return api;
+    }();
+    if (sdl.get_gamepads == nullptr) {
+        return false;
+    }
+    static void* gamepad = nullptr;
+    static u32 gamepad_id = 0;
+    static u64 looked_ms = 0;
+    const u64 now = GetTickCount64();
+    if (gamepad == nullptr || now - looked_ms > 5'000) {
+        looked_ms = now;
+        int count = 0;
+        u32* ids = sdl.get_gamepads(&count);
+        const u32 first = ids != nullptr && count > 0 ? ids[0] : 0;
+        if (ids != nullptr) {
+            sdl.free(ids);
+        }
+        if (first == 0) {
+            gamepad = nullptr;
+            return false;
+        }
+        if (gamepad == nullptr || first != gamepad_id) {
+            gamepad = sdl.open(first); // a second open of the same pad: SDL counts it
+            gamepad_id = first;
+            LOG_INFO(Mod, "Pad: SDL3 controller {} {} for the F1 camera", first,
+                     gamepad != nullptr ? "opened" : "could not be opened");
+        }
+    }
+    if (gamepad == nullptr) {
+        return false;
+    }
+    // SDL_GamepadButton: 0 south, 2 west, 3 north, 7/8 sticks, 9/10 shoulders, 11-14 d-pad up,
+    // down, left, right. SDL_GamepadAxis: 0-3 sticks (y down positive), 4/5 triggers (0..32767).
+    const auto pressed = [&](int b) { return sdl.button(gamepad, b); };
+    u32 buttons = 0;
+    buttons |= pressed(11) ? PadUp : 0;
+    buttons |= pressed(12) ? PadDown : 0;
+    buttons |= pressed(13) ? PadLeft : 0;
+    buttons |= pressed(14) ? PadRight : 0;
+    buttons |= pressed(7) ? PadL3 : 0;
+    buttons |= pressed(8) ? PadR3 : 0;
+    buttons |= pressed(9) ? PadL1 : 0;
+    buttons |= pressed(10) ? PadR1 : 0;
+    buttons |= pressed(0) ? PadCross : 0;
+    buttons |= pressed(2) ? PadSquare : 0;
+    buttons |= pressed(3) ? PadTriangle : 0;
+    const auto axis = [&](int a) { return static_cast<float>(sdl.axis(gamepad, a)) / 32767.0f; };
+    ApplyCinePadLocked(buttons, StickAxis(axis(0)), StickAxis(axis(1)), StickAxis(axis(2)),
+                       StickAxis(axis(3)), std::clamp(axis(4), 0.0f, 1.0f),
+                       std::clamp(axis(5), 0.0f, 1.0f), "SDL3");
+    return true;
+}
+
 struct XiGamepad {
     WORD buttons;
     BYTE left_trigger, right_trigger;
@@ -903,13 +1020,7 @@ struct XiState {
 };
 using XInputGetStateFn = DWORD(WINAPI*)(DWORD user, XiState* state);
 
-float XiAxis(SHORT value) {
-    const float v = static_cast<float>(value) / 32767.0f;
-    constexpr float Dead = 0.15f;
-    return std::abs(v) < Dead ? 0.0f : std::clamp((v - std::copysign(Dead, v)) / (1.0f - Dead), -1.0f, 1.0f);
-}
-
-void PollXInputPadLocked() {
+bool PollXInputPadLocked() {
     static XInputGetStateFn get_state = [] {
         for (const char* dll : {"xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"}) {
             if (HMODULE module = LoadLibraryA(dll)) {
@@ -919,11 +1030,11 @@ void PollXInputPadLocked() {
                 }
             }
         }
-        LOG_WARNING(Mod, "Pad: no XInput - the F1 camera has no controller fallback");
+        LOG_WARNING(Mod, "Pad: no XInput - the F1 camera has no XInput fallback");
         return static_cast<XInputGetStateFn>(nullptr);
     }();
     if (get_state == nullptr) {
-        return;
+        return false;
     }
     XiState state{};
     bool found = false;
@@ -931,7 +1042,7 @@ void PollXInputPadLocked() {
         found = get_state(user, &state) == ERROR_SUCCESS;
     }
     if (!found) {
-        return;
+        return false;
     }
     const WORD xb = state.pad.buttons;
     u32 buttons = 0;
@@ -946,27 +1057,12 @@ void PollXInputPadLocked() {
     buttons |= (xb & 0x1000) ? PadCross : 0;
     buttons |= (xb & 0x4000) ? PadSquare : 0;
     buttons |= (xb & 0x8000) ? PadTriangle : 0;
-    const u32 pressed = buttons & ~cine_pad.last_buttons;
-    cine_pad.last_buttons = buttons;
-    if ((buttons & (PadL3 | PadR3)) == (PadL3 | PadR3) && (pressed & (PadL3 | PadR3)) != 0) {
-        const bool enabled = !cine_state.enabled;
-        cine_state = CinematicInput{};
-        cine_state.enabled = enabled;
-        LOG_INFO(Debug, "BBSC cinematic camera: {} (L3 + R3, XInput)", enabled ? "on" : "off");
-    }
-    if (!cine_state.enabled) {
-        return;
-    }
-    cine_pad.buttons = buttons;
-    cine_pad.lx = XiAxis(state.pad.lx);
-    cine_pad.ly = -XiAxis(state.pad.ly); // the PS4 pad's y grows downwards
-    cine_pad.rx = XiAxis(state.pad.rx);
-    cine_pad.ry = -XiAxis(state.pad.ry);
-    cine_pad.l2 = static_cast<float>(state.pad.left_trigger) / 255.0f;
-    cine_pad.r2 = static_cast<float>(state.pad.right_trigger) / 255.0f;
-    cine_pad.speed_steps += ((pressed & PadUp) ? 1 : 0) - ((pressed & PadDown) ? 1 : 0);
-    cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
-    cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
+    const auto axis = [](SHORT v) { return StickAxis(static_cast<float>(v) / 32767.0f); };
+    // XInput's y grows upwards.
+    ApplyCinePadLocked(buttons, axis(state.pad.lx), -axis(state.pad.ly), axis(state.pad.rx),
+                       -axis(state.pad.ry), static_cast<float>(state.pad.left_trigger) / 255.0f,
+                       static_cast<float>(state.pad.right_trigger) / 255.0f, "XInput");
+    return true;
 }
 
 bool CineKeyPressed(int key, bool down) {
@@ -989,8 +1085,9 @@ CinematicInput TakeCinematicInput() {
     }
     const u64 tick = GetTickCount64();
     const bool game_reads_pad = tick - pad_read_last_ms.load() < 500;
+    static const char* pad_source = "none";
     if (!game_reads_pad) {
-        PollXInputPadLocked();
+        pad_source = PollSdlPadLocked() ? "SDL3" : PollXInputPadLocked() ? "XInput" : "no controller found";
     }
     static bool was_enabled = false;
     if (cine_state.enabled && !was_enabled) {
@@ -998,7 +1095,7 @@ CinematicInput TakeCinematicInput() {
         LOG_INFO(Debug, "BBSC cinematic camera: controller - {} game pad read(s) so far, the last {} "
                         "- {}",
                  pad_reads.load(), last == 0 ? std::string{"never"} : fmt::format("{} ms ago", tick - last),
-                 game_reads_pad ? "the game's pad" : "XInput fallback");
+                 game_reads_pad ? "the game's pad" : pad_source);
     }
     was_enabled = cine_state.enabled;
     if (!cine_state.enabled) {
