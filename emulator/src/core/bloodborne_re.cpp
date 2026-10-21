@@ -14928,7 +14928,7 @@ std::vector<u32> BbscInventoryCodes(u64 inventory) {
 bool BbscGemIsRune(u32 gem) {
     static std::vector<u64> tables;
     if (tables.empty()) {
-        tables = FindBbscKitParamTables("GEM_GEN_PARAM_ST", 500, 0);
+        tables = FindBbscParamTables("GEM_GEN_PARAM_ST", 500, 0);
     }
     for (const u64 table : tables) {
         if (const u64 row = BbscParamRow(table, gem, BbscGemGenRowSize)) {
@@ -15029,7 +15029,7 @@ void TickBbscGearGifts() {
     // In a session too (live), but not in a boss fight or just after a kill: the one item popup that
     // stayed on a guest's screen came with a boss reward (2026-10-11).
     const s32 state = GetSessionState();
-    const bool boss_time = BossFightActive() || BbscHostBossFightRecent(10'000) ||
+    const bool boss_time = BossFightActive() ||
                            (bbsc_boss_killed_ms != 0 && now - bbsc_boss_killed_ms < 30'000);
     const bool ready = (state == 0 || state == 6) && !boss_time && GetLocalPlayerType() != 2 &&
                        ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) == 0 &&
@@ -15063,7 +15063,7 @@ void TickBbscGearGifts() {
         return;
     }
     if (g.saved_rows.empty()) {
-        for (const u64 table : FindBbscKitParamTables("ITEMLOT_PARAM_ST", 1000, 0)) {
+        for (const u64 table : FindBbscParamTables("ITEMLOT_PARAM_ST", 1000, 0)) {
             if (const u64 row = BbscParamRow(table, BbscGearLot, BbscItemLotRowSize)) {
                 std::array<u8, BbscItemLotRowSize> bytes{};
                 std::memcpy(bytes.data(), reinterpret_cast<const void*>(row), bytes.size());
