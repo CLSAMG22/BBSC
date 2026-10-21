@@ -15085,7 +15085,9 @@ void TickBbscGearGifts() {
     for (const auto& [row, bytes] : g.saved_rows) {
         std::memcpy(reinterpret_cast<void*>(row), bytes.data(), bytes.size());
         WriteValue<s32>(row, 0x00, static_cast<s32>(id));   // lotItemId01
-        WriteValue<s32>(row, 0x20, rune ? 8 : 1);            // lotItemCategory01: gem / weapon
+        // lotItemCategory01: 8 a gem, 0 a weapon (ItemLotParam: lot 29000 gives weapon 18100000 as
+        // category 0; 1 gave nothing, 2026-10-21 22:48: 0 of 4 weapons arrived, 6 of 6 runes did).
+        WriteValue<s32>(row, 0x20, rune ? 8 : 0);
         WriteValue<u16>(row, 0x40, 100);                     // lotItemBasePoint01
         WriteValue<s32>(row, 0x60, -1);                      // getItemFlagId01
         WriteValue<s32>(row, 0x80, -1);                      // getItemFlagId
