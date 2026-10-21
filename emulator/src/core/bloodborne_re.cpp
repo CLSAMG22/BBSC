@@ -8101,6 +8101,46 @@ constexpr u32 DeathTextEventId = 0xFFA;
 s32 bbsc_echoes_at_death = -1;
 bool bbsc_kept_death_this_load = false; // see BbscRepeatDeathMs
 
+// Where the bloodstain goes (2026-10-21, the user: "where are Eric's echoes from the death? we
+// can't find it"). A guest's stain is placed at the forced summon placement (global+0x14F0 map,
+// +0x1500 position), not where it died: the 15:53 death in map 0x18020000 left its 19150 echoes in
+// the Hunter's Dream at the spot of the follow warp 40 minutes before, and the wipe at Cainhurst
+// left 7994 at the host's lamp. The living player's spot is noted every second (one from just
+// before the death, not a body in mid-fall), and the drop is given that spot.
+struct BbscDeathSpot {
+    std::array<float, 3> position{};
+    u32 map = 0;
+    s64 ms = 0;
+};
+BbscDeathSpot bbsc_alive_spot; // refreshed every second while alive, not loading
+BbscDeathSpot bbsc_death_spot; // the alive spot when the HP hit zero
+
+void TickBbscDeathSpot() {
+    static s64 last_ms = 0;
+    static bool was_dead = false;
+    const s64 now = SteadyNowMs();
+    const u64 player = GetLocalPlayerCharacter();
+    const s32 hp = ReadablePointer(player, 0x3B8) ? GetCharacterHp(player) : -1;
+    const u64 global = GetGlobalState();
+    const bool loading = !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0;
+    if (hp == 0 && !was_dead) {
+        was_dead = true;
+        bbsc_death_spot = now - bbsc_alive_spot.ms <= 3'000 ? bbsc_alive_spot : BbscDeathSpot{};
+    } else if (hp > 0) {
+        was_dead = false;
+    }
+    if (hp <= 0 || loading || now - last_ms < 1'000) {
+        return;
+    }
+    last_ms = now;
+    const u32 map = GetCurrentPackedMap();
+    const auto here = ReadCharacterTransform(player);
+    if (!here.has_value() || !IsUsablePackedMap(map)) {
+        return;
+    }
+    bbsc_alive_spot = {{here->position[0], here->position[1], here->position[2]}, map, now};
+}
+
 // Code review 2026-09-23 A1 (CONFIRMED from the decompile of 0x013824C0): PartyGhostDeath_2 starts
 // by deleting the objects at global+0x1698 and +0x16B8 and zeroing +0x1690 / +0x16B0. Those are
 // the own-world save snapshot 0x0131E5C0 builds when a guest is summoned, which the save writer
@@ -8319,8 +8359,30 @@ bool BbscApplyDeathPenalty(std::string_view why) {
     if (guest) {
         WriteValue<u8>(global, 0x1592, 1);
     }
+    // The spot of the death in the forced placement for the drop, then the placement put back.
+    const BbscDeathSpot spot = bbsc_death_spot;
+    bbsc_death_spot = {};
+    const bool use_spot = spot.ms != 0 && IsUsablePackedMap(spot.map) &&
+                          ReadablePointer(global, 0x1520) &&
+                          HasMemoryAccess(global + 0x14F0, 0x20, MemoryProt::CpuWrite);
+    u32 saved_map = 0;
+    std::array<float, 3> saved_position{};
+    if (use_spot) {
+        saved_map = ReadValue<u32>(global, 0x14F0);
+        for (size_t i = 0; i < 3; ++i) {
+            saved_position[i] = ReadValue<float>(global, 0x1500 + i * 4);
+            WriteValue<float>(global, 0x1500 + i * 4, spot.position[i]);
+        }
+        WriteValue<u32>(global, 0x14F0, spot.map);
+    }
     using DropBloodstain = void PS4_SYSV_ABI (*)(u64 stain_root, u64 chr, u8 drop);
     reinterpret_cast<DropBloodstain>(image_base + DropBloodstainOffset)(stain_root, player, 1);
+    if (use_spot) {
+        WriteValue<u32>(global, 0x14F0, saved_map);
+        for (size_t i = 0; i < 3; ++i) {
+            WriteValue<float>(global, 0x1500 + i * 4, saved_position[i]);
+        }
+    }
     if (guest) {
         WriteValue<u8>(global, 0x1592, 0);
     }
@@ -8352,6 +8414,14 @@ bool BbscApplyDeathPenalty(std::string_view why) {
              why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
     BBSC_TIMELINE("DEATH", "death penalty ({}): dropped {} echoes (now {}, stain holds {}, type {}, gate {})",
              why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
+    if (ReadablePointer(record, 0x40)) {
+        LOG_INFO(Debug, "BBSC bloodstain: placed in map {:#x} at ({:.1f}, {:.1f}, {:.1f}); died in map "
+                        "{:#x} at ({:.1f}, {:.1f}, {:.1f}){}",
+                 ReadValue<u32>(record, 0x3C), ReadValue<float>(record, 0x18),
+                 ReadValue<float>(record, 0x1C), ReadValue<float>(record, 0x20), spot.map,
+                 spot.position[0], spot.position[1], spot.position[2],
+                 use_spot ? "" : " (no spot noted - the game's own placement)");
+    }
     return true;
 }
 
@@ -16076,6 +16146,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscSessionEnd();
         TickBbscStrayForcedWarp();
         TickBbscGuestBlank();
+        TickBbscDeathSpot();
         TickBbscDeadWatchdog();
         TickBbscDeathCurtain();
         TickBbscLoadingScreenClose();
