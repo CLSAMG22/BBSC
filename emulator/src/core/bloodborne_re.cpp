@@ -7090,6 +7090,7 @@ struct BbscLoadCoverState {
     bool own_screen = false;       // BBSC opened the loading screen (between / after the loads)
     s64 started_ms = 0;
     s64 load_over_ms = 0;          // the game's loading screen closed and no load is running
+    s64 real_load_over_ms = 0;     // no load running (global+8), whatever the loading screen says
     s64 no_session_since_ms = 0;
     std::string why;
 };
@@ -7187,7 +7188,38 @@ void TickBbscLoadCover() {
     // guest is placed).
     if (const u64 menu = ReadValue<u64>(image_base + MenuManPointerOffset, 0);
         ReadablePointer(menu, 0x810)) {
-        if (ReadValue<s32>(menu, 0x804) != 0) {
+        // 2026-10-22 01:15 (the user: "a loading, see in game, another loading"): between a join's
+        // summon load and its second reload the game was in view for 8 s. The loading screen's
+        // state stayed at 3 (close asked) after the first load, so this returned before opening a
+        // screen or darkening the plate. The state is the menu script's (see
+        // KeepClosingBbscLoadingScreen: 0 written while shown kept a screen up), so it is left
+        // alone: with no load running for 1.5 s the plate is darkened as after a load.
+        const u64 cover_global = GetGlobalState();
+        const bool real_load =
+            ReadablePointer(cover_global, 0x10) && ReadValue<u8>(cover_global, 0x08) != 0;
+        if (real_load) {
+            bbsc_load_cover.real_load_over_ms = 0;
+        } else if (bbsc_load_cover.real_load_over_ms == 0) {
+            bbsc_load_cover.real_load_over_ms = now;
+        }
+        const s32 screen_state = ReadValue<s32>(menu, 0x804);
+        const bool screen_left_over = screen_state != 0 && !real_load &&
+                                      !bbsc_load_cover.own_screen &&
+                                      bbsc_load_cover.game_screen_seen &&
+                                      now - bbsc_load_cover.real_load_over_ms >= 1'500 &&
+                                      !BbscCurtainActive();
+        if (screen_left_over) {
+            static s64 logged_for = 0;
+            if (logged_for != bbsc_load_cover.started_ms) {
+                logged_for = bbsc_load_cover.started_ms;
+                LOG_INFO(Debug, "BBSC load cover: the loading screen stayed in state {} after the "
+                                "load ({}) - the plate stays black",
+                         screen_state, bbsc_load_cover.why);
+                BBSC_TIMELINE("LOAD", "load cover: loading screen left in state {} after the load "
+                                      "({}) - plate kept black",
+                              screen_state, bbsc_load_cover.why);
+            }
+        } else if (screen_state != 0) {
             if (!bbsc_load_cover.game_screen_seen) {
                 bbsc_load_cover.game_screen_seen = true;
                 LOG_INFO(Debug, "BBSC load cover: the game's loading screen is up (kind {})",
@@ -7197,7 +7229,7 @@ void TickBbscLoadCover() {
         }
         if (!bbsc_load_cover.game_screen_seen) {
             WriteValue<s32>(menu, 0x808, 2);
-        } else if (!BbscCurtainActive()) {
+        } else if (!BbscCurtainActive() && !screen_left_over) {
             // 2026-10-05 (tester): "it shows me pop in for a second and then it shows me the load
             // screen and then it shows me" - between the summon load and the join's second reload
             // (and after a load, until the guest is placed) the black plate did not hide the map.
