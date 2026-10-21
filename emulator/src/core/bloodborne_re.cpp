@@ -3493,6 +3493,7 @@ bool BbscRejoinV7Enabled() {
 //   WorldChrMan       [0x0553E878]+0x30 count, +0x38 entries (0x38 each, +0 PlayerIns*),
 //                     PlayerIns+0x3D8 member id. Member-id compare = 0x00CA1C70.
 constexpr u64 PlayerSlotManagerPointerOffset = 0x0553B130;
+s64 bbsc_reinsert_ms = 0; // last re-insert of a remote player, see TickBbscReinsertVisible
 constexpr u64 MultiPlayManPointerOffset = 0x05540230;
 constexpr u64 MultiPlayerInsSetStateOffset = 0x01E52560;
 // Ghidra name FUN_01ca1c70 = offset 0x00CA1C70 (Ghidra base 0x01000000). 0x01CA1C70 is mid-function.
@@ -3837,6 +3838,9 @@ void TickBbscReinsertV8() {
     }
     LOG_INFO(Debug, "BBSC reinsert v8: restarted {} remote player insert task(s) at FirstSyncWait",
              restarted);
+    if (restarted != 0) {
+        bbsc_reinsert_ms = SteadyNowMs();
+    }
     LogBbscSessionShape("v8 restarted", true);
 }
 
@@ -14729,6 +14733,62 @@ bool BbscEraseLocalEffect(s32 id) {
     return BbscLocalEffectNode(id) == 0;
 }
 
+// A guest's copy invisible on the host after a wipe (2026-10-20 01:01: "reinsert v8: restarted 1
+// remote player insert task(s)", 2 in the world, but the guest was not drawn; also 2026-10-19 14:50,
+// only a transparent name at the boss entrance). TickBbscRemoteRevive only handles a copy that still
+// carries the death flag; a re-inserted copy has none. For BbscReinsertWatchMs after a re-insert,
+// a living remote co-op copy with opacity (chr+0x208) at 0 or drawing off gets the same visibility
+// steps as that revive, once, and it is logged.
+constexpr s64 BbscReinsertWatchMs = 30'000;
+void TickBbscReinsertVisible() {
+    static s64 last_ms = 0;
+    static std::vector<u64> fixed;
+    const s64 now = SteadyNowMs();
+    if (bbsc_reinsert_ms == 0 || image_base == 0 || now - last_ms < 500) {
+        return;
+    }
+    last_ms = now;
+    if (now - bbsc_reinsert_ms > BbscReinsertWatchMs) {
+        bbsc_reinsert_ms = 0;
+        fixed.clear();
+        return;
+    }
+    const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
+    if (!ReadablePointer(world_chr, 0x70)) {
+        return;
+    }
+    const u64 local = ReadValue<u64>(world_chr, 0x60);
+    const s32 count = ReadValue<s32>(world_chr, 0x30);
+    const u64 entries = ReadValue<u64>(world_chr, 0x38);
+    if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
+        return;
+    }
+    for (s32 i = 0; i < count; ++i) {
+        const u64 chr = ReadValue<u64>(entries, static_cast<size_t>(i) * 0x38);
+        if (chr == 0 || chr == local || !ReadablePointer(chr, 0x410) ||
+            GetCharacterType(chr) != 1 || GetCharacterHp(chr) <= 0 ||
+            std::ranges::find(fixed, chr) != fixed.end()) {
+            continue;
+        }
+        const u64 modules = ReadValue<u64>(chr, 0x3B0);
+        const u64 draw = ReadablePointer(modules, 0x60) ? ReadValue<u64>(modules, 0x58) : 0;
+        const u64 draw_state = ReadablePointer(draw, 0x30) ? ReadValue<u64>(draw, 0x28) : 0;
+        const float opacity = ReadValue<float>(chr, 0x208);
+        const int drawing = ReadablePointer(draw_state, 0x10) ? ReadValue<u8>(draw_state, 0x0C) : -1;
+        if (opacity > 0.01f && drawing != 0) {
+            continue;
+        }
+        fixed.push_back(chr);
+        WriteValue<u64>(chr, 0x208, 0x3F8000003F800000ull);
+        if (drawing == 0) {
+            WriteValue<u8>(draw_state, 0x0C, 1);
+        }
+        LOG_INFO(Debug, "BBSC reinsert visible: the re-inserted guest was not drawn (opacity {:.2f}, "
+                        "drawing {}) {} ms after the re-insert - made visible",
+                 opacity, drawing, now - bbsc_reinsert_ms);
+    }
+}
+
 // Test 2026-10-05 14:42: with 9020 on both players, the host world found the invader's sign
 // (SummonType 2), claimed it, opened its room and signalled the invader - who never joined
 // (no JoinSession_Black). The invader carried 9020 too. HYPOTHESIS: a player whose own world is
@@ -16082,6 +16142,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
+        TickBbscReinsertVisible();
         CaptureBbscGuestLoot();
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
