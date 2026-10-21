@@ -309,7 +309,8 @@ constexpr auto Sites = std::to_array<TraceSite>({
     {"OnSummonResult.TimeOut", 0x01384520, TraceKind::MatchingSignal, ReturnAndPadding, 16},
     {"OnSummonResult.OtherError", 0x01384530, TraceKind::MatchingEvent, StandardRbxPrologue, 5},
     {"ForceSummonFail", 0x01384990, TraceKind::MatchingSignal, ReturnAndPadding, 16},
-    {"ForceSummonSuccess", 0x013849A0, TraceKind::MatchingEvent, StandardR15Prologue, 6},
+    // 0x013849A0 was traced here as "ForceSummonSuccess", but the game registers it as BlockClear2
+    // (ForceSummonSuccess is 0x01384990); its entry is BBSC's BlockClear2 hook now.
 
     {"CSMultiPlayMan.StageUidChanged.Policy",
      MultiPlayStageUidPolicyOffset,
@@ -6956,6 +6957,7 @@ struct BbscCurtainState {
 };
 BbscCurtainState bbsc_curtain;
 bool BbscRespawnInPlace(std::string_view why); // below
+size_t BbscCureStatusAfterRevive(std::string* ids = nullptr); // see "The X lock after a revive in place"
 void BbscRestockFromStorage(std::string_view why); // below
 s64 bbsc_inplace_respawn_ms = 0; // last BbscRespawnInPlace revive
 
@@ -7533,6 +7535,16 @@ bool BbscRespawnInPlace(std::string_view why) {
         using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
         reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
                                                                  image_base + 0x04992C40);
+    }
+
+    // Timed effects off before the HP refill, as a normal death's reload would: an effect that lowers
+    // the maximum HP would otherwise cap the refill (the user, 2026-10-21: the host died of poison and
+    // came back with half its life).
+    std::string cured_ids;
+    if (const size_t cured = BbscCureStatusAfterRevive(&cured_ids); cured != 0) {
+        LOG_INFO(Debug, "BBSC respawn in place ({}): {} timed effect(s) taken off before the HP refill, "
+                        "as the reload of a normal death would [{}]",
+                 why, cured, cured_ids);
     }
 
     // 4. state reset, HP, death flags, drawing
@@ -8619,6 +8631,25 @@ void TickBbscSpectate() {
 constexpr u64 BlockClear2FirstOffset = 0x01385470; // BlockClear2_1
 constexpr u64 BlockClear2LeaveOffset = 0x013858A0; // BlockClear2_3Leave
 constexpr u64 BlockClear2HomeOffset = 0x01385930;  // BlockClear2_3
+constexpr u64 BlockClear2Offset = 0x013849A0;      // BlockClear2 (rewards, then BlockClear2_1)
+// A guest's BlockClear2 with no boss fight anywhere (2026-10-19, guest log 23:26:47-23:27:16): the
+// guest followed the host into an area whose boss the host had killed long before. Writing the
+// host's flags there made the area's boss event run the whole clear chain on the guest - a "prey"
+// banner and the after-boss locks, X did nothing until the game was restarted. So on a guest it
+// only runs when its own boss bar was up in the last BbscBossClearFightMs: a guest in a real kill
+// always has it. The host's bar does not count (test 2026-10-19 23:44: the host was in Darkbeast
+// Paarl's fight, the guest had no bar of its own and still got Paarl's clear chain and reward,
+// though nobody killed Paarl), and a "boss killed" word from the host would come too late - the
+// guest's BlockClear2 ran before the host's at the 15:13 kill.
+constexpr s64 BbscBossClearFightMs = 60'000;
+u8 bbsc_boss_clear_skip = 0;
+bool BbscHostBossFightRecent(s64 within_ms); // the host's boss bar, see "Boss name line"
+// What a real boss kill leaves on the guest, logged for BbscBossProbeMs after BlockClear2_1 (the X
+// button stays dead after a boss even with TickBbscBossUnlock; the cause is not known yet). The
+// clear gives the guest SpEffect 4680 (stateInfo 119): if it is still on, it is taken off.
+constexpr s64 BbscBossProbeMs = 30'000;
+constexpr s32 BbscBossClearEffectId = 4680;
+s64 bbsc_boss_probe_until_ms = 0;
 u8 bbsc_boss_leave_skip = 0;
 u8 bbsc_boss_home_skip = 0;
 // After a guest skipped BlockClear2_3: clear its locks for this long, see TickBbscBossUnlock.
@@ -8696,6 +8727,20 @@ void PS4_SYSV_ABI BbscBossClearHook(u64 tag, const GuestRegisterSnapshot* regist
     if (registers == nullptr || !BbscSessionAlive()) {
         return;
     }
+    if (tag == 3) {
+        const s64 now = SteadyNowMs();
+        const bool own_bar = BossFightActive() || (bbsc_boss_bar_seen_ms != 0 &&
+                                                   now - bbsc_boss_bar_seen_ms <= BbscBossClearFightMs);
+        if (LocalPlayerType() == 1 && !own_bar) {
+            bbsc_boss_clear_skip = 1;
+            LOG_INFO(Debug, "BBSC boss clear: BlockClear2 on the guest without its own boss bar in "
+                            "the last {} s (a boss flag from the host's world?) - skipped (host's "
+                            "bar {})",
+                     BbscBossClearFightMs / 1'000,
+                     BbscHostBossFightRecent(BbscBossClearFightMs) ? "seen" : "not seen");
+        }
+        return;
+    }
     if (tag == 0) {
         GuardBbscBossClearCoopCount();
         bbsc_boss_killed_ms = SteadyNowMs();
@@ -8703,6 +8748,9 @@ void PS4_SYSV_ABI BbscBossClearHook(u64 tag, const GuestRegisterSnapshot* regist
             bbsc_gate_watch_since_ms = bbsc_boss_killed_ms;
         }
         ArmBbscDeathLockClear();
+        if (LocalPlayerType() == 1) {
+            bbsc_boss_probe_until_ms = bbsc_boss_killed_ms + BbscBossProbeMs;
+        }
         LOG_INFO(Debug, "BBSC boss clear: BlockClear2_1 (player type {}), session kept{}",
                  LocalPlayerType(),
                  bbsc_spectate_active ? " - the spectating player respawns" : "");
@@ -8797,7 +8845,10 @@ void InstallBbscBossClearHooks() {
                              &bbsc_boss_leave_skip) &&
         InstallGuestCodeHook(reinterpret_cast<void*>(image_base + BlockClear2HomeOffset),
                              std::span<const u8>{PushRbxRax}, 2, BbscBossClearHook,
-                             &bbsc_boss_home_skip);
+                             &bbsc_boss_home_skip) &&
+        InstallGuestCodeHook(reinterpret_cast<void*>(image_base + BlockClear2Offset),
+                             std::span<const u8>{PushR15}, 3, BbscBossClearHook,
+                             &bbsc_boss_clear_skip);
     if (!ok) {
         LOG_ERROR(Debug, "BBSC boss clear: failed to hook the BlockClear2 chain");
         return;
@@ -10300,6 +10351,21 @@ void NoteBbscBossRewardEvent(s64 event) {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_GUEST_ITEMS");
     if (!enabled || std::ranges::none_of(BbscBossRewards,
                                          [event](const auto& r) { return r.event == event; })) {
+        return;
+    }
+    // Same rule as the BlockClear2 skip: a guest that had no boss bar of its own did not fight
+    // (test 2026-10-20 00:12: event 12301800 reached the wait right after the guest followed the
+    // host into m23_00, 40 s before anyone fought there, and the guest got that boss's lot).
+    const s64 now = SteadyNowMs();
+    if (!BossFightActive() &&
+        (bbsc_boss_bar_seen_ms == 0 || now - bbsc_boss_bar_seen_ms > BbscBossClearFightMs)) {
+        static s64 skipped_event = -1;
+        if (skipped_event != event) {
+            skipped_event = event;
+            LOG_INFO(Debug, "BBSC boss drop: event {} reached its player-type wait on the guest "
+                            "without its own boss bar in the last {} s - no reward",
+                     event, BbscBossClearFightMs / 1'000);
+        }
         return;
     }
     std::scoped_lock lock{bbsc_boss_reward_mutex};
@@ -12816,6 +12882,12 @@ constexpr s64 BbscHostBossFreshMs = 10'000;
 std::array<char16_t, 160> bbsc_boss_line_text{};
 std::atomic<s32> bbsc_host_boss_id{-1};
 std::atomic<s64> bbsc_host_boss_ms{0};
+std::atomic<s64> bbsc_host_boss_fight_ms{0}; // last host packet with a boss on its bar
+
+bool BbscHostBossFightRecent(s64 within_ms) {
+    const s64 seen = bbsc_host_boss_fight_ms.load();
+    return seen != 0 && SteadyNowMs() - seen <= within_ms;
+}
 const char* BbscBossNameById(s32 id); // see "Discord status"
 
 // The name id on our own boss bar, or -1.
@@ -14729,6 +14801,118 @@ bool BbscEraseLocalEffect(s32 id) {
     return BbscLocalEffectNode(id) == 0;
 }
 
+// The X lock after a revive in place (2026-10-20, the guest's X did nothing after being revived
+// at a boss kill, 09:58 and 15:57). The state snapshot at 15:57:27, while X was locked, had every
+// lock BBSC knows about clear but SpEffect 2 on the guest (stateInfo 52, no duration), which the
+// game puts on a dead player and which a normal death's reload throws away. A revive in place has
+// no reload, so it stayed. It was absent whenever X worked (the Amelia kill at 01:03, the host). For
+// BbscDeathMarkWatchMs after a revive in place, a living local player carrying it has it taken off.
+// Timed effects still on the player at the revive (2026-10-20 17:47: the guest was revived poisoned
+// and went down again; 2026-10-21, the user: the host died of poison and came back with half its
+// life). A normal death's reload throws every timed effect away, so this does too, once, before
+// the HP refill. An effect node's game data is at +0x48: SpEffectParam, effectEndurance (float)
+// at +0x08 and stateInfo at +0x156 (as 0x018C6600 reads it). Taken off: every effect lasting 1 s
+// or more (poison and toxic last 30 s, and buffs and debuffs), and poison (2) and toxic (5) of any
+// length. Permanent ones (-1: equipment, runes, the world, and every SpEffect BBSC adds) and the
+// game's sub-second ones, which it re-adds each frame, stay.
+size_t BbscCureStatusAfterRevive(std::string* ids_out) {
+    const u64 player = GetLocalPlayerCharacter();
+    const u64 effects = ReadablePointer(player, 0x1D0) ? ReadValue<u64>(player, 0x1C8) : 0;
+    if (!ReadablePointer(effects, 0x10)) {
+        return 0;
+    }
+    std::vector<s32> ids;
+    u64 entry = ReadValue<u64>(effects, 0x08);
+    for (int guard = 0; entry != 0 && guard < 256 && ReadablePointer(entry, 0x60); ++guard) {
+        const u64 data = ReadValue<u64>(entry, 0x48);
+        if (ReadablePointer(data, 0x158)) {
+            const u16 state = ReadValue<u16>(data, 0x156);
+            const float endurance = ReadValue<float>(data, 0x08);
+            if (state == 2 || state == 5 || endurance >= 1.0f) {
+                ids.push_back(ReadValue<s32>(entry, 0x40));
+            }
+        }
+        entry = ReadValue<u64>(entry, 0x58);
+    }
+    size_t cured = 0;
+    for (const s32 id : ids) {
+        if (BbscEraseLocalEffect(id)) {
+            ++cured;
+            if (ids_out != nullptr) {
+                *ids_out += fmt::format("{}{}", ids_out->empty() ? "" : " ", id);
+            }
+        }
+    }
+    return cured;
+}
+
+constexpr s32 BbscDeathMarkEffectId = 2;
+constexpr s64 BbscDeathMarkWatchMs = 30'000;
+void TickBbscDeathMarkClear() {
+    static s64 last_ms = 0;
+    static s64 logged_for = 0;
+    const s64 now = SteadyNowMs();
+    if (bbsc_inplace_respawn_ms == 0 || image_base == 0 || now - last_ms < 500 ||
+        now - bbsc_inplace_respawn_ms > BbscDeathMarkWatchMs) {
+        return;
+    }
+    last_ms = now;
+    const u64 player = GetLocalPlayerCharacter();
+    if (player == 0 || GetCharacterHp(player) <= 0 ||
+        BbscLocalEffectNode(BbscDeathMarkEffectId) == 0) {
+        return;
+    }
+    const bool gone = BbscEraseLocalEffect(BbscDeathMarkEffectId);
+    if (logged_for != bbsc_inplace_respawn_ms) {
+        logged_for = bbsc_inplace_respawn_ms;
+        LOG_INFO(Debug, "BBSC revive: SpEffect {} (dead) was still on us {} ms after the revive - "
+                        "taken off ({})",
+                 BbscDeathMarkEffectId, now - bbsc_inplace_respawn_ms, gone ? "gone" : "STILL THERE");
+    }
+}
+
+// See BbscBossProbeMs: once a second after a real boss clear on the guest, which SpEffects it
+// carries and the control flags byte the state diffs showed changing (+0x40: 00 -> 08 at both kills
+// of 2026-10-19), and 4680 taken off if it is there.
+void TickBbscBossClearProbe() {
+    static s64 last_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (bbsc_boss_probe_until_ms == 0 || image_base == 0 || now - last_ms < 1'000) {
+        return;
+    }
+    last_ms = now;
+    if (now > bbsc_boss_probe_until_ms) {
+        bbsc_boss_probe_until_ms = 0;
+        LOG_INFO(Debug, "BBSC boss probe: done");
+        return;
+    }
+    const u64 player = GetLocalPlayerCharacter();
+    if (player == 0) {
+        return;
+    }
+    std::string ids;
+    const u64 effects = ReadablePointer(player, 0x1D0) ? ReadValue<u64>(player, 0x1C8) : 0;
+    u64 entry = ReadablePointer(effects, 0x10) ? ReadValue<u64>(effects, 0x08) : 0;
+    for (int guard = 0; entry != 0 && guard < 64 && ReadablePointer(entry, 0x60); ++guard) {
+        ids += fmt::format("{}{}", ids.empty() ? "" : " ", ReadValue<s32>(entry, 0x40));
+        entry = ReadValue<u64>(entry, 0x58);
+    }
+    const u64 control = ReadValue<u64>(player, 0x58);
+    const u64 flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
+    const int byte40 = ReadablePointer(flags, 0x48) ? ReadValue<u8>(flags, 0x40) : -1;
+    static std::string last_line;
+    const std::string line = fmt::format("SpEffects [{}], control flags +0x40 = {:#04x}", ids, byte40);
+    if (line != last_line) {
+        last_line = line;
+        LOG_INFO(Debug, "BBSC boss probe: {}", line);
+    }
+    if (BbscLocalEffectNode(BbscBossClearEffectId) != 0) {
+        const bool gone = BbscEraseLocalEffect(BbscBossClearEffectId);
+        LOG_INFO(Debug, "BBSC boss probe: SpEffect {} was still on the guest - taken off ({})",
+                 BbscBossClearEffectId, gone ? "gone" : "STILL THERE");
+    }
+}
+
 // Test 2026-10-05 14:42: with 9020 on both players, the host world found the invader's sign
 // (SummonType 2), claimed it, opened its room and signalled the invader - who never joined
 // (no JoinSession_Black). The invader carried 9020 too. HYPOTHESIS: a player whose own world is
@@ -16082,6 +16266,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
+        TickBbscBossClearProbe();
         CaptureBbscGuestLoot();
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
@@ -16097,6 +16282,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         if (BbscSpectateEnabled()) {
             TickBbscRemoteRevive();
             TickBbscDeathLockClear();
+            TickBbscDeathMarkClear();
             TickBbscStateDiff();
             TickBbscJoinTeleport();
         }
@@ -16748,6 +16934,9 @@ bool BbscConnectFirstPlacementFresh() {
 void OnBbscHostBossPacket(std::int32_t boss) {
     bbsc_host_boss_id = boss;
     bbsc_host_boss_ms = SteadyNowMs();
+    if (boss != -1) {
+        bbsc_host_boss_fight_ms = bbsc_host_boss_ms.load();
+    }
 }
 
 void OnBbscProgressPacket(const std::uint32_t* flags, std::size_t count) {
