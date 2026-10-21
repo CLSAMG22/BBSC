@@ -14782,6 +14782,44 @@ void SendBbscCommunionPacket(u8 kind, const std::vector<u32>& ids) {
         packet.data(), static_cast<u32>(packet.size()));
 }
 
+// Every used slot of an inventory, logged (2026-10-21, the user: the chalice should also sync weapons
+// and runes). Weapons and runes are unique copies (an upgrade level, gem slots, a generated rune),
+// not stacks like the key items, and their slot keys are not known yet: this shows them. Slot
+// entry: +0 item key (goods: 0xB0000000 | id), +4, +8 count, +12. The hash entries at [inv+0x78]
+// give each used slot's lookup code (goods: 0x40000000 | id).
+void LogBbscInventoryDump(u64 inventory, std::string_view name) {
+    if (inventory == 0) {
+        return;
+    }
+    const u64 entries = ReadValue<u64>(inventory, 0x78);
+    std::string line;
+    size_t used = 0;
+    for (u32 index = 0; index < 4096 && ReadablePointer(entries + index * 8ull, 8); ++index) {
+        const u32 code = ReadValue<u32>(entries, index * 8ull);
+        const u32 info = ReadValue<u32>(entries, index * 8ull + 4);
+        if (code == 0 || code == 0xFFFFFFFFu) {
+            continue;
+        }
+        const u64 at = BbscInventorySlotEntry(inventory, info & 0xFFF);
+        if (at == 0 || ReadValue<u32>(at, 0) == 0) {
+            continue;
+        }
+        line += fmt::format(" {:08x}>{:08x}/{:08x}/{}/{:08x}", code, ReadValue<u32>(at, 0),
+                            ReadValue<u32>(at, 4), ReadValue<s32>(at, 8), ReadValue<u32>(at, 12));
+        if (++used % 40 == 0) {
+            LOG_INFO(Debug, "BBSC inventory dump ({}):{}", name, line);
+            line.clear();
+        }
+    }
+    if (!line.empty()) {
+        LOG_INFO(Debug, "BBSC inventory dump ({}):{}", name, line);
+    }
+    LOG_INFO(Debug, "BBSC inventory dump ({}): {} used slot(s); fields code>key/+4/count/+12, split {}, "
+                    "header +0x20 {:08x} +0x24 {:08x} +0x28 {:08x}",
+             name, used, ReadValue<u32>(inventory, 0x24), ReadValue<u32>(inventory, 0x20),
+             ReadValue<u32>(inventory, 0x24), ReadValue<u32>(inventory, 0x28));
+}
+
 // The key items we hold, carried or in storage.
 std::vector<u32> BbscHeldKeyItems() {
     const u64 carried = BbscCarriedInventory();
@@ -14964,6 +15002,8 @@ void TickBbscCommunion() {
             for (const u32 flag : BbscProgressFlags) {
                 boss_flags += BbscEventFlag(flag) ? 1 : 0;
             }
+            LogBbscInventoryDump(BbscCarriedInventory(), "carried");
+            LogBbscInventoryDump(BbscStorageInventory(), "storage");
             LOG_INFO(Debug, "BBSC communion bell: rung outside a guest's session (state {}) - a guest "
                             "ringing it in our world would get our {} key item(s) [{}] and our "
                             "progress ({} of {} boss flags set here)",
