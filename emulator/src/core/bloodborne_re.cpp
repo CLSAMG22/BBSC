@@ -14992,19 +14992,29 @@ struct BbscGearGifts {
 };
 BbscGearGifts bbsc_gear_gifts;
 
-void StartBbscGearGifts() {
+// Queues the weapons and runes of the last chalice we lack. Live, right after the drink (the user:
+// "all should be live"; the game's item pickup already gives guests their drops in a session),
+// and again at the trip home for anything the session did not keep.
+void QueueBbscGearGifts(std::string_view when) {
     if (bbsc_communion_gear.empty()) {
         return;
     }
-    bbsc_gear_gifts = {};
+    // A queue still running keeps its saved lot rows: only the items change.
+    bbsc_gear_gifts.queue.clear();
+    bbsc_gear_gifts.awarded.clear();
     for (const u32 tagged : bbsc_communion_gear) {
         if (!BbscHasGear(tagged)) {
             bbsc_gear_gifts.queue.push_back(tagged);
         }
     }
-    LOG_INFO(Debug, "BBSC communion bell: home again - {} of the host's {} weapon(s) and rune(s) are "
-                    "new to us, given one by one",
-             bbsc_gear_gifts.queue.size(), bbsc_communion_gear.size());
+    bbsc_gear_gifts.next_ms = SteadyNowMs() + 2'000; // after the chalice's own notice
+    LOG_INFO(Debug, "BBSC communion bell: {} - {} of the host's {} weapon(s) and rune(s) are new to "
+                    "us, given one by one",
+             when, bbsc_gear_gifts.queue.size(), bbsc_communion_gear.size());
+}
+
+void StartBbscGearGifts() {
+    QueueBbscGearGifts("home again");
     bbsc_communion_gear.clear();
 }
 
@@ -15016,8 +15026,14 @@ void TickBbscGearGifts() {
     }
     const u64 global = GetGlobalState();
     const u64 item_man = ReadValue<u64>(image_base + ItemManPointerOffset, 0);
-    const bool ready = GetSessionState() == 0 && ReadablePointer(global, 0x10) &&
-                       ReadValue<u8>(global, 0x08) == 0 && ReadablePointer(item_man, 0x10) &&
+    // In a session too (live), but not in a boss fight or just after a kill: the one item popup that
+    // stayed on a guest's screen came with a boss reward (2026-10-11).
+    const s32 state = GetSessionState();
+    const bool boss_time = BossFightActive() || BbscHostBossFightRecent(10'000) ||
+                           (bbsc_boss_killed_ms != 0 && now - bbsc_boss_killed_ms < 30'000);
+    const bool ready = (state == 0 || state == 6) && !boss_time && GetLocalPlayerType() != 2 &&
+                       ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) == 0 &&
+                       ReadablePointer(item_man, 0x10) &&
                        GetCharacterHp(GetLocalPlayerCharacter()) > 0;
     if (!ready) {
         g.next_ms = now + 1'000;
@@ -15302,17 +15318,18 @@ void TickBbscCommunion() {
     }
     WriteBbscPendingProgress(); // the progress collected so far is on disk now, crash or not
     SendBbscCommunionPacket(3, {static_cast<u32>(given)}); // the host shows its completion
+    QueueBbscGearGifts("live, after the drink");
     LOG_INFO(Debug, "BBSC communion bell: the host has {} key item(s), {} new to us now given; "
-                    "{} weapon(s) and rune(s), lamps, world and boss progress and NPC states come "
-                    "at the next trip home",
+                    "{} weapon(s) and rune(s) follow now; lamps, world and boss progress and NPC "
+                    "states join our own world at the next trip home",
              got.size() - bbsc_communion_gear.size(), given, bbsc_communion_gear.size());
     const std::string text =
         bbsc_communion_gear.empty()
             ? fmt::format("Communion complete: {} key item(s) received.\nThe host's world "
                           "joins yours\non your return.",
                           given)
-            : fmt::format("Communion complete: {} key item(s) received.\nThe host's world, "
-                          "weapons and runes\njoin yours on your return.",
+            : fmt::format("Communion complete: {} key item(s) received.\nWeapons and runes follow;\n"
+                          "the host's world joins yours on your return.",
                           given);
     static std::u16string announce;
     announce.assign(text.begin(), text.end());
