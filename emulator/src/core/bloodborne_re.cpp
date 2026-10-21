@@ -6978,10 +6978,20 @@ bool BbscCurtainActive() {
 }
 
 // The respawn lines wait for the screen to come back.
+// A notice due while the load cover is up waits for it (see EndBbscLoadCover).
+bool BbscLoadCoverActive();
+const char16_t* bbsc_cover_notice = nullptr;
+std::string_view bbsc_cover_notice_what;
+
 void BbscAnnounceAfterCurtain(const char16_t* text, std::string_view what) {
     if (BbscCurtainActive()) {
         bbsc_curtain.notice = text;
         bbsc_curtain.notice_what = what;
+        return;
+    }
+    if (BbscLoadCoverActive()) {
+        bbsc_cover_notice = text;
+        bbsc_cover_notice_what = what;
         return;
     }
     BbscAnnounce(text, what);
@@ -7129,11 +7139,19 @@ void StartBbscLoadCover(std::string_view why) {
     BBSC_TIMELINE("LOAD", "load cover: fading out ({})", why);
 }
 
+bool BbscLoadCoverActive() {
+    return bbsc_load_cover.active;
+}
+
 void EndBbscLoadCover(std::string_view how) {
     if (!bbsc_load_cover.active) {
         return;
     }
     bbsc_load_cover.active = false;
+    if (bbsc_cover_notice != nullptr) {
+        BbscAnnounce(bbsc_cover_notice, bbsc_cover_notice_what);
+        bbsc_cover_notice = nullptr;
+    }
     if (bbsc_load_cover.why == "summon") {
         bbsc_join_quiet_until_ms = SteadyNowMs() + 8'000; // the join banner filter (BbscJoinQuiet)
     }
@@ -8591,7 +8609,17 @@ void TickBbscSpectate() {
         }
         if (!respawn_why.empty()) {
             BbscApplyDeathPenalty(respawn_why);
-            if (StartBbscDeathCurtain(respawn_why) || BbscRespawnInPlace(respawn_why)) {
+            // Under a wipe's load cover the screen is already covered: a death curtain on top showed
+            // the loading screen twice with black between (2026-10-21, the user: "Bloodborne screen
+            // 2 s, black 2 s, Bloodborne 2 s"), and its forced close left the loading screen's state
+            // stuck. The revive happens under the cover, which fades in once it is done.
+            const bool under_cover = BbscLoadCoverActive();
+            if (under_cover) {
+                LOG_INFO(Debug, "BBSC death: {} - revived under the load cover, no death curtain",
+                         respawn_why);
+            }
+            if ((!under_cover && StartBbscDeathCurtain(respawn_why)) ||
+                BbscRespawnInPlace(respawn_why)) {
                 bbsc_spectate_active = false;
                 return;
             }
