@@ -14824,6 +14824,12 @@ std::string BbscHeldKeyItemsText(size_t* count = nullptr) {
 // the key items held at home before a session are noted, and any of them missing after the trip
 // home are given back the same way: a session never takes a key item away.
 std::vector<u32> bbsc_communion_keys; // guest: the host's key items from the last chalice
+// Host: the guest's "done" (relay 0x28 kind 3, the key items it received; -1 = none yet). The host
+// saw "A guest shares in your progress" and never a completion (2026-10-21): only the guest knew
+// when the gift was over. The completion waits until the first notice has had its time on screen,
+// so it does not replace it.
+std::atomic<s32> bbsc_communion_guest_done{-1};
+constexpr s64 BbscCommunionNoticeGapMs = 6'000;
 std::vector<u32> bbsc_keys_before_session; // home: refreshed every 5 s while home and settled
 
 bool BbscHomeSettled(s64 now, s64& since_ms) {
@@ -14973,6 +14979,7 @@ void TickBbscCommunion() {
     }
     rung_was = rung;
     // Host: answer with the key items we have.
+    static s64 host_notice_ms = 0;
     if (state == 3 && bbsc_communion_requested.exchange(false)) {
         const u64 carried = BbscCarriedInventory();
         const u64 storage = BbscStorageInventory();
@@ -14987,6 +14994,22 @@ void TickBbscCommunion() {
         SendBbscCommunionPacket(2, have);
         LOG_INFO(Debug, "BBSC communion bell: a guest asked - sent our {} key item(s)", have.size());
         BbscAnnounce(u"A guest shares in your progress.", "communion shared");
+        host_notice_ms = SteadyNowMs();
+    }
+    if (state == 3 && bbsc_communion_guest_done.load() >= 0 &&
+        SteadyNowMs() - host_notice_ms >= BbscCommunionNoticeGapMs) {
+        const s32 received = bbsc_communion_guest_done.exchange(-1);
+        LOG_INFO(Debug, "BBSC communion bell: the guest says it is done - {} key item(s) received",
+                 received);
+        const std::string text = fmt::format(
+            "Communion complete.\nThe guest received {} of your key item(s)\nand will carry your "
+            "world home.",
+            received);
+        static std::u16string announce;
+        announce.assign(text.begin(), text.end());
+        BbscAnnounce(announce.c_str(), "communion complete (host)");
+    } else if (state != 3) {
+        bbsc_communion_guest_done = -1;
     }
     // Guest: give the key items we lack.
     std::vector<u32> got;
@@ -15021,6 +15044,7 @@ void TickBbscCommunion() {
         }
     }
     WriteBbscPendingProgress(); // the progress collected so far is on disk now, crash or not
+    SendBbscCommunionPacket(3, {static_cast<u32>(given)}); // the host shows its completion
     LOG_INFO(Debug, "BBSC communion bell: the host has {} key item(s), {} new to us now given; "
                     "lamps, world and boss progress and NPC states join our own world at the next "
                     "trip home",
@@ -17234,6 +17258,12 @@ void OnBbscPvpPacket(std::uint8_t kind, std::uint8_t on) {
 void OnBbscCommunionPacket(std::uint8_t kind, const void* data, std::uint32_t size) {
     if (kind == 1) {
         bbsc_communion_requested = true;
+        return;
+    }
+    if (kind == 3 && data != nullptr && size >= 6) {
+        u32 given = 0;
+        std::memcpy(&given, static_cast<const u8*>(data) + 2, 4);
+        bbsc_communion_guest_done = static_cast<s32>(std::min<u32>(given, 1000));
         return;
     }
     if (kind != 2 || data == nullptr || size < 2) {
