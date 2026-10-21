@@ -8160,7 +8160,27 @@ void GuardBbscStrayForcedWarp(const GuestRegisterSnapshot& registers) {
         caller2 = ReadablePointer(up, 0x10) ? ReadValue<u64>(up, 8) : 0;
     }
     const auto offset = [](u64 address) { return address > image_base ? address - image_base : 0; };
-    const u32 forced_map = ReadValue<u32>(global, 0x14F0);
+    u32 forced_map = ReadValue<u32>(global, 0x14F0);
+    // The trip home (2026-10-21, the user: Eric "came back to his world not where he left mine";
+    // picked: the Hunter's Dream). The forced placement holds whatever the last join or follow warp
+    // put there (16:10: the spot of the join 10 minutes before), so a guest going home landed
+    // there. A guest sent home (no session any more, still in the host's world, not an invader)
+    // now goes to its own Hunter's Dream, by the lamp: no enemies, no shut door, no boss arena,
+    // and the merged progress is there by then.
+    const s32 state_now = GetSessionState();
+    if (state_now != 4 && state_now != 6 && ReadValue<u8>(global, 0x1592) == 0 &&
+        GetLocalPlayerType() != 2 && forced_map != BbscDreamStateMap &&
+        HasMemoryAccess(global + 0x14F0, 0x20, MemoryProt::CpuWrite)) {
+        static constexpr std::array<float, 3> DreamLamp{-9.20f, -6.77f, -19.40f}; // the lamp arrival
+        LOG_INFO(Debug, "BBSC leave: the trip home goes to the Hunter's Dream (the placement held "
+                        "map {:#x}, the last join or follow warp's)",
+                 forced_map);
+        WriteValue<u32>(global, 0x14F0, BbscDreamStateMap);
+        for (size_t i = 0; i < 3; ++i) {
+            WriteValue<float>(global, 0x1500 + i * 4, DreamLamp[i]);
+        }
+        forced_map = BbscDreamStateMap;
+    }
     // Mod 24 only cleared it when +0x14F0 held no map; 22:17:12 it held the host's own map and the
     // host still fell (the position is the summon placement's, not his). Not a guest = no forced warp.
     const bool clear = BbscOwnWorldNonGuest(global);
