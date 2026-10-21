@@ -39,6 +39,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import bbhost_service
+import thd_messages
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "ss_info_template.xml")
@@ -307,6 +308,9 @@ class OnlineStore:
 
 
 STORE = None  # OnlineStore, set up in main()
+THD = None    # thd_messages.HuntersDreamMessages, set up in main()
+# Whether the request being handled comes from the game on this PC (the host's own game).
+_CALLER = threading.local()
 
 def _request(req):
     try:
@@ -368,6 +372,8 @@ def blood_create(req):
                 del STORE.data["messages"][str(old["BloodMessId"])]
         STORE.save()
     print("      messages: user {} wrote {}".format(user, created), flush=True)
+    if THD is not None and getattr(_CALLER, "local", False):
+        THD.post(body, created)  # the host's own messages only: a guest's would be under its name
     return empty("BloodMessCreateResponse", BloodMessId=created[0] if created else 0,
                  BloodMessIdList=created)
 
@@ -375,18 +381,27 @@ def blood_area(req):
     body = _request(req)
     user = _as_int(body.get("UserId"))
     found = []
+    most = _as_int(body.get("GetMaxCount"), 100) or 100
+    wanted = []  # (region, its GetCount), each region once, in the game's order
+    for area in body.get("AreaInfoList") or []:
+        if _region(area) not in [key for key, _ in wanted]:
+            wanted.append((_region(area), _as_int(area.get("GetCount"), 30) or 30))
     with STORE.lock:
         messages = list(STORE.data["messages"].values())
-        seen = set()
-        for area in body.get("AreaInfoList") or []:
-            key = _region(area)
-            if key in seen:
-                continue
-            seen.add(key)
-            limit = _as_int(area.get("GetCount"), 30) or 30
+        for key, limit in wanted:
             here = [m for m in messages if _region(m) == key and m["UserId"] != user]
             here.sort(key=lambda m: m["BloodMessId"], reverse=True)
             found += [_message_entry(m) for m in here[:limit]]
+    found = found[:most]
+    if THD is not None and wanted:
+        # The game asks for a whole map's regions at once (20 and more) with GetMaxCount 100:
+        # The Hunter's Dream's messages are shared out over all of them, or the first few regions
+        # would take every place and the one the player stands in could get none.
+        share = max(1, (most - len(found)) // len(wanted))
+        for key, limit in wanted:
+            mine = sum(1 for m in found if _region(m) == key)
+            found += THD.entries_for(key, min(limit - mine, share))
+        found = found[:most]
     total = len(found)
     found = _within_budget(found)
     if len(found) < total:
@@ -397,19 +412,55 @@ def blood_area(req):
         len(found), user, ",".join(areas) or "-", ",".join(stored) or "-"), flush=True)
     return empty("BloodMessGetListResponse", BloodMessList=found)
 
+ERASED_MIN_AGE = 60  # seconds, see blood_exist
+
+
 def blood_exist(req):
     """The game checks the messages it knows about: ratings for those that exist, 'lost' for
     those deleted here. Ids this server never saw (written before it stored anything) are left
     alone rather than reported lost, so nobody's own messages vanish."""
     body = _request(req)
+    user = _as_int(body.get("UserId"))
+    erased = []
     with STORE.lock:
         ids = _ids(body, "BloodMessIdList", "BloodMessId")
         messages = STORE.data["messages"]
         deleted = set(STORE.data["deleted"])
         evaluations = [_evaluation(messages[str(i)]) for i in ids if str(i) in messages]
         lost = [i for i in ids if i in deleted]
-    return ok("BloodMessSearchAddResponse", BloodMessEvaluationList=evaluations,
+        # The game never sends a delete when its player erases a message (test 2026-10-20: an
+        # erase in game, no request at all); its next check simply leaves the message out. For
+        # the host, a message of theirs stored here and missing from the list is taken as erased:
+        # it goes here and on The Hunter's Dream. ERASED_MIN_AGE keeps a message written moments
+        # before the check.
+        if user and getattr(_CALLER, "local", False):
+            listed = set(ids)
+            erased = [int(key) for key, msg in messages.items()
+                      if msg.get("UserId") == user and int(key) not in listed
+                      and time.time() - msg.get("Created", 0) > ERASED_MIN_AGE]
+            for msg_id in erased:
+                del messages[str(msg_id)]
+            if erased:
+                STORE.data["deleted"] = (STORE.data["deleted"] + erased)[-1000:]
+                STORE.save()
+    if erased:
+        print("      messages: user {} no longer has {} (erased in game) - removed".format(
+            user, erased), flush=True)
+        if THD is not None:
+            THD.remove(erased)
+    return ok("BloodMessSearchAddResponse", BloodMessEvaluationList=_with_thd_ratings(evaluations),
               LostBloodMessIdList=lost)
+
+def _with_thd_ratings(evaluations):
+    """The host's posted messages also get the ratings The Hunter's Dream players gave them."""
+    if THD is None or not getattr(_CALLER, "local", False):
+        return evaluations
+    theirs = THD.ratings_for([e["BloodMessId"] for e in evaluations])
+    for entry in evaluations:
+        plus, minus = theirs.get(entry["BloodMessId"], (0, 0))
+        entry["EvaluatePlus"] += plus
+        entry["EvaluateMinus"] += minus
+    return evaluations
 
 def blood_get_evaluation(req):
     body = _request(req)
@@ -418,7 +469,8 @@ def blood_get_evaluation(req):
         evaluations = [_evaluation(messages[str(i)])
                        for i in _ids(body, "BloodMessIdList", "BloodMessId")
                        if str(i) in messages]
-    return empty("BloodMessGetEvaluateResponse", BloodMessEvaluationList=evaluations)
+    return empty("BloodMessGetEvaluateResponse",
+                 BloodMessEvaluationList=_with_thd_ratings(evaluations))
 
 def blood_evaluate(req):
     body = _request(req)
@@ -447,6 +499,8 @@ def blood_delete(req):
                 STORE.data["deleted"] = (STORE.data["deleted"] + [msg_id])[-1000:]
         STORE.save()
     print("      messages: user {} removed {}".format(user, ids), flush=True)
+    if THD is not None:
+        THD.remove(ids)
     return empty("BloodMessRemoveResponse")
 
 def shell_upload(req):
@@ -871,6 +925,7 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_inner(self):
         caller = self.client_address[0]
         is_local = caller in LOCAL_ADDRESSES or (ARGS.advertise and caller == ARGS.advertise)
+        _CALLER.local = bool(is_local)
         path = self.path.split("?", 1)[0]
         length = int(self.headers.get("Content-Length") or 0)
         payload = self.rfile.read(length).decode("utf-8", "replace") if length else ""
@@ -1463,6 +1518,11 @@ def start_bbhost():
 def main():
     global ARGS, SS_INFO_B64, SS_INFO_LOCAL_B64, SS_INFO_BBHOST_B64, SS_INFO_BBHOST_LOCAL_B64
     global AREA_REPLY_BUDGET
+    if "--thd-sign-in" in sys.argv[1:]:
+        # The Hunter's Dream sign-in for the messages setting (thd_messages.py), saved next to
+        # online-data.json; it needs none of the server's own options.
+        data_home = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else HERE
+        return thd_messages.sign_in(data_home)
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--shadnet", required=True,
@@ -1489,6 +1549,10 @@ def main():
                         help="message / bloodstain reply budget in bytes (default 65536 - the "
                              "Dantelion2 Panic 265 fix); 0 = no cap")
     parser.add_argument("--verbose", action="store_true", help="log headers and request bodies")
+    parser.add_argument("--thd-messages", action="store_true",
+                        help="add The Hunter's Dream's messages to ours (see thd_messages.py)")
+    parser.add_argument("--thd-sign-in", action="store_true",
+                        help="sign in to The Hunter's Dream with Discord for --thd-messages, then exit")
     parser.add_argument("--no-bbhost", dest="bbhost", action="store_false",
                         help="turn off the bbhost players' services (bbhost_service.py)")
     parser.add_argument("--bbhost-port", type=int, default=18671,
@@ -1533,6 +1597,9 @@ def main():
     STORE = OnlineStore(ARGS.data)
     print("messages and bloodstains: {} ({} messages, {} bloodstains)".format(
         ARGS.data, len(STORE.data["messages"]), len(STORE.data["tombs"])))
+    global THD
+    THD = thd_messages.HuntersDreamMessages.from_settings(ARGS.thd_messages,
+                                                          os.path.dirname(os.path.abspath(ARGS.data)))
 
     if not os.path.exists(TEMPLATE):
         print("missing {}".format(TEMPLATE))
