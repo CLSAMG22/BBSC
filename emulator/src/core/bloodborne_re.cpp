@@ -8414,6 +8414,25 @@ bool BbscApplyDeathPenalty(std::string_view why) {
              why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
     BBSC_TIMELINE("DEATH", "death penalty ({}): dropped {} echoes (now {}, stain holds {}, type {}, gate {})",
              why, before, GetBloodEchoes(), in_stain, GetLocalPlayerType(), gate);
+    // 2026-10-21 00:00:35: after a wipe reload the drop still put the stain in the Hunter's Dream (the
+    // spot of an old follow warp), not where the guest died - after a load it reads its spot from
+    // somewhere else again. Whatever it did, the record is checked and put right: +0x18 the spot,
+    // +0x3C the map ([[0x0553B130]+0x30], see "Report 2026-10-06" above).
+    if (use_spot && ReadablePointer(record, 0x40) && in_stain > 0) {
+        const float dx = ReadValue<float>(record, 0x18) - spot.position[0];
+        const float dy = ReadValue<float>(record, 0x1C) - spot.position[1];
+        const float dz = ReadValue<float>(record, 0x20) - spot.position[2];
+        if (ReadValue<u32>(record, 0x3C) != spot.map || dx * dx + dy * dy + dz * dz > 9.0f) {
+            LOG_INFO(Debug, "BBSC bloodstain: the drop put it in map {:#x} at ({:.1f}, {:.1f}, {:.1f}) - "
+                            "moved to where we died",
+                     ReadValue<u32>(record, 0x3C), ReadValue<float>(record, 0x18),
+                     ReadValue<float>(record, 0x1C), ReadValue<float>(record, 0x20));
+            for (size_t i = 0; i < 3; ++i) {
+                WriteValue<float>(record, 0x18 + i * 4, spot.position[i]);
+            }
+            WriteValue<u32>(record, 0x3C, spot.map);
+        }
+    }
     if (ReadablePointer(record, 0x40)) {
         LOG_INFO(Debug, "BBSC bloodstain: placed in map {:#x} at ({:.1f}, {:.1f}, {:.1f}); died in map "
                         "{:#x} at ({:.1f}, {:.1f}, {:.1f}){}",
