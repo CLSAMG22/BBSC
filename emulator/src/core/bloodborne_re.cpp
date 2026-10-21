@@ -6957,7 +6957,7 @@ struct BbscCurtainState {
 };
 BbscCurtainState bbsc_curtain;
 bool BbscRespawnInPlace(std::string_view why); // below
-size_t BbscCureStatusAfterRevive(); // see "The X lock after a revive in place"
+size_t BbscCureStatusAfterRevive(std::string* ids = nullptr); // see "The X lock after a revive in place"
 void BbscRestockFromStorage(std::string_view why); // below
 s64 bbsc_inplace_respawn_ms = 0; // last BbscRespawnInPlace revive
 
@@ -7537,6 +7537,16 @@ bool BbscRespawnInPlace(std::string_view why) {
                                                                  image_base + 0x04992C40);
     }
 
+    // Timed effects off before the HP refill, as a normal death's reload would: an effect that lowers
+    // the maximum HP would otherwise cap the refill (the user, 2026-10-21: the host died of poison and
+    // came back with half its life).
+    std::string cured_ids;
+    if (const size_t cured = BbscCureStatusAfterRevive(&cured_ids); cured != 0) {
+        LOG_INFO(Debug, "BBSC respawn in place ({}): {} timed effect(s) taken off before the HP refill, "
+                        "as the reload of a normal death would [{}]",
+                 why, cured, cured_ids);
+    }
+
     // 4. state reset, HP, death flags, drawing
     using Reset = void PS4_SYSV_ABI (*)(u64 chr);
     reinterpret_cast<Reset>(reset)(player);
@@ -7588,11 +7598,6 @@ bool BbscRespawnInPlace(std::string_view why) {
              why, GetCharacterHp(player), ReadValue<s32>(player, 0x78), where, position[0],
              position[1], position[2]);
     bbsc_inplace_respawn_ms = SteadyNowMs();
-    if (const size_t cured = BbscCureStatusAfterRevive(); cured != 0) {
-        LOG_INFO(Debug, "BBSC respawn in place ({}): {} poison / toxic effect(s) taken off, as the "
-                        "reload of a normal death would",
-                 why, cured);
-    }
     BbscRestockFromStorage(why);
     if (where == "host's last lamp") {
         BbscAnnounceAfterCurtain(u"You respawned at the host's lamp.",
@@ -14802,11 +14807,15 @@ bool BbscEraseLocalEffect(s32 id) {
 // game puts on a dead player and which a normal death's reload throws away. A revive in place has
 // no reload, so it stayed. It was absent whenever X worked (the Amelia kill at 01:03, the host). For
 // BbscDeathMarkWatchMs after a revive in place, a living local player carrying it has it taken off.
-// Poison and toxic still on the player at the revive (2026-10-20 17:47: the guest was revived
-// poisoned and went down again; a normal death's reload throws every such effect away). An
-// effect node's game data is at +0x48 and its stateInfo at +0x156 of that (as 0x018C6600 reads
-// it): 2 is poison, 5 toxic (SpEffectParam). Taken off once, at the revive.
-size_t BbscCureStatusAfterRevive() {
+// Timed effects still on the player at the revive (2026-10-20 17:47: the guest was revived poisoned
+// and went down again; 2026-10-21, the user: the host died of poison and came back with half its
+// life). A normal death's reload throws every timed effect away, so this does too, once, before
+// the HP refill. An effect node's game data is at +0x48: SpEffectParam, effectEndurance (float)
+// at +0x08 and stateInfo at +0x156 (as 0x018C6600 reads it). Taken off: every effect lasting 1 s
+// or more (poison and toxic last 30 s, and buffs and debuffs), and poison (2) and toxic (5) of any
+// length. Permanent ones (-1: equipment, runes, the world, and every SpEffect BBSC adds) and the
+// game's sub-second ones, which it re-adds each frame, stay.
+size_t BbscCureStatusAfterRevive(std::string* ids_out) {
     const u64 player = GetLocalPlayerCharacter();
     const u64 effects = ReadablePointer(player, 0x1D0) ? ReadValue<u64>(player, 0x1C8) : 0;
     if (!ReadablePointer(effects, 0x10)) {
@@ -14818,7 +14827,8 @@ size_t BbscCureStatusAfterRevive() {
         const u64 data = ReadValue<u64>(entry, 0x48);
         if (ReadablePointer(data, 0x158)) {
             const u16 state = ReadValue<u16>(data, 0x156);
-            if (state == 2 || state == 5) {
+            const float endurance = ReadValue<float>(data, 0x08);
+            if (state == 2 || state == 5 || endurance >= 1.0f) {
                 ids.push_back(ReadValue<s32>(entry, 0x40));
             }
         }
@@ -14826,7 +14836,12 @@ size_t BbscCureStatusAfterRevive() {
     }
     size_t cured = 0;
     for (const s32 id : ids) {
-        cured += BbscEraseLocalEffect(id) ? 1 : 0;
+        if (BbscEraseLocalEffect(id)) {
+            ++cured;
+            if (ids_out != nullptr) {
+                *ids_out += fmt::format("{}{}", ids_out->empty() ? "" : " ", id);
+            }
+        }
     }
     return cured;
 }
