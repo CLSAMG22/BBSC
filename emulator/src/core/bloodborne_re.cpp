@@ -12864,23 +12864,40 @@ void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers)
     const u32 id = static_cast<u32>(registers->rcx);
     const auto found = std::ranges::find(BbscMissingTexts, id, &std::pair<u32, u32>::first);
     if (found == BbscMissingTexts.end()) {
-        // Not one we map: if the game lacks it too, say which id it is, once (2026-10-20 15:58: a
-        // ?ActionEventInfo? box with no swap logged, so its id was not in the table).
+        // Not one we map: if the game lacks it too, say which id it is and which code asked
+        // (2026-10-20 15:58: a ?ActionEventInfo? box with no swap logged). Each miss is logged
+        // again after 30 s, so a box that comes back can be matched to its time (2026-10-21: a box
+        // in Cainhurst with nothing logged, every id having been logged once already). 8000xxxx
+        // ids are 80000000 + a place name (19/xxxx: 80002500 is Forsaken Cainhurst Castle), asked
+        // for when an area name shows; those are marked as such.
         static std::mutex checked_mutex;
-        static std::vector<u32> checked;
+        static std::vector<std::pair<u32, s64>> checked;
+        const s64 now = SteadyNowMs();
         {
             std::scoped_lock lock{checked_mutex};
-            if (std::ranges::find(checked, id) != checked.end() || checked.size() > 4096) {
+            auto seen = std::ranges::find(checked, id, &std::pair<u32, s64>::first);
+            if (seen != checked.end()) {
+                if (now - seen->second < 30'000) {
+                    return;
+                }
+                seen->second = now;
+            } else if (checked.size() < 4096) {
+                checked.emplace_back(id, now);
+            } else {
                 return;
             }
-            checked.push_back(id);
         }
         u64 fmg = 0;
         const u64 slot = FindBbscMessageSlot(30, id, &fmg);
         if (id != 0 && (slot == 0 || ReadValue<u64>(slot, 0) == 0)) {
-            LOG_WARNING(Debug, "BBSC messages: text 30/{} is not in the game's text either - the "
-                               "game shows ?ActionEventInfo? (no line mapped for it)",
-                        id);
+            const u64 ret = ReadValue<u64>(registers->rsp, 0);
+            const bool place = id >= 80000000 && id < 80010000;
+            LOG_WARNING(Debug, "BBSC messages: text 30/{} is not in the game's text either{} "
+                               "(caller {:#x})",
+                        id,
+                        place ? " - a place name probe (19/" + std::to_string(id - 80000000) + ")"
+                              : std::string{" - the game shows ?ActionEventInfo? (no line mapped)"},
+                        ret >= image_base ? ret - image_base : 0);
         }
         return;
     }
