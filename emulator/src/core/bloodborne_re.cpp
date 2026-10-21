@@ -12887,17 +12887,24 @@ void PS4_SYSV_ABI BbscMsgLookupHook(u64, const GuestRegisterSnapshot* registers)
                 return;
             }
         }
+        // 2026-10-22 00:3x: another box with no miss logged (the 30/10010710 asked for then exists:
+        // "Do you wish to reawaken?"), so every event text asked for is logged now, found or not,
+        // id 0 included: the box's line is the one at its time.
         u64 fmg = 0;
         const u64 slot = FindBbscMessageSlot(30, id, &fmg);
-        if (id != 0 && (slot == 0 || ReadValue<u64>(slot, 0) == 0)) {
-            const u64 ret = ReadValue<u64>(registers->rsp, 0);
-            const bool place = id >= 80000000 && id < 80010000;
+        const bool missing = slot == 0 || ReadValue<u64>(slot, 0) == 0;
+        const u64 ret = ReadValue<u64>(registers->rsp, 0);
+        const bool place = id >= 80000000 && id < 80010000;
+        if (missing) {
             LOG_WARNING(Debug, "BBSC messages: text 30/{} is not in the game's text either{} "
                                "(caller {:#x})",
                         id,
                         place ? " - a place name probe (19/" + std::to_string(id - 80000000) + ")"
                               : std::string{" - the game shows ?ActionEventInfo? (no line mapped)"},
                         ret >= image_base ? ret - image_base : 0);
+        } else {
+            LOG_INFO(Debug, "BBSC messages: text 30/{} looked up (caller {:#x})", id,
+                     ret >= image_base ? ret - image_base : 0);
         }
         return;
     }
