@@ -8164,10 +8164,11 @@ void GuardBbscStrayForcedWarp(const GuestRegisterSnapshot& registers) {
     // The trip home (2026-10-21, the user: Eric "came back to his world not where he left mine").
     // The forced placement holds whatever the last join or follow warp put there (16:10: the spot
     // of the join 10 minutes before), so a guest going home landed there. A guest sent home (no
-    // session any more, still in the host's world, not an invader) now lands where it left when
-    // that is within BbscHomeNearLampM of a lamp (the user: "if the position is far, back to the
-    // Dream to avoid mobs"), else in its own Hunter's Dream by the lamp: no enemies, no shut door,
-    // no boss arena. The merged progress is there either way.
+    // session any more, still in the host's world, not an invader) now lands at the lamp nearest
+    // where it left when that lamp is within BbscHomeNearLampM (the user: "if the position is far,
+    // back to the Dream to avoid mobs"; the spot itself "could have mobs", a lamp is the safe
+    // place), else in its own Hunter's Dream by the lamp: no enemies, no shut door, no boss arena.
+    // The merged progress is there either way.
     constexpr float BbscHomeNearLampM = 30.0f;
     const s32 state_now = GetSessionState();
     if (state_now != 4 && state_now != 6 && ReadValue<u8>(global, 0x1592) == 0 &&
@@ -8177,8 +8178,10 @@ void GuardBbscStrayForcedWarp(const GuestRegisterSnapshot& registers) {
         const auto here = ReadCharacterTransform(GetLocalPlayerCharacter());
         s32 lamp_point = -1;
         float lamp_m = -1.0f;
+        std::array<float, 3> lamp_at{};
         if (here.has_value() && IsUsablePackedMap(here_map) && here_map != BbscDreamStateMap) {
             if (const auto lamp = ResolveNearestLoadedLamp(here->position, &lamp_point)) {
+                lamp_at = {lamp->position[0], lamp->position[1], lamp->position[2]};
                 const float dx = lamp->position[0] - here->position[0];
                 const float dy = lamp->position[1] - here->position[1];
                 const float dz = lamp->position[2] - here->position[2];
@@ -8189,11 +8192,11 @@ void GuardBbscStrayForcedWarp(const GuestRegisterSnapshot& registers) {
         const u32 to_map = stay ? here_map : BbscDreamStateMap;
         std::array<float, 3> to{DreamLamp};
         if (stay) {
-            to = {here->position[0], here->position[1] + 0.3f, here->position[2]};
+            to = lamp_at;
         }
         LOG_INFO(Debug, "BBSC leave: the trip home goes to {} (map {:#x}; nearest lamp {} at {:.0f} m; "
                         "the placement held map {:#x})",
-                 stay ? "where we left" : "the Hunter's Dream", to_map, lamp_point, lamp_m,
+                 stay ? "the lamp nearest where we left" : "the Hunter's Dream", to_map, lamp_point, lamp_m,
                  forced_map);
         WriteValue<u32>(global, 0x14F0, to_map);
         for (size_t i = 0; i < 3; ++i) {
