@@ -14772,13 +14772,26 @@ bool BbscDuelBellEffectActive() {
 // seen in the item-use code instead, where it stores the goods id being used: 0x018F754C
 // mov [r13+0x478], eax (41 89 85 78 04 00 00), r13 the character, just after the trace's
 // ChrAction.UseItem.ResolvedGoods. Any animation works that way.
+// With the yes / no question (2026-10-22, solo test with a state diff): the store runs when the
+// chalice is picked, before the question, and again on "yes". [chr+0x490] is the item use's state:
+// 0 when picked (the question then shows, 2), 3 at the store after "yes" (then 0 as the drink
+// starts); "no" leaves it at 2 and stores nothing more. Only the store at 3 is the drink.
 constexpr u64 ItemUseStoreOffset = 0x018F754C;
+constexpr s32 BbscItemUseAnswered = 3;
 std::atomic<bool> bbsc_communion_drunk{false};
 
 void PS4_SYSV_ABI BbscItemUseHook(u64, const GuestRegisterSnapshot* registers) {
-    if (registers != nullptr && static_cast<u32>(registers->rax) == BbscCommunionGoodsId &&
-        registers->r13 == GetLocalPlayerCharacter()) {
+    if (registers == nullptr || static_cast<u32>(registers->rax) != BbscCommunionGoodsId ||
+        registers->r13 != GetLocalPlayerCharacter()) {
+        return;
+    }
+    const s32 state = ReadablePointer(registers->r13, 0x494) ? ReadValue<s32>(registers->r13, 0x490) : -1;
+    if (state == BbscItemUseAnswered) {
         bbsc_communion_drunk = true;
+    } else {
+        LOG_INFO(Debug, "BBSC communion bell: chalice picked (item use state {}) - waiting for the "
+                        "answer",
+                 state);
     }
 }
 
