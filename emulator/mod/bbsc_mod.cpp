@@ -868,7 +868,10 @@ int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
     return result;
 }
 
+void HideGamePadWhileCameraOn(); // see "The game's own controller reads"
+
 void InstallPadWrapper() {
+    HideGamePadWhileCameraOn();
     auto* slot = reinterpret_cast<u64*>(EbootBase + PadReadStateSlot);
     for (int i = 0; i < 60'000; ++i) {
         const u64 value = *slot;
@@ -937,6 +940,85 @@ struct SdlPadApi {
     GetAxisFn axis = nullptr;
     GetButtonFn button = nullptr;
 };
+
+// The game's own controller reads (2026-10-22, the user: "free cam still has some input on the
+// character (R2 L2)"). BBport polls the pad itself through SDL_GetGamepadAxis /
+// SDL_GetGamepadButton, imported from SDL3.dll, so the sticks, triggers and buttons that fly the
+// camera also moved and attacked with the hunter. While the camera is on, those two entries of the
+// exe's import table answer a pad at rest. The camera's own reads (below) look the functions up in
+// SDL3.dll itself and still see the real pad.
+std::atomic<bool> cine_pad_hidden{false};
+SdlPadApi::GetAxisFn game_pad_axis = nullptr;
+SdlPadApi::GetButtonFn game_pad_button = nullptr;
+
+s16 GamePadAxis(void* gamepad, int axis) {
+    return cine_pad_hidden ? 0 : game_pad_axis(gamepad, axis);
+}
+
+bool GamePadButton(void* gamepad, int button) {
+    return cine_pad_hidden ? false : game_pad_button(gamepad, button);
+}
+
+// Points the exe's import of `name` from `dll` at `replacement`; the original, or nullptr when the
+// exe does not import it (an emulator build with SDL linked in).
+void* PatchExeImport(const char* dll, const char* name, void* replacement) {
+    auto* base = reinterpret_cast<u8*>(GetModuleHandleW(nullptr));
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (dir.VirtualAddress == 0) {
+        return nullptr;
+    }
+    for (auto* desc = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress);
+         desc->Name != 0; ++desc) {
+        if (_stricmp(reinterpret_cast<const char*>(base + desc->Name), dll) != 0) {
+            continue;
+        }
+        const DWORD names_rva = desc->OriginalFirstThunk != 0 ? desc->OriginalFirstThunk : desc->FirstThunk;
+        auto* names = reinterpret_cast<IMAGE_THUNK_DATA*>(base + names_rva);
+        auto* slots = reinterpret_cast<IMAGE_THUNK_DATA*>(base + desc->FirstThunk);
+        for (; names->u1.AddressOfData != 0; ++names, ++slots) {
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) {
+                continue;
+            }
+            const auto* by_name = reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+            if (std::strcmp(reinterpret_cast<const char*>(by_name->Name), name) != 0) {
+                continue;
+            }
+            DWORD old = 0;
+            if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) {
+                return nullptr;
+            }
+            void* original = reinterpret_cast<void*>(slots->u1.Function);
+            slots->u1.Function = reinterpret_cast<ULONGLONG>(replacement);
+            VirtualProtect(&slots->u1.Function, sizeof(void*), old, &old);
+            return original;
+        }
+    }
+    return nullptr;
+}
+
+void HideGamePadWhileCameraOn() {
+    game_pad_axis = reinterpret_cast<SdlPadApi::GetAxisFn>(
+        PatchExeImport("SDL3.dll", "SDL_GetGamepadAxis", reinterpret_cast<void*>(&GamePadAxis)));
+    game_pad_button = reinterpret_cast<SdlPadApi::GetButtonFn>(
+        PatchExeImport("SDL3.dll", "SDL_GetGamepadButton", reinterpret_cast<void*>(&GamePadButton)));
+    if (game_pad_axis != nullptr && game_pad_button != nullptr) {
+        LOG_INFO(Mod, "Pad: the game's controller reads come through BBSC - at rest while the camera is on");
+        return;
+    }
+    // One without the other would leave half the pad to the game: put a patched one back.
+    if (game_pad_axis != nullptr) {
+        PatchExeImport("SDL3.dll", "SDL_GetGamepadAxis", reinterpret_cast<void*>(game_pad_axis));
+    }
+    if (game_pad_button != nullptr) {
+        PatchExeImport("SDL3.dll", "SDL_GetGamepadButton", reinterpret_cast<void*>(game_pad_button));
+    }
+    game_pad_axis = nullptr;
+    game_pad_button = nullptr;
+    LOG_INFO(Mod, "Pad: the exe does not import SDL3's gamepad reads - the camera can't keep the pad "
+                  "from the game");
+}
 
 bool PollSdlPadLocked() {
     static SdlPadApi sdl = [] {
@@ -1098,6 +1180,7 @@ CinematicInput TakeCinematicInput() {
                  game_reads_pad ? "the game's pad" : pad_source);
     }
     was_enabled = cine_state.enabled;
+    cine_pad_hidden = cine_state.enabled && game_pad_axis != nullptr;
     if (!cine_state.enabled) {
         cine_looking = false;
         cine_mouse_owned = false;
@@ -1178,6 +1261,7 @@ void CinematicForceOff() {
     cine_pad = CinePad{.last_buttons = cine_pad.last_buttons};
     cine_looking = false;
     cine_mouse_owned = false;
+    cine_pad_hidden = false;
 }
 
 void CinematicForceOn() {
