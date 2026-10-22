@@ -15392,9 +15392,9 @@ void TickBbscCommunion() {
                     ++given;
                 }
             }
-            const bool gear = !bbsc_communion_gear.empty();
             QueueBbscGearGifts("live, after the host's drink", "your guests");
             bbsc_communion_gear.clear(); // ours now, not for a later trip home
+            const bool gear = !bbsc_gear_gifts.queue.empty();
             LOG_INFO(Debug, "BBSC communion bell: {} guest(s) answered with {} key item(s), {} new to "
                             "us now given; their weapons and runes follow",
                      answers.size(), keys.size(), given);
@@ -15426,10 +15426,10 @@ void TickBbscCommunion() {
     if (state == 3 && bbsc_communion_guest_done.load() >= 0 &&
         SteadyNowMs() - host_notice_ms >= BbscCommunionNoticeGapMs) {
         const s32 received = bbsc_communion_guest_done.exchange(-1);
-        LOG_INFO(Debug, "BBSC communion bell: the guest says it is done - {} key item(s) received",
+        LOG_INFO(Debug, "BBSC communion bell: the guest says it is done - {} new key item(s) received",
                  received);
         const std::string text = fmt::format(
-            "Communion complete: the guest received {} key item(s)\nand will carry your world home.",
+            "Communion complete: the guest received {} new key item(s)\nand will carry your world home.",
             received);
         static std::u16string announce;
         announce.assign(text.begin(), text.end());
@@ -15454,7 +15454,11 @@ void TickBbscCommunion() {
     if (carried == 0 || state != 6) {
         return;
     }
+    // What the notices count is what is new to this character (2026-10-22, the user: "the msg
+    // result is inaccurate" - 24 key items "received" that it owned at home: the game takes a
+    // guest's key items while it is away, and they come back at the trip home anyway).
     size_t given = 0;
+    size_t new_keys = 0;
     LOG_INFO(Debug, "BBSC communion bell: before the gift we hold {}", BbscHeldKeyItemsText());
     bbsc_communion_keys.clear();
     bbsc_communion_gear.clear();
@@ -15474,23 +15478,29 @@ void TickBbscCommunion() {
         BbscBossGoodsLot lot{0, id, 1, 0};
         if (GiveBbscBossGoods(lot)) {
             ++given;
+            if (std::ranges::find(bbsc_keys_before_session, id) == bbsc_keys_before_session.end()) {
+                ++new_keys;
+            }
         }
     }
     WriteBbscPendingProgress(); // the progress collected so far is on disk now, crash or not
-    SendBbscCommunionPacket(3, {static_cast<u32>(given)}); // the host shows its completion
+    SendBbscCommunionPacket(3, {static_cast<u32>(new_keys)}); // the host shows its completion
     QueueBbscGearGifts("live, after the drink");
-    LOG_INFO(Debug, "BBSC communion bell: the host has {} key item(s), {} new to us now given; "
-                    "{} weapon(s) and rune(s) follow now; lamps, world and boss progress and NPC "
-                    "states join our own world at the next trip home",
-             got.size() - bbsc_communion_gear.size(), given, bbsc_communion_gear.size());
+    const size_t new_gear = bbsc_gear_gifts.queue.size();
+    LOG_INFO(Debug, "BBSC communion bell: the host has {} key item(s), {} given now ({} new to this "
+                    "character, the rest ours at home); {} of its {} weapon(s) and rune(s) are new "
+                    "and follow now; lamps, world and boss progress and NPC states join our own "
+                    "world at the next trip home",
+             got.size() - bbsc_communion_gear.size(), given, new_keys, new_gear,
+             bbsc_communion_gear.size());
     const std::string text =
-        bbsc_communion_gear.empty()
-            ? fmt::format("Communion complete: {} key item(s) received.\nThe host's world "
-                          "joins yours on your return.",
-                          given)
-            : fmt::format("Communion complete: {} key item(s) received.\nWeapons and runes "
+        new_gear == 0
+            ? fmt::format("Communion complete: {} new key item(s).\nThe host's world joins "
+                          "yours at home.",
+                          new_keys)
+            : fmt::format("Communion complete: {} new key item(s).\n{} weapon(s) and rune(s) "
                           "follow; the host's world joins yours at home.",
-                          given);
+                          new_keys, new_gear);
     static std::u16string announce;
     announce.assign(text.begin(), text.end());
     BbscAnnounce(announce.c_str(), "communion done");
