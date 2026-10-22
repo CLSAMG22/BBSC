@@ -14207,6 +14207,9 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
             WriteValue<s32>(bell, 36, static_cast<s32>(BbscCommunionPromptId)); // ask first
             WriteValue<u16>(bell, 44, 192);    // iconId: the Pthumeru Chalice's
             WriteValue<u8>(bell, 62, 26);      // goodsUseAnim: drink, as a Blood Vial
+            // opmeMenuType: 1, the yes / no question (2026-10-22: with 0 the game did not ask; every
+            // vanilla goods with a yesNoDialogMessageId has 1, the Silencing Blank 4).
+            WriteValue<u8>(bell, 63, 1);
             communion_goods.push_back(bell);
         }
     }
@@ -14217,7 +14220,10 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
              effects.size(), ok ? "" : " - NOT READY, no PvP bell");
     // Review 2026-10-08: the game thread reads these vectors; they are filled only once, here, by
     // this (scan) thread, and published by the ready flag - never replaced while being read.
-    if (publish && ok && !communion_effects.empty() && !bbsc_communion_ready) {
+    // The chalice is published by whichever thread is first (2026-10-22: with only the scan, the
+    // chalice was still off 90 s after the load and a drink did nothing). The game's own table is
+    // the one it reads the row from; the bell rows below still wait for every copy.
+    if (ok && !communion_effects.empty() && !bbsc_communion_ready) {
         bbsc_communion_effect_rows = std::move(communion_effects);
         bbsc_communion_goods_rows = std::move(communion_goods);
         bbsc_key_goods_ids = std::move(keys);
