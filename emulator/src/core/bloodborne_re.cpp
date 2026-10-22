@@ -15399,10 +15399,10 @@ void TickBbscCommunion() {
                             "us now given; their weapons and runes follow",
                      answers.size(), keys.size(), given);
             const std::string text =
-                gear ? fmt::format("Communion complete: {} key item(s)\nreceived from your guests.\n"
+                gear ? fmt::format("Communion complete: {} key item(s) received\nfrom your guests. "
                                    "Weapons and runes follow.",
                                    given)
-                     : fmt::format("Communion complete: {} key item(s)\nreceived from your guests.",
+                     : fmt::format("Communion complete: {} key item(s) received\nfrom your guests.",
                                    given);
             static std::u16string announce;
             announce.assign(text.begin(), text.end());
@@ -15429,8 +15429,7 @@ void TickBbscCommunion() {
         LOG_INFO(Debug, "BBSC communion bell: the guest says it is done - {} key item(s) received",
                  received);
         const std::string text = fmt::format(
-            "Communion complete.\nThe guest received {} of your key item(s)\nand will carry your "
-            "world home.",
+            "Communion complete: the guest received {} key item(s)\nand will carry your world home.",
             received);
         static std::u16string announce;
         announce.assign(text.begin(), text.end());
@@ -15438,6 +15437,7 @@ void TickBbscCommunion() {
     } else if (state != 3) {
         bbsc_communion_guest_done = -1;
     }
+    // Notices: the game's banner shows two lines (2026-10-22: a third one was cut off).
     // Guest: give the key items we lack.
     std::vector<u32> got;
     {
@@ -15486,10 +15486,10 @@ void TickBbscCommunion() {
     const std::string text =
         bbsc_communion_gear.empty()
             ? fmt::format("Communion complete: {} key item(s) received.\nThe host's world "
-                          "joins yours\non your return.",
+                          "joins yours on your return.",
                           given)
-            : fmt::format("Communion complete: {} key item(s) received.\nWeapons and runes follow;\n"
-                          "the host's world joins yours on your return.",
+            : fmt::format("Communion complete: {} key item(s) received.\nWeapons and runes "
+                          "follow; the host's world joins yours at home.",
                           given);
     static std::u16string announce;
     announce.assign(text.begin(), text.end());
