@@ -14965,15 +14965,13 @@ std::vector<u32> BbscInventoryCodes(u64 inventory) {
     return codes;
 }
 
+// The game's own GemGenParam table, never a memory scan: these run on the game thread (2026-10-22,
+// two games on one PC: the host's first answer to a guest's drink scanned memory for the table and
+// froze the host 44 s, from 15:02:29 to 15:03:13; the guest gave up after 15 s).
 bool BbscGemIsRune(u32 gem) {
-    static std::vector<u64> tables;
-    if (tables.empty()) {
-        tables = FindBbscParamTables("GEM_GEN_PARAM_ST", 500, 0);
-    }
-    for (const u64 table : tables) {
-        if (const u64 row = BbscParamRow(table, gem, BbscGemGenRowSize)) {
-            return (ReadValue<u8>(row, 0x8C) & 1) != 0;
-        }
+    const u64 table = BbscGameParamTable("GEM_GEN_PARAM_ST");
+    if (const u64 row = table != 0 ? BbscParamRow(table, gem, BbscGemGenRowSize) : 0) {
+        return (ReadValue<u8>(row, 0x8C) & 1) != 0;
     }
     return false;
 }
@@ -15106,12 +15104,12 @@ void TickBbscGearGifts() {
         return;
     }
     if (g.saved_rows.empty()) {
-        for (const u64 table : FindBbscParamTables("ITEMLOT_PARAM_ST", 1000, 0)) {
-            if (const u64 row = BbscParamRow(table, BbscGearLot, BbscItemLotRowSize)) {
-                std::array<u8, BbscItemLotRowSize> bytes{};
-                std::memcpy(bytes.data(), reinterpret_cast<const void*>(row), bytes.size());
-                g.saved_rows.emplace_back(row, bytes);
-            }
+        // The table the game awards from (no memory scan on the game thread, see BbscGemIsRune).
+        const u64 table = BbscGameParamTable("ITEMLOT_PARAM_ST");
+        if (const u64 row = table != 0 ? BbscParamRow(table, BbscGearLot, BbscItemLotRowSize) : 0) {
+            std::array<u8, BbscItemLotRowSize> bytes{};
+            std::memcpy(bytes.data(), reinterpret_cast<const void*>(row), bytes.size());
+            g.saved_rows.emplace_back(row, bytes);
         }
         if (g.saved_rows.empty()) {
             LOG_WARNING(Debug, "BBSC communion bell: no item lot table - {} weapon(s) and rune(s) "
