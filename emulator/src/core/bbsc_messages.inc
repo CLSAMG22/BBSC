@@ -207,9 +207,9 @@
 {20, 205, u"No longer used. Use the Kin Bell."}, // Ring this bell to help hunters in other worlds.
 {20, 225, u"No longer used. Use the Bloodlust Bell."}, // Ring to become the enemy of a hunter in another world.
 {20, 111, u"No longer used. Use the Parting Blank."}, // Fire to end ongoing, and prevent further, cooperation.
+{10, 201, u"Communion Chalice"}, // (empty)
+{20, 201, u"A cup of communion between hunters. Share\nkeys, weapons and runes in co-op; a guest\nalso carries the host's progress home."}, // (empty)
+{24, 201, u"A chalice of the Healing Church, passed between\nhunters who walk the same night.\n\nThose who drink partake of one another's blood,\nand of all it carries: keys, arms and runes.\nA guest also carries home the host's lamps\nand the beasts the host has slain.\n\nYour own strength remains your own."}, // (empty)
 {10, 4313, u"Duel Bell"}, // (empty)
 {20, 4313, u"Ring in co-op to turn on PvP between players.\nRing again to turn it off."}, // (empty)
 {24, 4313, u"A cracked bell with a sour, discordant chime.\n\nRing it while hunting together, and the\nresonance binding the hunters turns to\nrivalry: they may strike one another as foes.\n\nRing it again to restore the old bond.\nOnly the beckoner decides; a cooperator\nwho rings it merely asks."}, // (empty)
-{10, 201, u"Communion Chalice"}, // (empty)
-{20, 201, u"Drink as a guest in co-op to receive the host's\nkey items, lamps and progress."}, // (empty)
-{24, 201, u"A chalice of the Healing Church, from which\nhunters share in a communion of blood.\n\nDrink from it in another hunter's world, and what\nthat hunter has found and done passes to you:\ntheir keys, the lamps they lit, the beasts they\nslew. Your own strength remains your own."}, // (empty)

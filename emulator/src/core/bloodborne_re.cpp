@@ -14036,6 +14036,13 @@ std::atomic<bool> bbsc_communion_requested{false}; // host side: a guest rang th
 std::mutex bbsc_communion_mutex;
 std::vector<u32> bbsc_communion_received; // guest side: the host's key items, to give
 bool bbsc_communion_received_ready = false;
+// The other way (2026-10-22, the user: as host "nothing happens, but it should sync back the other
+// way"; their choices: items only, from every guest). The host's drink asks its guests (kind 4),
+// each guest answers with its key items, weapons and runes (kind 5, as kind 2), and the host gets
+// the ones it lacks. The host's world is never touched.
+std::atomic<bool> bbsc_communion_host_asked{false}; // guest side: our host drank the chalice
+std::vector<std::vector<u32>> bbsc_communion_from_guests; // host side: the guests' answers
+constexpr s64 BbscCommunionGatherMs = 4'000; // the host waits this long for every guest's answer
 
 // ---- The BBSC hunter's kit (2026-10-05) ---------------------------------------------------------
 // The user: "our own stuff - summoning, joining, pvp, invading - with our rules, including no insight
@@ -14768,7 +14775,8 @@ void InstallBbscItemUseHook() {
     }
 }
 
-// Relay "SHAD" 0x28: kind 1 (a guest asks), kind 2 + u16 count + u32 key item ids (the host).
+// Relay "SHAD" 0x28: kind 1 (a guest asks), kind 2 + u16 count + u32 key item ids (the host),
+// kind 3 + u32 (the guest is done), kind 4 (the host asks), kind 5 as kind 2 (a guest answers).
 void SendBbscCommunionPacket(u8 kind, const std::vector<u32>& ids) {
     std::vector<u8> packet{'S', 'H', 'A', 'D', BbscCommunionType, kind, 0, 0};
     const u16 count = static_cast<u16>(std::min<size_t>(ids.size(), 1024));
@@ -14989,16 +14997,18 @@ struct BbscGearGifts {
     s64 next_ms = 0;
     size_t weapons = 0;
     size_t runes = 0;
+    const char* from = "the host's world";
 };
 BbscGearGifts bbsc_gear_gifts;
 
 // Queues the weapons and runes of the last chalice we lack. Live, right after the drink (the user:
 // "all should be live"; the game's item pickup already gives guests their drops in a session),
 // and again at the trip home for anything the session did not keep.
-void QueueBbscGearGifts(std::string_view when) {
+void QueueBbscGearGifts(std::string_view when, const char* from = "the host's world") {
     if (bbsc_communion_gear.empty()) {
         return;
     }
+    bbsc_gear_gifts.from = from;
     // A queue still running keeps its saved lot rows: only the items change.
     bbsc_gear_gifts.queue.clear();
     bbsc_gear_gifts.awarded.clear();
@@ -15008,9 +15018,9 @@ void QueueBbscGearGifts(std::string_view when) {
         }
     }
     bbsc_gear_gifts.next_ms = SteadyNowMs() + 2'000; // after the chalice's own notice
-    LOG_INFO(Debug, "BBSC communion bell: {} - {} of the host's {} weapon(s) and rune(s) are new to "
-                    "us, given one by one",
-             when, bbsc_gear_gifts.queue.size(), bbsc_communion_gear.size());
+    LOG_INFO(Debug, "BBSC communion bell: {} - {} of the {} weapon(s) and rune(s) from {} are new "
+                    "to us, given one by one",
+             when, bbsc_gear_gifts.queue.size(), bbsc_communion_gear.size(), from);
 }
 
 void StartBbscGearGifts() {
@@ -15031,7 +15041,8 @@ void TickBbscGearGifts() {
     const s32 state = GetSessionState();
     const bool boss_time = BossFightActive() ||
                            (bbsc_boss_killed_ms != 0 && now - bbsc_boss_killed_ms < 30'000);
-    const bool ready = (state == 0 || state == 6) && !boss_time && GetLocalPlayerType() != 2 &&
+    const bool ready = (state == 0 || state == 3 || state == 6) && !boss_time &&
+                       GetLocalPlayerType() != 2 &&
                        ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) == 0 &&
                        ReadablePointer(item_man, 0x10) &&
                        GetCharacterHp(GetLocalPlayerCharacter()) > 0;
@@ -15055,9 +15066,9 @@ void TickBbscGearGifts() {
         LOG_INFO(Debug, "BBSC communion bell: gave {} weapon(s) and {} rune(s) of {}; lot {} put back",
                  g.weapons, g.runes, g.awarded.size(), BbscGearLot);
         static std::u16string text;
-        const std::string line = fmt::format("Communion: {} weapon(s) and {} rune(s)\nfrom the host's "
-                                             "world received.",
-                                             g.weapons, g.runes);
+        const std::string line = fmt::format("Communion: {} weapon(s) and {} rune(s)\nfrom {} "
+                                             "received.",
+                                             g.weapons, g.runes, g.from);
         text.assign(line.begin(), line.end());
         BbscAnnounce(text.c_str(), "communion gear received");
         return;
@@ -15198,6 +15209,7 @@ void TickBbscCommunion() {
     TickBbscGearGifts();
     // The ring.
     static bool rung_was = false;
+    static s64 host_gather_until_ms = 0;
     const bool rung =
         bbsc_communion_drunk.exchange(false) || BbscLocalEffectActive(bbsc_communion_effect_rows);
     if (rung && !rung_was) {
@@ -15232,7 +15244,14 @@ void TickBbscCommunion() {
                             "progress ({} of {} boss flags set here)",
                      state, held, ids, boss_flags, BbscProgressFlags.size());
             if (state == 3) {
-                BbscAnnounce(u"Your progress is ready to share.\nA guest must drink from the chalice to receive it.",
+                {
+                    std::scoped_lock lock{bbsc_communion_mutex};
+                    bbsc_communion_from_guests.clear();
+                }
+                host_gather_until_ms = SteadyNowMs() + BbscCommunionGatherMs;
+                SendBbscCommunionPacket(4, {});
+                LOG_INFO(Debug, "BBSC communion bell: drunk as host - asking our guests");
+                BbscAnnounce(u"Communion begun.\nSharing in your guests' progress...",
                              "communion as host");
             } else {
                 BbscAnnounce(u"No one to commune with.\nDrink it as a guest in another hunter's world.",
@@ -15241,9 +15260,8 @@ void TickBbscCommunion() {
         }
     }
     rung_was = rung;
-    // Host: answer with the key items we have.
-    static s64 host_notice_ms = 0;
-    if (state == 3 && bbsc_communion_requested.exchange(false)) {
+    // What we offer: the key items we carry or store, then our weapons and runes (tagged).
+    const auto offer = [](size_t& key_count, std::vector<u32>& gear) {
         const u64 carried = BbscCarriedInventory();
         const u64 storage = BbscStorageInventory();
         std::vector<u32> have;
@@ -15254,10 +15272,88 @@ void TickBbscCommunion() {
                 have.push_back(id);
             }
         }
-        const size_t key_count = have.size();
-        const std::vector<u32> gear = BbscHeldGearTagged();
+        key_count = have.size();
+        gear = BbscHeldGearTagged();
         have.insert(have.end(), gear.begin(), gear.end());
-        SendBbscCommunionPacket(2, have);
+        return have;
+    };
+    // Guest: our host drank - answer with what we have.
+    if (bbsc_communion_host_asked.exchange(false) && state == 6) {
+        size_t key_count = 0;
+        std::vector<u32> gear;
+        SendBbscCommunionPacket(5, offer(key_count, gear));
+        LOG_INFO(Debug, "BBSC communion bell: the host drank - sent it our {} key item(s) and {} "
+                        "weapon(s) and rune(s)",
+                 key_count, gear.size());
+        BbscAnnounce(u"The host shares in your progress.", "communion shared with the host");
+    }
+    // Host: our drink's answers, once every guest had the time to answer.
+    if (host_gather_until_ms != 0 && SteadyNowMs() >= host_gather_until_ms) {
+        host_gather_until_ms = 0;
+        std::vector<std::vector<u32>> answers;
+        {
+            std::scoped_lock lock{bbsc_communion_mutex};
+            answers.swap(bbsc_communion_from_guests);
+        }
+        const u64 carried = BbscCarriedInventory();
+        const u64 storage = BbscStorageInventory();
+        if (state != 3 || carried == 0) {
+            LOG_INFO(Debug, "BBSC communion bell: no longer hosting - {} answer(s) dropped",
+                     answers.size());
+        } else if (answers.empty()) {
+            LOG_INFO(Debug, "BBSC communion bell: no guest answered");
+            BbscAnnounce(u"No guest answered the communion.", "communion as host, no answer");
+        } else {
+            size_t given = 0;
+            std::vector<u32> keys;
+            bbsc_communion_gear.clear();
+            for (const std::vector<u32>& answer : answers) {
+                for (const u32 id : answer) {
+                    const u32 tag = id & 0xF0000000u;
+                    std::vector<u32>& into =
+                        tag == BbscGearWeaponTag || tag == BbscGearRuneTag ? bbsc_communion_gear : keys;
+                    if (std::ranges::find(into, id) == into.end()) {
+                        into.push_back(id);
+                    }
+                }
+            }
+            for (const u32 id : keys) {
+                if (std::ranges::find(bbsc_key_goods_ids, id) == bbsc_key_goods_ids.end()) {
+                    continue; // only key items, whatever the packet says
+                }
+                const u32 code = 0x40000000u | id;
+                if (BbscInventoryHas(carried, code) ||
+                    (storage != 0 && BbscInventoryHas(storage, code))) {
+                    continue;
+                }
+                BbscBossGoodsLot lot{0, id, 1, 0};
+                if (GiveBbscBossGoods(lot)) {
+                    ++given;
+                }
+            }
+            const bool gear = !bbsc_communion_gear.empty();
+            QueueBbscGearGifts("live, after the host's drink", "your guests");
+            bbsc_communion_gear.clear(); // ours now, not for a later trip home
+            LOG_INFO(Debug, "BBSC communion bell: {} guest(s) answered with {} key item(s), {} new to "
+                            "us now given; their weapons and runes follow",
+                     answers.size(), keys.size(), given);
+            const std::string text =
+                gear ? fmt::format("Communion complete: {} key item(s)\nreceived from your guests.\n"
+                                   "Weapons and runes follow.",
+                                   given)
+                     : fmt::format("Communion complete: {} key item(s)\nreceived from your guests.",
+                                   given);
+            static std::u16string announce;
+            announce.assign(text.begin(), text.end());
+            BbscAnnounce(announce.c_str(), "communion done (host)");
+        }
+    }
+    // Host: answer with the key items we have.
+    static s64 host_notice_ms = 0;
+    if (state == 3 && bbsc_communion_requested.exchange(false)) {
+        size_t key_count = 0;
+        std::vector<u32> gear;
+        SendBbscCommunionPacket(2, offer(key_count, gear));
         const size_t weapons = static_cast<size_t>(std::ranges::count_if(
             gear, [](u32 t) { return (t & 0xF0000000u) == BbscGearWeaponTag; }));
         LOG_INFO(Debug, "BBSC communion bell: a guest asked - sent our {} key item(s), {} weapon(s) "
@@ -17540,13 +17636,17 @@ void OnBbscCommunionPacket(std::uint8_t kind, const void* data, std::uint32_t si
         bbsc_communion_requested = true;
         return;
     }
+    if (kind == 4) {
+        bbsc_communion_host_asked = true;
+        return;
+    }
     if (kind == 3 && data != nullptr && size >= 6) {
         u32 given = 0;
         std::memcpy(&given, static_cast<const u8*>(data) + 2, 4);
         bbsc_communion_guest_done = static_cast<s32>(std::min<u32>(given, 1000));
         return;
     }
-    if (kind != 2 || data == nullptr || size < 2) {
+    if ((kind != 2 && kind != 5) || data == nullptr || size < 2) {
         return;
     }
     u16 count = 0;
@@ -17558,6 +17658,12 @@ void OnBbscCommunionPacket(std::uint8_t kind, const void* data, std::uint32_t si
         ids.push_back(id);
     }
     std::scoped_lock lock{bbsc_communion_mutex};
+    if (kind == 5) {
+        if (bbsc_communion_from_guests.size() < 8) {
+            bbsc_communion_from_guests.push_back(std::move(ids));
+        }
+        return;
+    }
     bbsc_communion_received = std::move(ids);
     bbsc_communion_received_ready = true;
 }
