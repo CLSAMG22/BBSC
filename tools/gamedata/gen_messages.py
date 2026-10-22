@@ -168,6 +168,9 @@ replace(1122, r'Small Resonant Bell', "Join another player's game\nwith the Kin 
 replace(15000011, r'^\*$', 'You caught up with <?hostName?>.')
 replace(15000012, r'^\*$', '<?joinName?> caught up with you.')
 replace(15000035, r'^\*$', "You are in the host's Hunter's Dream.")
+# The Communion Chalice's question before the drink (its goods row's yesNoDialogMessageId), an empty
+# "*" slot among the game's item prompts that nothing refers to.
+replace(10010854, r'^\*$', "Drink from the Communion Chalice\nand share progress with the other hunters?")
 
 # The Duel Bell (PvP toggle, bloodborne_re.cpp "PvP toggle item"): goods 4313 is an unused key item
 # with empty slots in the item name / info / caption tables (msg/engus/item.msgbnd: 10, 20, 24).

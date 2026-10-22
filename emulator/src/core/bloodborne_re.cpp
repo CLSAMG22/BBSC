@@ -14031,6 +14031,15 @@ constexpr u32 BbscCommunionEffectId = 190001;
 constexpr u8 BbscCommunionType = 0x28;
 std::atomic<bool> bbsc_communion_ready{false};
 std::vector<u64> bbsc_communion_effect_rows; // SpEffect 190001 rows (every table copy)
+// 2026-10-22, the user: "a prompt asking the user of the cup to confirm", and "we should not be able
+// to use the item when sync is in progress". The goods row's yesNoDialogMessageId (+36) makes the
+// game ask before the drink, as the Bold Hunter's Mark does (goods 100, text 30/10010711). 10010854
+// is an empty "*" text among the game's item prompts that no talk script, event or param refers
+// to. While a drink's sync runs, the row's use bits (+68) are cleared, as for the retired bells.
+constexpr u32 BbscCommunionPromptId = 10010854;
+constexpr u8 BbscCommunionUseBits = 0x1F;  // usable alive / grey / white / black / in co-op
+constexpr s64 BbscCommunionAnswerMs = 15'000; // a guest's drink without the host's answer by then
+std::vector<u64> bbsc_communion_goods_rows; // goods 201 rows (every table copy)
 std::vector<u32> bbsc_key_goods_ids;         // goodsType 1 rows, filled once with the kit tables
 std::atomic<bool> bbsc_communion_requested{false}; // host side: a guest rang the bell
 std::mutex bbsc_communion_mutex;
@@ -14126,6 +14135,7 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
     std::vector<u64> blanks;
     std::vector<u64> maidens;
     std::vector<u64> communion_effects;
+    std::vector<u64> communion_goods;
     for (const u64 table : speffect_tables) {
         if (const u64 blank = BbscParamRow(table, 7); blank != 0) {
             blanks.push_back(blank);
@@ -14194,8 +14204,10 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
             std::memcpy(reinterpret_cast<void*>(bell), copy.data(), copy.size());
             WriteValue<s32>(bell, 0, static_cast<s32>(BbscCommunionEffectId)); // refId
             WriteValue<s32>(bell, 28, 240015); // sortId: with the kit
+            WriteValue<s32>(bell, 36, static_cast<s32>(BbscCommunionPromptId)); // ask first
             WriteValue<u16>(bell, 44, 192);    // iconId: the Pthumeru Chalice's
             WriteValue<u8>(bell, 62, 26);      // goodsUseAnim: drink, as a Blood Vial
+            communion_goods.push_back(bell);
         }
     }
     const bool ok = goods != 0 && !effects.empty();
@@ -14207,6 +14219,7 @@ bool PrepareBbscDuelBellIn(const std::vector<u64>& goods_tables,
     // this (scan) thread, and published by the ready flag - never replaced while being read.
     if (publish && ok && !communion_effects.empty() && !bbsc_communion_ready) {
         bbsc_communion_effect_rows = std::move(communion_effects);
+        bbsc_communion_goods_rows = std::move(communion_goods);
         bbsc_key_goods_ids = std::move(keys);
         LOG_INFO(Debug, "BBSC communion bell: goods {}, SpEffect {}, {} key item(s) known",
                  BbscCommunionGoodsId, BbscCommunionEffectId, bbsc_key_goods_ids.size());
@@ -15210,12 +15223,14 @@ void TickBbscCommunion() {
     // The ring.
     static bool rung_was = false;
     static s64 host_gather_until_ms = 0;
+    static s64 guest_wait_until_ms = 0; // our drink as a guest, until the host's answer
     const bool rung =
         bbsc_communion_drunk.exchange(false) || BbscLocalEffectActive(bbsc_communion_effect_rows);
     if (rung && !rung_was) {
         if (state == 6) {
             bbsc_communion_this_session = true;
             SendBbscCommunionPacket(1, {});
+            guest_wait_until_ms = SteadyNowMs() + BbscCommunionAnswerMs;
             LOG_INFO(Debug, "BBSC communion bell: rung as a guest - asking the host");
             BbscAnnounce(u"Communion begun.\nSharing in the host's progress...",
                          "communion asked");
@@ -15260,6 +15275,35 @@ void TickBbscCommunion() {
         }
     }
     rung_was = rung;
+    // No second drink while one is still being shared: the chalice can't be used until then.
+    {
+        static s64 last_ms = 0;
+        static bool was_busy = false;
+        const s64 now = SteadyNowMs();
+        if (guest_wait_until_ms != 0 && (now > guest_wait_until_ms || state != 6)) {
+            if (state == 6) {
+                LOG_INFO(Debug, "BBSC communion bell: no answer from the host in {} s",
+                         BbscCommunionAnswerMs / 1000);
+                BbscAnnounce(u"The host did not answer the communion.", "communion no answer");
+            }
+            guest_wait_until_ms = 0;
+        }
+        const bool busy = guest_wait_until_ms != 0 || host_gather_until_ms != 0 ||
+                          !bbsc_gear_gifts.queue.empty() || !bbsc_gear_gifts.saved_rows.empty();
+        if (busy != was_busy || now - last_ms >= 500) {
+            last_ms = now;
+            for (const u64 row : bbsc_communion_goods_rows) {
+                if (HasMemoryAccess(row + 68, 1, MemoryProt::CpuWrite)) {
+                    WriteValue<u8>(row, 68, busy ? 0 : BbscCommunionUseBits);
+                }
+            }
+            if (busy != was_busy) {
+                LOG_INFO(Debug, "BBSC communion bell: chalice {}",
+                         busy ? "locked while sharing" : "usable again");
+            }
+            was_busy = busy;
+        }
+    }
     // What we offer: the key items we carry or store, then our weapons and runes (tagged).
     const auto offer = [](size_t& key_count, std::vector<u32>& gear) {
         const u64 carried = BbscCarriedInventory();
@@ -15387,6 +15431,7 @@ void TickBbscCommunion() {
         bbsc_communion_received_ready = false;
         got.swap(bbsc_communion_received);
     }
+    guest_wait_until_ms = 0;
     const u64 carried = BbscCarriedInventory();
     const u64 storage = BbscStorageInventory();
     if (carried == 0 || state != 6) {
