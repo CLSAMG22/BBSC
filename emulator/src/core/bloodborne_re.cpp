@@ -15338,11 +15338,20 @@ void TickBbscCommunion() {
         have.insert(have.end(), gear.begin(), gear.end());
         return have;
     };
-    // Guest: our host drank - answer with what we have.
+    // Guest: our host drank - answer with what we have. Our key items too, from the list noted at
+    // home (2026-10-22: a guest answered with 0 key items - the game takes them while we are away).
     if (bbsc_communion_host_asked.exchange(false) && state == 6) {
         size_t key_count = 0;
         std::vector<u32> gear;
-        SendBbscCommunionPacket(5, offer(key_count, gear));
+        std::vector<u32> answer = offer(key_count, gear);
+        for (const u32 id : bbsc_keys_before_session) {
+            if (std::ranges::find(bbsc_key_goods_ids, id) != bbsc_key_goods_ids.end() &&
+                std::ranges::find(answer, id) == answer.end()) {
+                answer.insert(answer.begin(), id);
+                ++key_count;
+            }
+        }
+        SendBbscCommunionPacket(5, answer);
         LOG_INFO(Debug, "BBSC communion bell: the host drank - sent it our {} key item(s) and {} "
                         "weapon(s) and rune(s)",
                  key_count, gear.size());
@@ -15396,8 +15405,8 @@ void TickBbscCommunion() {
             bbsc_communion_gear.clear(); // ours now, not for a later trip home
             const bool gear = !bbsc_gear_gifts.queue.empty();
             LOG_INFO(Debug, "BBSC communion bell: {} guest(s) answered with {} key item(s), {} new to "
-                            "us now given; their weapons and runes follow",
-                     answers.size(), keys.size(), given);
+                            "us now given; {} new weapon(s) and rune(s) follow",
+                     answers.size(), keys.size(), given, bbsc_gear_gifts.queue.size());
             const std::string text =
                 gear ? fmt::format("Communion complete: {} key item(s) received\nfrom your guests. "
                                    "Weapons and runes follow.",
