@@ -8742,7 +8742,14 @@ constexpr s64 BbscReviveGlowEveryMs = 3'000;
 void BbscPlayEvent(u64 chr, const char16_t* name) {
     const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
     const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
-    if (ReadablePointer(behaviour, 0x388) && ReadValue<u8>(behaviour, 0x384) != 0) {
+    const int ready = ReadablePointer(behaviour, 0x388) ? ReadValue<u8>(behaviour, 0x384) : -1;
+    static s64 logged_ms = 0;
+    if (SteadyNowMs() - logged_ms > 5'000) {
+        logged_ms = SteadyNowMs();
+        LOG_INFO(Debug, "BBSC revive: kneel event {} (behaviour {:#x}, ready {})",
+                 ready > 0 ? "sent" : "NOT sent", behaviour, ready);
+    }
+    if (ready > 0) {
         using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
         reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
                                                                  reinterpret_cast<u64>(name));
@@ -8805,17 +8812,32 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     const u64 draw_state = ReadablePointer(draw, 0x30) ? ReadValue<u64>(draw, 0x28) : 0;
     const float opacity = ReadValue<float>(best, 0x208);
     const int drawing = ReadablePointer(draw_state, 0x10) ? ReadValue<u8>(draw_state, 0x0C) : -1;
+    // The death flags hide the body too, only the name stayed (2026-10-24 11:24, screenshot): the
+    // same ones TickBbscRemoteRevive clears, [[chr+0x58]+0x38]+0x48 bits 0-1 and [chr+0x58]+0x114
+    // bit 0. No Idle_wild here: the body keeps lying as it fell.
+    const u64 control = ReadablePointer(best, 0x60) ? ReadValue<u64>(best, 0x58) : 0;
+    const u64 control_flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
+    const int flags48 = ReadablePointer(control_flags, 0x50) ? ReadValue<u8>(control_flags, 0x48) : -1;
+    const int dead114 = ReadablePointer(control, 0x118) ? ReadValue<u16>(control, 0x114) : -1;
     if (opacity < 0.99f) {
         WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
     }
     if (drawing == 0) {
         WriteValue<u8>(draw_state, 0x0C, 1);
     }
-    if ((opacity < 0.99f || drawing == 0) && std::ranges::find(logged, id) == logged.end()) {
+    if (flags48 > 0 && (flags48 & 3) != 0) {
+        WriteValue<u8>(control_flags, 0x48, static_cast<u8>(flags48 & 0xFC));
+    }
+    if (dead114 > 0 && (dead114 & 1) != 0) {
+        WriteValue<u16>(control, 0x114, static_cast<u16>(dead114 & 0xFFFE));
+    }
+    const bool changed = opacity < 0.99f || drawing == 0 || (flags48 > 0 && (flags48 & 3) != 0) ||
+                         (dead114 > 0 && (dead114 & 1) != 0);
+    if (changed && std::ranges::find(logged, id) == logged.end()) {
         logged.push_back(id);
         LOG_INFO(Debug, "BBSC revive: fallen player {:08x} drawn again where it lies (opacity {:.2f}, "
-                        "drawing {})",
-                 id, opacity, drawing);
+                        "drawing {}, flags +0x48 {:#x}, +0x114 {:#x})",
+                 id, opacity, drawing, flags48, dead114);
     }
     return best;
 }
@@ -8935,7 +8957,7 @@ void TickBbscRevive() {
     }
     static s64 shown_ms = 0;
     static std::map<u32, u64> copies; // fallen player -> its copy here, from the last look
-    if (!lying.empty() && now - shown_ms >= 500) {
+    if (!lying.empty() && now - shown_ms >= 100) {
         shown_ms = now;
         copies.clear();
         for (const auto& [id, at] : lying) {
@@ -8948,7 +8970,7 @@ void TickBbscRevive() {
         near_id = target;
         if (target != 0 && now - prompted_ms > 10'000) {
             prompted_ms = now;
-            BbscAnnounce(u"A fellow hunter has fallen.\nHold <img src=\"KG_R_D\" vspace='-8'> "
+            BbscAnnounce(u"A fellow hunter has fallen.\nHold <img src=\"KG_OK\" vspace='-8'> "
                          u"beside it to revive it.",
                          "revive prompt");
         }
@@ -12043,8 +12065,9 @@ std::vector<u64> BbscWatchTargets() {
 }
 
 // The co-op banner, at most every 1.5 s (switching fast would queue one banner per press).
-// The game's button icons, as its tutorial texts (menu category 2) write them.
-constexpr std::string_view BbscIconCircle = "<img src=\"KG_R_R\" vspace='-8'>";
+// The game's button icons, as its tutorial texts (menu category 2) write them. The names are the
+// images in menu/common.tpf: KG_OK (Cross, confirm), KG_Cancel (Circle), KG_R1, KG_TP_L, ...
+constexpr std::string_view BbscIconCircle = "<img src=\"KG_Cancel\" vspace='-8'>";
 constexpr std::string_view BbscIconR1 = "<img src=\"KG_R1\" vspace='-8'>";
 constexpr std::string_view BbscIconTouchpad = "<img src=\"KG_TP_L\" vspace='-8'>";
 
@@ -12140,11 +12163,15 @@ bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s
             // PlayStation, Xbox or keyboard (2026-10-24, the user: icons by input).
             const std::string lamp = "Hold " + std::string{BbscIconCircle} + ": return to the lamp.";
             const std::string free_cam = std::string{BbscIconTouchpad} + ": free camera.";
-            BbscWatchNotice(lamp_choice ? free_cam + "\n" + lamp
-                            : size > 1  ? fmt::format("Watching hunter {} of {}. {}: next hunter.\n{}",
-                                                      index + 1, size, BbscIconR1, free_cam)
-                                        : "Watching the living hunter.\n" + free_cam,
-                            "watch camera", now);
+            // Down outside a boss fight: no banner at all (2026-10-24, the user: the game's own
+            // "You died." banner is the only one wanted there). The hints wait for the game's own
+            // prompt UI.
+            if (!lamp_choice) {
+                BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. {}: next hunter.\n{}",
+                                                       index + 1, size, BbscIconR1, free_cam)
+                                         : "Watching the living hunter.\n" + free_cam,
+                                "watch camera", now);
+            }
         } else {
             BbscWatchNotice(fmt::format("Watching hunter {} of {}.", index + 1, size),
                             "watch camera switch", now);
