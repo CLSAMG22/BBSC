@@ -8580,9 +8580,17 @@ void TickBbscSpectate() {
         LOG_INFO(Debug, "BBSC spectate: a partner said dead and then alive while we were down - "
                         "it reloaded after a wipe, the guest follows");
     }
-    if (session_alive && LivingPartnerExists()) {
+    // After the wipe warp the new character is up as soon as a partner says it is alive: the
+    // host's copy took about 6 s to appear in the guest's reloaded world (2026-10-24 20:21), the
+    // new character had no HP meanwhile, and the game ran its death again 6 s after the load.
+    const u64 now_chr = GetLocalPlayerCharacter();
+    const auto [peers_fresh, peers_dead] = BbscPeerLifeCounts();
+    const bool new_after_wipe = bbsc_spectate_wipe_warped && now_chr != 0 &&
+                                bbsc_spectate_chr != 0 && now_chr != bbsc_spectate_chr &&
+                                peers_fresh > peers_dead;
+    if (session_alive && (LivingPartnerExists() || new_after_wipe)) {
         std::string_view respawn_why;
-        const u64 chr = GetLocalPlayerCharacter();
+        const u64 chr = now_chr;
         if (bbsc_revive_received.exchange(false)) {
             // A partner revived us: up where we fell, no curtain, no death penalty.
             if (BbscRespawnInPlace(BbscRevivedWhy)) {
