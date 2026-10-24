@@ -7193,9 +7193,18 @@ void TickBbscLoadCover() {
                 LOG_INFO(Debug, "BBSC load cover: the game's loading screen is up (kind {})",
                          ReadValue<s32>(menu, 0x808));
             }
-            return;
-        }
-        if (!bbsc_load_cover.game_screen_seen) {
+            // 2026-10-24 (the user: "you see your character and then you are teleported"): the
+            // summon load was over 3 s before the guest was placed (20:55:16.6 the load made the
+            // character, 20:55:19.5 the join teleport), and in that time the game's loading screen
+            // was closing - MenuMan+0x804 still set, so the cover kept off it, and "loading screen
+            // kept up" was never logged in any join that day. Once no load runs, the plate goes
+            // black under it too, until the guest is placed. A wipe's cover keeps its own rules.
+            const u64 global = GetGlobalState();
+            const bool real_load = ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) != 0;
+            if (real_load || bbsc_load_cover.why == "wipe") {
+                return; // the game's logo while the load runs
+            }
+        } else if (!bbsc_load_cover.game_screen_seen) {
             WriteValue<s32>(menu, 0x808, 2);
         } else if (!BbscCurtainActive()) {
             // 2026-10-05 (tester): "it shows me pop in for a second and then it shows me the load
