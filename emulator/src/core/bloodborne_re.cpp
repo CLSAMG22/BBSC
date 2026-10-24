@@ -9567,6 +9567,19 @@ void TickBbscRevive() {
             if (ReadablePointer(own_state, 0x10) && ReadValue<u8>(own_state, 0x0C) == 0) {
                 WriteValue<u8>(own_state, 0x0C, 1);
             }
+            // A repeat death (raised by BBSC, see TickBbscDeadWatchdog) sets neither death flag,
+            // and the enemies went on attacking the fallen hunter (2026-10-24 23:40, the user):
+            // both bit 0s, as the game's own death sets them (BbscRespawnInPlace clears them).
+            const u64 own_control = ReadablePointer(me, 0x60) ? ReadValue<u64>(me, 0x58) : 0;
+            const u64 own_flags =
+                ReadablePointer(own_control, 0x40) ? ReadValue<u64>(own_control, 0x38) : 0;
+            if (ReadablePointer(own_flags, 0x50) && (ReadValue<u8>(own_flags, 0x48) & 1) == 0) {
+                WriteValue<u8>(own_flags, 0x48, static_cast<u8>(ReadValue<u8>(own_flags, 0x48) | 1));
+            }
+            if (ReadablePointer(own_control, 0x118) && (ReadValue<u16>(own_control, 0x114) & 1) == 0) {
+                WriteValue<u16>(own_control, 0x114,
+                                static_cast<u16>(ReadValue<u16>(own_control, 0x114) | 1));
+            }
         }
         if (body.has_value() && now - sent_ms >= BbscReviveSendMs) {
             sent_ms = now;
