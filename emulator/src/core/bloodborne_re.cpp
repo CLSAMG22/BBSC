@@ -4169,6 +4169,8 @@ enum class BbscDeathMode : u8 { Spectate, RespawnNow, Downed };
 bool BbscReviveEnabled();   // see "Reviving a fallen hunter"
 bool BbscReviveGiveUp();    // the fallen hunter held Circle: to the lamp
 std::atomic<bool> bbsc_revive_received{false}; // a partner finished reviving us
+constexpr s32 BbscReviveGlowEffectId = 3010; // the Blood Vial's look, see "Reviving a fallen hunter"
+void BbscAddEffect(u64 chr, s32 id);         // see "Reviving a fallen hunter"
 
 BbscDeathMode bbsc_death_mode = BbscDeathMode::Spectate;
 s64 bbsc_boss_cleared_since_ms = 0;
@@ -8522,6 +8524,7 @@ void TickBbscSpectate() {
             // A partner revived us: up where we fell, no curtain, no death penalty.
             if (BbscRespawnInPlace(BbscRevivedWhy)) {
                 bbsc_spectate_active = false;
+                BbscAddEffect(GetLocalPlayerCharacter(), BbscReviveGlowEffectId);
                 BbscAnnounce(u"Revived by a fellow hunter.", "revived");
                 return;
             }
@@ -8724,17 +8727,47 @@ bool BbscReviveGiveUp() {
 // where it lies, so the others can find it (2026-10-24, the user: "dead player has no body"). The
 // remote copy nearest to the spot it reported (within 3 m) gets the visibility of
 // TickBbscRemoteRevive: opacity chr+0x208 back to 1 and drawing on.
-void ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
+// The look of a revive (2026-10-24, the user: "missing animation, like kneeling with effect"): the
+// reviver kneels with the messenger note's animation (event W_UseItemMessage, played again while it
+// holds X), the fallen body glows with the Blood Vial's effect (SpEffect 3010), and so does the
+// hunter who gets up. Events play through 0x01A19F60(behaviour, name), as Idle_wild does in
+// BbscRespawnInPlace; effects through the character's own add, vtable +0x3F0 (see "Invasions").
+constexpr char16_t BbscReviveKneelEvent[] = u"W_UseItemMessage";
+constexpr s64 BbscReviveKneelEveryMs = 2'500;
+constexpr s64 BbscReviveGlowEveryMs = 3'000;
+
+void BbscPlayEvent(u64 chr, const char16_t* name) {
+    const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
+    const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
+    if (ReadablePointer(behaviour, 0x388) && ReadValue<u8>(behaviour, 0x384) != 0) {
+        using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
+        reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
+                                                                 reinterpret_cast<u64>(name));
+    }
+}
+
+void BbscAddEffect(u64 chr, s32 id) {
+    const u64 vtable = ReadablePointer(chr, 8) ? ReadValue<u64>(chr, 0) : 0;
+    const u64 add = ReadablePointer(vtable, 0x3F8) ? ReadValue<u64>(vtable, 0x3F0) : 0;
+    if (!IsEbootCodeAddress(add)) {
+        return;
+    }
+    using AddSpEffect = void PS4_SYSV_ABI (*)(u64 chr, s32 id, u64 source, s32, s32, s32, float,
+                                               float, float, float, float, s32);
+    reinterpret_cast<AddSpEffect>(add)(chr, id, chr, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0);
+}
+
+u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     static std::vector<u32> logged;
     const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
     if (!ReadablePointer(world_chr, 0x70)) {
-        return;
+        return 0;
     }
     const u64 local = ReadValue<u64>(world_chr, 0x60);
     const s32 count = ReadValue<s32>(world_chr, 0x30);
     const u64 entries = ReadValue<u64>(world_chr, 0x38);
     if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
-        return;
+        return 0;
     }
     u64 best = 0;
     float best_d = 9.0f;
@@ -8762,7 +8795,7 @@ void ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
             LOG_INFO(Debug, "BBSC revive: no copy of fallen player {:08x} within 3 m of where it lies",
                      id);
         }
-        return;
+        return 0;
     }
     const u64 modules = ReadValue<u64>(best, 0x3B0);
     const u64 draw = ReadablePointer(modules, 0x60) ? ReadValue<u64>(modules, 0x58) : 0;
@@ -8781,6 +8814,7 @@ void ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
                         "drawing {})",
                  id, opacity, drawing);
     }
+    return best;
 }
 
 void TickBbscRevive() {
@@ -8896,10 +8930,14 @@ void TickBbscRevive() {
         }
     }
     static s64 shown_ms = 0;
+    static std::map<u32, u64> copies; // fallen player -> its copy here, from the last look
     if (!lying.empty() && now - shown_ms >= 500) {
         shown_ms = now;
+        copies.clear();
         for (const auto& [id, at] : lying) {
-            ShowBbscFallenCopy(id, at);
+            if (const u64 copy = ShowBbscFallenCopy(id, at)) {
+                copies[id] = copy;
+            }
         }
     }
     if (target != near_id) {
@@ -8923,6 +8961,23 @@ void TickBbscRevive() {
         BbscAnnounce(u"Reviving the fallen hunter...", "reviving");
     }
     filling = now_filling;
+    static s64 kneel_ms = 0;
+    static s64 glow_ms = 0;
+    if (filling) {
+        if (now - kneel_ms >= BbscReviveKneelEveryMs) {
+            kneel_ms = now;
+            BbscPlayEvent(me, BbscReviveKneelEvent);
+        }
+        if (now - glow_ms >= BbscReviveGlowEveryMs) {
+            glow_ms = now;
+            if (const auto it = copies.find(target); it != copies.end()) {
+                BbscAddEffect(it->second, BbscReviveGlowEffectId);
+            }
+        }
+    } else {
+        kneel_ms = 0;
+        glow_ms = 0;
+    }
     if (filling && now - progress_sent_ms >= 1'000) {
         progress_sent_ms = now;
         SendBbscRevivePacket(2, target, map, target_position,
@@ -11950,6 +12005,15 @@ std::vector<u64> BbscWatchTargets() {
         return out;
     }
     const u64 local = ReadValue<u64>(world_chr, 0x60);
+    // Down outside a boss fight, the camera stays at our own body (2026-10-24, the user: following
+    // the other hunter can go where the world is not loaded here). A boss arena is loaded, so a
+    // boss fight still watches the living hunters.
+    if (bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Downed) {
+        if (local != 0 && ReadCharacterTransform(local).has_value()) {
+            out.push_back(local);
+        }
+        return out;
+    }
     const s32 count = ReadValue<s32>(world_chr, 0x30);
     const u64 entries = ReadValue<u64>(world_chr, 0x38);
     if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
@@ -11980,7 +12044,18 @@ constexpr std::string_view BbscIconCircle = "<img src=\"KG_R_R\" vspace='-8'>";
 constexpr std::string_view BbscIconR1 = "<img src=\"KG_R1\" vspace='-8'>";
 constexpr std::string_view BbscIconTouchpad = "<img src=\"KG_TP_L\" vspace='-8'>";
 
+// The death camera's notice waits until the game's YOU DIED is gone (2026-10-24, the user: it was
+// shown under it): BbscWatchNoticeDelayMs after the death step's last part.
+constexpr s64 BbscWatchNoticeDelayMs = 4'000;
+std::string bbsc_watch_pending;
+std::string bbsc_watch_pending_what;
+
 void BbscWatchNotice(std::string_view text, std::string_view what, s64 now) {
+    if (bbsc_spectate_active && now - bbsc_spectate_since_ms < BbscWatchNoticeDelayMs) {
+        bbsc_watch_pending = std::string{text};
+        bbsc_watch_pending_what = std::string{what};
+        return;
+    }
     if (now - bbsc_watch.notice_ms < 1'500) {
         return;
     }
@@ -11995,6 +12070,15 @@ void BbscWatchNotice(std::string_view text, std::string_view what, s64 now) {
 
 // Camera director update (game thread). True when this frame's camera was written here.
 bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s64 now) {
+    if (!bbsc_watch_pending.empty() &&
+        (!bbsc_spectate_active || now - bbsc_spectate_since_ms >= BbscWatchNoticeDelayMs)) {
+        const std::string text = std::move(bbsc_watch_pending);
+        const std::string what = std::move(bbsc_watch_pending_what);
+        bbsc_watch_pending.clear();
+        if (bbsc_spectate_active) {
+            BbscWatchNotice(text, what, now);
+        }
+    }
     const std::vector<u64> targets = BbscWatchTargets();
     if (targets.empty()) {
         if (bbsc_watch.on) {
@@ -12050,13 +12134,12 @@ bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s
             // The banner shows two lines. The buttons are the game's own icons (its tutorial texts
             // use <img src="KG_..."> the same way), so they follow BBport's prompt choice:
             // PlayStation, Xbox or keyboard (2026-10-24, the user: icons by input).
-            const std::string lamp = "\nHold " + std::string{BbscIconCircle} + ": return to the lamp.";
+            const std::string lamp = "Hold " + std::string{BbscIconCircle} + ": return to the lamp.";
             const std::string free_cam = std::string{BbscIconTouchpad} + ": free camera.";
-            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. {}: next hunter.{}",
-                                                   index + 1, size, BbscIconR1,
-                                                   lamp_choice ? lamp : "\n" + free_cam)
-                                     : fmt::format("Watching the living hunter. {}{}", free_cam,
-                                                   lamp_choice ? lamp : ""),
+            BbscWatchNotice(lamp_choice ? free_cam + "\n" + lamp
+                            : size > 1  ? fmt::format("Watching hunter {} of {}. {}: next hunter.\n{}",
+                                                      index + 1, size, BbscIconR1, free_cam)
+                                        : "Watching the living hunter.\n" + free_cam,
                             "watch camera", now);
         } else {
             BbscWatchNotice(fmt::format("Watching hunter {} of {}.", index + 1, size),
