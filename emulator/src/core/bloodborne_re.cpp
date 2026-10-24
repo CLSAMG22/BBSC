@@ -4169,6 +4169,7 @@ enum class BbscDeathMode : u8 { Spectate, RespawnNow, Downed };
 bool BbscReviveEnabled();   // see "Reviving a fallen hunter"
 bool BbscReviveGiveUp();    // the fallen hunter held Circle: to the lamp
 std::atomic<bool> bbsc_revive_received{false}; // a partner finished reviving us
+bool bbsc_free_camera_pressed = false;          // the fallen hunter's "Free Camera" prompt (game thread)
 constexpr s32 BbscReviveGlowEffectId = 3010; // the Blood Vial's look, see "Reviving a fallen hunter"
 void BbscAddEffect(u64 chr, s32 id);         // see "Reviving a fallen hunter"
 
@@ -8721,12 +8722,12 @@ void BbscReviveRelayPacket(std::uint8_t kind, std::uint32_t player, std::uint32_
     }
 }
 
-// The fallen hunter's choice, outside a boss fight: Circle held for a moment, or X, the button of
-// the game's own prompt that TickBbscRevive shows ("Return to Lamp").
+// The fallen hunter's choice, outside a boss fight: Circle held for a moment - the button of the
+// "Return to Lamp" prompt TickBbscRevive shows (X is its "Free Camera").
 bool BbscReviveGiveUp() {
     static s64 held_since_ms = 0;
     const s64 now = SteadyNowMs();
-    if ((Bbsc::HeldPadButtons() & (BbscPadCircle | BbscPadCross)) == 0) {
+    if ((Bbsc::HeldPadButtons() & BbscPadCircle) == 0) {
         held_since_ms = 0;
         return false;
     }
@@ -8880,15 +8881,26 @@ u64 BbscGameParamTable(std::string_view type);     // see "The BBSC hunter's kit
 u64 BbscParamRow(u64 table, u32 id, size_t size); // see "The BBSC hunter's kit"
 constexpr u64 BbscButtonManagerPointer = 0x05540048;
 constexpr u64 BbscButtonRegisterOffset = 0x01CD91F0;
-constexpr u32 BbscReviveButtonSlot = 0x20;
-constexpr s32 BbscReviveButtonRow = 1;
-constexpr s32 BbscReviveButtonText = 10010104;
-constexpr s32 BbscLampButtonText = 10010715;
+// The fallen hunter gets two (2026-10-24, the user: "[X] Return to Lamp  Free Camera [touchpad]"):
+// the prompt draws no touchpad, so the free camera takes the action button and the lamp the other
+// one, row 10000000 (empty too) and slot 0x21 for the second. execButtonCircle 0, which only rows 1
+// and 10000000 have, is taken to be the other button - HYPOTHESIS until a test shows its icon.
+struct BbscButtonPrompt {
+    u32 slot;
+    s32 row;
+    s32 text;
+    bool circle; // the other button (Circle in the west) instead of the action button
+};
+constexpr BbscButtonPrompt BbscRevivePrompt{0x20, 1, 10010104, false};      // "Revive Hunter"
+constexpr BbscButtonPrompt BbscLampPrompt{0x20, 1, 10010715, true};         // "Return to Lamp"
+constexpr BbscButtonPrompt BbscFreeCameraPrompt{0x21, 10000000, 10010774, false}; // "Free Camera"
 constexpr size_t BbscActionButtonRowSize = 0x48;
 
-void BbscShowButtonPrompt(s32 text, u64 dead_chr = 0) {
+// True on the frame its button is pressed.
+bool BbscShowButtonPrompt(const BbscButtonPrompt& prompt, u64 dead_chr = 0) {
+    const s32 text = prompt.text;
     const u64 table = BbscGameParamTable("ACTIONBUTTON_PARAM_ST");
-    const u64 row = table != 0 ? BbscParamRow(table, BbscReviveButtonRow, BbscActionButtonRowSize) : 0;
+    const u64 row = table != 0 ? BbscParamRow(table, prompt.row, BbscActionButtonRowSize) : 0;
     const u64 manager = ReadValue<u64>(image_base + BbscButtonManagerPointer, 0);
     if (row == 0 || !ReadablePointer(manager, 0x58)) {
         static bool logged = false;
@@ -8896,7 +8908,7 @@ void BbscShowButtonPrompt(s32 text, u64 dead_chr = 0) {
             logged = true;
             LOG_WARNING(Debug, "BBSC revive: no action button row or manager - prompt not shown");
         }
-        return;
+        return false;
     }
     if (ReadValue<s32>(row, 0x30) != text) {
         WriteValue<u8>(row, 0x00, 0);                  // regionType
@@ -8913,8 +8925,9 @@ void BbscShowButtonPrompt(s32 text, u64 dead_chr = 0) {
         WriteValue<s32>(row, 0x38, -1);                // grayoutFlag
         WriteValue<s32>(row, 0x3C, 3);                 // priority
         WriteValue<float>(row, 0x40, 0.0f);            // execInvalidTime
-        WriteValue<u8>(row, 0x44, 1);                  // execButtonCircle
-        LOG_INFO(Debug, "BBSC revive: prompt row {} now shows text {}", BbscReviveButtonRow, text);
+        WriteValue<u8>(row, 0x44, prompt.circle ? 0 : 1); // execButtonCircle
+        LOG_INFO(Debug, "BBSC revive: prompt row {} now shows text {} ({} button)", prompt.row, text,
+                 prompt.circle ? "the other" : "the action");
     }
     const u64 modules = ReadablePointer(dead_chr, 0x3B8) ? ReadValue<u64>(dead_chr, 0x3B0) : 0;
     const u64 acts = ReadablePointer(modules, 0x10) ? ReadValue<u64>(modules, 0x08) : 0;
@@ -8924,11 +8937,12 @@ void BbscShowButtonPrompt(s32 text, u64 dead_chr = 0) {
     }
     using Register = bool PS4_SYSV_ABI (*)(u64 manager, u32 slot, s32 row, u32 off, u32 r8,
                                            u32 r9, float xmm0, u32 stack0, u32 stack1);
-    reinterpret_cast<Register>(image_base + BbscButtonRegisterOffset)(
-        manager, BbscReviveButtonSlot, BbscReviveButtonRow, 0, 0, 1, 0.0f, 0, 0);
+    const bool pressed = reinterpret_cast<Register>(image_base + BbscButtonRegisterOffset)(
+        manager, prompt.slot, prompt.row, 0, 0, 1, 0.0f, 0, 0);
     if ((act_bits & 1) == 0) {
         WriteValue<u8>(acts, 0x10, act_bits);
     }
+    return pressed;
 }
 
 // The bar (2026-10-24, the user: "use the stamina to show a progress bar"): the fallen hunter's
@@ -9110,7 +9124,10 @@ void TickBbscRevive() {
     if (down) {
         bbsc_fallen_bodies[0] = me;
         if (bbsc_death_mode == BbscDeathMode::Downed) {
-            BbscShowButtonPrompt(BbscLampButtonText, me);
+            BbscShowButtonPrompt(BbscLampPrompt, me);
+            if (BbscShowButtonPrompt(BbscFreeCameraPrompt, me)) {
+                bbsc_free_camera_pressed = true; // the watch camera turns it (BbscCinematicUpdate)
+            }
         }
         // The bar: the reviver's last word while it fills (four a second), carried on at the
         // fill rate from there, so it mirrors the reviver's own bar (2026-10-24, the user: "both
@@ -9301,7 +9318,7 @@ void TickBbscRevive() {
     }
     const bool now_filling = target != 0 && may_fill && progress < 1.0f;
     if (target != 0 && !now_filling && progress < 1.0f) {
-        BbscShowButtonPrompt(BbscReviveButtonText);
+        BbscShowButtonPrompt(BbscRevivePrompt);
         static s64 breath_ms = 0;
         if (held && !rested && !filling && !resuming && !blocked && !acting &&
             now - breath_ms > 5'000) {
@@ -12686,7 +12703,8 @@ void PS4_SYSV_ABI BbscCinematicCameraHook(u64 /*tag*/, const GuestRegisterSnapsh
     }
     // Dead in co-op: watch a living hunter (BbscWatchCamera); F flies freely instead, and back.
     if (bbsc_spectate_active) {
-        if (in.toggle_free) {
+        const bool prompt_pressed = std::exchange(bbsc_free_camera_pressed, false);
+        if (in.toggle_free || prompt_pressed) {
             bbsc_watch.free = !bbsc_watch.free;
             bbsc_watch.on = false;
             LOG_INFO(Debug, "BBSC watch camera: F - {}",

@@ -171,12 +171,12 @@ replace(15000035, r'^\*$', "You are in the host's Hunter's Dream.")
 # The co-op revive's prompts (bloodborne_re.cpp, BbscShowButtonPrompt): the game's action button
 # shows them with the button's icon. Two more empty "*" slots, the first beside "Pick Up Item".
 replace(10010104, r'^\*$', 'Revive Hunter')
-# The fallen hunter's prompt names the free camera too, on the right (2026-10-24, the user: "free
-# camera should be on the right"), by its keys: the prompt (menu/fe.gfx, ActionButton1) draws only
-# its own button, from a clip (Button_0), and has none of the KG_ icon images - <img
-# src="KG_TP_L"> drew nothing there (19:21 test, and the guest's game closed 15 s later). Spaced
-# with the ideographic space the game's key guides use.
-replace(10010715, r'^\*$', 'Return to Lamp\u3000\u3000\u3000\u3000Free Camera: Touchpad (F)')
+# The fallen hunter's two prompts, "Return to Lamp" and "Free Camera" (2026-10-24, the user). The
+# prompt (menu/fe.gfx, ActionButton1) draws only its own buttons, from a clip (Button_0), and none
+# of the KG_ icon images - <img src="KG_TP_L"> drew nothing there (19:21 test) - so the free camera
+# is a button prompt of its own. 10010774 is another empty "*" slot.
+replace(10010715, r'^\*$', 'Return to Lamp')
+replace(10010774, r'^\*$', 'Free Camera')
 
 # The Duel Bell (PvP toggle, bloodborne_re.cpp "PvP toggle item"): goods 4313 is an unused key item
 # with empty slots in the item name / info / caption tables (msg/engus/item.msgbnd: 10, 20, 24).
