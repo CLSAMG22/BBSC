@@ -13427,6 +13427,14 @@ void TickBbscEchoTrace() {
     last = now;
 }
 
+// The host's wipe reload, asked for at a repeat death: the watchdog leaves the death alone until
+// the host is up again (or 60 s pass). In a session the reload took 25 s to start, and the game
+// revives the character only after the placement; meanwhile the watchdog raised YOU DIED and asked
+// for the reload again 3 times, and the game panicked (177) back to the title (2026-10-24 23:45,
+// Ludwig, the host with two guests).
+constexpr s64 BbscWipeReloadWaitMs = 60'000;
+s64 bbsc_wipe_reload_ms = 0;
+
 // Last resort: the player has been dead for 15 s and nothing revived them. Whatever step went
 // missing, they do not get to stay a corpse.
 void TickBbscDeadWatchdog() {
@@ -13442,6 +13450,17 @@ void TickBbscDeadWatchdog() {
     }
     const u64 player = GetLocalPlayerCharacter();
     const s32 hp = ReadablePointer(player, 0x3B8) ? GetCharacterHp(player) : -1;
+    if (bbsc_wipe_reload_ms != 0) {
+        if (hp > 0 || !session_alive || now - bbsc_wipe_reload_ms > BbscWipeReloadWaitMs) {
+            LOG_INFO(Debug, "BBSC death: done waiting for the wipe reload after {} ms ({})",
+                     now - bbsc_wipe_reload_ms,
+                     hp > 0 ? "up again" : !session_alive ? "session over" : "time limit");
+            bbsc_wipe_reload_ms = 0;
+        } else {
+            bbsc_dead_since_ms = 0;
+            return;
+        }
+    }
     // A held death during a boss fight is meant to stay dead until the boss is over.
     const bool spectating = bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Spectate;
     if (!session_alive || hp > 0 || hp < 0 || spectating || BbscCurtainActive()) {
@@ -13518,6 +13537,7 @@ void TickBbscDeadWatchdog() {
         bbsc_spectate_active = false;
         BbscApplyDeathPenalty("wipe");
         RequestBbscDeathReload("host's repeat death in a wipe");
+        bbsc_wipe_reload_ms = now;
         return;
     }
     if (repeat) {
