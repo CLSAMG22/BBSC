@@ -8249,6 +8249,11 @@ bool RaiseBbscDeathText(u64 event_object, std::string_view who) {
 }
 
 void ShowBbscGuestDeathText(u64 event_object) {
+    if (BbscReviveEnabled()) {
+        // 2026-10-24, the user: no banner when the guest falls (it waits to be revived).
+        LOG_INFO(Debug, "BBSC death text: not raised for the guest (revive on)");
+        return;
+    }
     const u64 lua_event = BbscLuaEventObject();
     LOG_INFO(Debug, "BBSC death text: PartyGhostDeath event {:#x}, Lua event manager's {:#x} ({})",
              event_object, lua_event, event_object == lua_event ? "same" : "different");
@@ -8819,6 +8824,24 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     const u64 control_flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
     const int flags48 = ReadablePointer(control_flags, 0x50) ? ReadValue<u8>(control_flags, 0x48) : -1;
     const int dead114 = ReadablePointer(control, 0x118) ? ReadValue<u16>(control, 0x114) : -1;
+    // The phantom's death breaks the body into shards (2026-10-24 11:32, screenshot): flags and
+    // opacity alone did not bring it back. TickBbscRemoteRevive does, with a physics reset and
+    // Idle_wild first, so the same steps run once per fall - the body then stands where it fell.
+    static std::map<u32, u64> stood;
+    if (stood[id] != best) {
+        stood[id] = best;
+        using PhysicsReset = void PS4_SYSV_ABI (*)(u64 chr, u8 flag);
+        reinterpret_cast<PhysicsReset>(image_base + 0x018BCF30)(best, 1);
+        const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
+        if (ReadablePointer(behaviour, 0x388) && ReadValue<u8>(behaviour, 0x384) != 0) {
+            using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
+            reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
+                                                                     image_base + 0x04992C40);
+        }
+        LOG_INFO(Debug, "BBSC revive: fallen player {:08x}'s body stood up where it fell (physics "
+                        "reset, Idle_wild)",
+                 id);
+    }
     if (opacity < 0.99f) {
         WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
     }
@@ -8970,7 +8993,7 @@ void TickBbscRevive() {
         near_id = target;
         if (target != 0 && now - prompted_ms > 10'000) {
             prompted_ms = now;
-            BbscAnnounce(u"A fellow hunter has fallen.\nHold <img src=\"KG_OK\" vspace='-8'> "
+            BbscAnnounce(u"A fellow hunter has fallen.\nHold X (E) "
                          u"beside it to revive it.",
                          "revive prompt");
         }
@@ -12065,11 +12088,11 @@ std::vector<u64> BbscWatchTargets() {
 }
 
 // The co-op banner, at most every 1.5 s (switching fast would queue one banner per press).
-// The game's button icons, as its tutorial texts (menu category 2) write them. The names are the
-// images in menu/common.tpf: KG_OK (Cross, confirm), KG_Cancel (Circle), KG_R1, KG_TP_L, ...
-constexpr std::string_view BbscIconCircle = "<img src=\"KG_Cancel\" vspace='-8'>";
-constexpr std::string_view BbscIconR1 = "<img src=\"KG_R1\" vspace='-8'>";
-constexpr std::string_view BbscIconTouchpad = "<img src=\"KG_TP_L\" vspace='-8'>";
+// The buttons by name: the banner drops the game's <img src="KG_..."> icons (KG_OK, KG_Cancel, ...
+// in menu/common.tpf) and draws nothing in their place (2026-10-24 tests), so it says them.
+constexpr std::string_view BbscIconCircle = "Circle (G)";
+constexpr std::string_view BbscIconR1 = "R1 (Tab)";
+constexpr std::string_view BbscIconTouchpad = "Touchpad (F)";
 
 // The death camera's notice waits until the game's YOU DIED is gone (2026-10-24, the user: it was
 // shown under it): BbscWatchNoticeDelayMs after the death step's last part.

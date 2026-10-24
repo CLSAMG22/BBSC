@@ -1276,6 +1276,13 @@ void CinematicForceOff() {
 }
 
 unsigned HeldPadButtons() {
+    // Only while our window is in front, the controller as the keys: it reaches every game on the
+    // PC (2026-10-24, two games on one PC: Circle held to run in one sent the other to the lamp).
+    DWORD pid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    if (pid != GetCurrentProcessId()) {
+        return 0;
+    }
     unsigned buttons = 0;
     {
         // last_buttons, not buttons: buttons only follows the pad while the camera is on
@@ -1283,12 +1290,8 @@ unsigned HeldPadButtons() {
         std::scoped_lock lock{cine_mutex};
         buttons = cine_pad.last_buttons;
     }
-    DWORD pid = 0;
-    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
-    if (pid == GetCurrentProcessId()) {
-        buttons |= (GetAsyncKeyState('E') & 0x8000) != 0 ? PadCross : 0;
-        buttons |= (GetAsyncKeyState('G') & 0x8000) != 0 ? PadCircle : 0;
-    }
+    buttons |= (GetAsyncKeyState('E') & 0x8000) != 0 ? PadCross : 0;
+    buttons |= (GetAsyncKeyState('G') & 0x8000) != 0 ? PadCircle : 0;
     return buttons;
 }
 
