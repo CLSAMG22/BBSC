@@ -3985,6 +3985,11 @@ constexpr s64 BbscWipeHostSettleMs = 2'000; // let the host's synced position se
 // while the guest was down saw a wipe and a reload, even if it never saw "nobody alive" itself
 // (test 2026-10-06: the guest died while the dead host was already reloading).
 u32 bbsc_spectate_revivals_at_death = 0;
+// bbsc_peer_revivals when the local player went down, saved by TickBbscLifeBroadcast. The death step
+// can reach the hook several seconds later; if the host reloaded in that gap, a count taken in the
+// hook already includes it and the guest misses the wipe (test 2026-10-19).
+u32 bbsc_revivals_at_own_down = 0;
+bool bbsc_own_down = false;
 
 bool BbscSpectateEnabled() {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_SPECTATE");
@@ -4198,8 +4203,17 @@ void NoteBbscBossBar() {
 
 // A boss fight was on when the player died: a bar is up now, or was up moments ago and no boss
 // has been killed since.
+bool BbscHostBossBarRecent(s64 within_ms); // see "Boss name line"
+constexpr s64 BbscHostBossAtDeathMs = 5'000;
+
 bool BbscBossFightAtDeath() {
     if (BossFightActive()) {
+        return true;
+    }
+    // A guest also counts the host's boss bar (sent every second): on 2026-10-20 at Darkbeast Paarl
+    // the guest died twice in the fight and was revived within seconds each time, as if no boss
+    // fight was on, instead of spectating until the kill.
+    if (GetSessionState() == 6 && BbscHostBossBarRecent(BbscHostBossAtDeathMs)) {
         return true;
     }
     return bbsc_boss_bar_seen_ms != 0 && bbsc_boss_killed_ms < bbsc_boss_bar_seen_ms &&
@@ -6964,10 +6978,20 @@ bool BbscCurtainActive() {
 }
 
 // The respawn lines wait for the screen to come back.
+// A notice due while the load cover is up waits for it (see EndBbscLoadCover).
+bool BbscLoadCoverActive();
+const char16_t* bbsc_cover_notice = nullptr;
+std::string_view bbsc_cover_notice_what;
+
 void BbscAnnounceAfterCurtain(const char16_t* text, std::string_view what) {
     if (BbscCurtainActive()) {
         bbsc_curtain.notice = text;
         bbsc_curtain.notice_what = what;
+        return;
+    }
+    if (BbscLoadCoverActive()) {
+        bbsc_cover_notice = text;
+        bbsc_cover_notice_what = what;
         return;
     }
     BbscAnnounce(text, what);
@@ -7090,6 +7114,7 @@ struct BbscLoadCoverState {
     bool own_screen = false;       // BBSC opened the loading screen (between / after the loads)
     s64 started_ms = 0;
     s64 load_over_ms = 0;          // the game's loading screen closed and no load is running
+    s64 real_load_over_ms = 0;     // no load running (global+8), whatever the loading screen says
     s64 no_session_since_ms = 0;
     std::string why;
 };
@@ -7114,11 +7139,19 @@ void StartBbscLoadCover(std::string_view why) {
     BBSC_TIMELINE("LOAD", "load cover: fading out ({})", why);
 }
 
+bool BbscLoadCoverActive() {
+    return bbsc_load_cover.active;
+}
+
 void EndBbscLoadCover(std::string_view how) {
     if (!bbsc_load_cover.active) {
         return;
     }
     bbsc_load_cover.active = false;
+    if (bbsc_cover_notice != nullptr) {
+        BbscAnnounce(bbsc_cover_notice, bbsc_cover_notice_what);
+        bbsc_cover_notice = nullptr;
+    }
     if (bbsc_load_cover.why == "summon") {
         bbsc_join_quiet_until_ms = SteadyNowMs() + 8'000; // the join banner filter (BbscJoinQuiet)
     }
@@ -7158,12 +7191,30 @@ void TickBbscLoadCover() {
     // map, so no follow load ran - and only the follow's arrival ended the cover. The loading screen
     // stayed up 75 s ("infinite loading screen unless you teleport"). A wipe cover ends once its
     // load is over and the respawn after it is done (curtain closed, alive), or 20 s after the load.
+    // Test 2026-10-21 01:04 (guest): the wipe reload was over and the guest revived at the host's
+    // lamp, but the loading screen's state stayed up after the death curtain had forced it closed,
+    // so this waited on it until the session ended 50 s later ("stuck on the Bloodborne screen").
+    // The loading screen only counts for 8 s after the real load is over; then it is closed here.
     if (bbsc_load_cover.why == "wipe" && bbsc_load_cover.game_screen_seen) {
         const u64 global = GetGlobalState();
         const u64 menu = ReadValue<u64>(image_base + MenuManPointerOffset, 0);
-        const bool loading = (ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) != 0) ||
-                             (ReadablePointer(menu, 0x810) && ReadValue<s32>(menu, 0x804) != 0 &&
-                              !bbsc_load_cover.own_screen);
+        const bool real_load = ReadablePointer(global, 0x10) && ReadValue<u8>(global, 0x08) != 0;
+        const bool menu_screen = ReadablePointer(menu, 0x810) && ReadValue<s32>(menu, 0x804) != 0 &&
+                                 !bbsc_load_cover.own_screen;
+        if (real_load) {
+            bbsc_load_cover.real_load_over_ms = 0;
+        } else if (bbsc_load_cover.real_load_over_ms == 0) {
+            bbsc_load_cover.real_load_over_ms = now;
+        }
+        const bool screen_stuck = menu_screen && bbsc_load_cover.real_load_over_ms != 0 &&
+                                  now - bbsc_load_cover.real_load_over_ms >= 8'000;
+        if (screen_stuck && !bbsc_load_cover.own_screen) {
+            LOG_INFO(Debug, "BBSC load cover: no load for 8 s but the loading screen is still up "
+                            "(state {}) - closing it with the cover",
+                     ReadValue<s32>(menu, 0x804));
+            bbsc_load_cover.own_screen = true; // EndBbscLoadCover closes it
+        }
+        const bool loading = real_load || (menu_screen && !screen_stuck);
         if (loading) {
             bbsc_load_cover.load_over_ms = 0;
         } else if (bbsc_load_cover.load_over_ms == 0) {
@@ -8455,7 +8506,8 @@ void PS4_SYSV_ABI BbscSpectateDeathHook(u64 tag, const GuestRegisterSnapshot* re
     bbsc_spectate_saw_wipe = guest_waits_for_host;
     bbsc_spectate_wipe_warped = false;
     bbsc_spectate_host_back_ms = 0;
-    bbsc_spectate_revivals_at_death = bbsc_peer_revivals.load();
+    bbsc_spectate_revivals_at_death =
+        bbsc_own_down ? bbsc_revivals_at_own_down : bbsc_peer_revivals.load();
     bbsc_boss_cleared_since_ms = 0;
     bbsc_death_mode = BbscBossFightAtDeath() || guest_waits_for_host ? BbscDeathMode::Spectate
                                                                       : BbscDeathMode::RespawnNow;
@@ -8557,7 +8609,17 @@ void TickBbscSpectate() {
         }
         if (!respawn_why.empty()) {
             BbscApplyDeathPenalty(respawn_why);
-            if (StartBbscDeathCurtain(respawn_why) || BbscRespawnInPlace(respawn_why)) {
+            // Under a wipe's load cover the screen is already covered: a death curtain on top showed
+            // the loading screen twice with black between (2026-10-21, the user: "Bloodborne screen
+            // 2 s, black 2 s, Bloodborne 2 s"), and its forced close left the loading screen's state
+            // stuck. The revive happens under the cover, which fades in once it is done.
+            const bool under_cover = BbscLoadCoverActive();
+            if (under_cover) {
+                LOG_INFO(Debug, "BBSC death: {} - revived under the load cover, no death curtain",
+                         respawn_why);
+            }
+            if ((!under_cover && StartBbscDeathCurtain(respawn_why)) ||
+                BbscRespawnInPlace(respawn_why)) {
                 bbsc_spectate_active = false;
                 return;
             }
@@ -12208,6 +12270,10 @@ void TickBbscLifeBroadcast() {
     Libraries::Np::NpSignaling::Helpers::SendBbscWorldFlagsToPeers(&packet, sizeof(packet));
     if (dead != last_dead) {
         last_dead = dead;
+        bbsc_own_down = dead;
+        if (dead) {
+            bbsc_revivals_at_own_down = bbsc_peer_revivals.load();
+        }
         LOG_INFO(Debug, "BBSC life: told the others we are {} (session state {})",
                  dead ? "dead" : "alive", state);
     }
@@ -12816,6 +12882,11 @@ constexpr s64 BbscHostBossFreshMs = 10'000;
 std::array<char16_t, 160> bbsc_boss_line_text{};
 std::atomic<s32> bbsc_host_boss_id{-1};
 std::atomic<s64> bbsc_host_boss_ms{0};
+
+// The host's boss bar, from its boss packets: up within the last within_ms.
+bool BbscHostBossBarRecent(s64 within_ms) {
+    return bbsc_host_boss_id.load() != -1 && SteadyNowMs() - bbsc_host_boss_ms.load() <= within_ms;
+}
 const char* BbscBossNameById(s32 id); // see "Discord status"
 
 // The name id on our own boss bar, or -1.
@@ -13356,6 +13427,14 @@ void TickBbscEchoTrace() {
     last = now;
 }
 
+// The host's wipe reload, asked for at a repeat death: the watchdog leaves the death alone until
+// the host is up again (or 60 s pass). In a session the reload took 25 s to start, and the game
+// revives the character only after the placement; meanwhile the watchdog raised YOU DIED and asked
+// for the reload again 3 times, and the game panicked (177) back to the title (2026-10-24 23:45,
+// Ludwig, the host with two guests).
+constexpr s64 BbscWipeReloadWaitMs = 60'000;
+s64 bbsc_wipe_reload_ms = 0;
+
 // Last resort: the player has been dead for 15 s and nothing revived them. Whatever step went
 // missing, they do not get to stay a corpse.
 void TickBbscDeadWatchdog() {
@@ -13371,6 +13450,17 @@ void TickBbscDeadWatchdog() {
     }
     const u64 player = GetLocalPlayerCharacter();
     const s32 hp = ReadablePointer(player, 0x3B8) ? GetCharacterHp(player) : -1;
+    if (bbsc_wipe_reload_ms != 0) {
+        if (hp > 0 || !session_alive || now - bbsc_wipe_reload_ms > BbscWipeReloadWaitMs) {
+            LOG_INFO(Debug, "BBSC death: done waiting for the wipe reload after {} ms ({})",
+                     now - bbsc_wipe_reload_ms,
+                     hp > 0 ? "up again" : !session_alive ? "session over" : "time limit");
+            bbsc_wipe_reload_ms = 0;
+        } else {
+            bbsc_dead_since_ms = 0;
+            return;
+        }
+    }
     // A held death during a boss fight is meant to stay dead until the boss is over.
     const bool spectating = bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Spectate;
     if (!session_alive || hp > 0 || hp < 0 || spectating || BbscCurtainActive()) {
@@ -13402,21 +13492,52 @@ void TickBbscDeadWatchdog() {
         return;
     }
     bbsc_dead_since_ms = 0;
-    if (repeat && BbscBossFightAtDeath() && LivingPartnerExists()) {
+    // A guest's repeat death with nobody left alive is a wipe: like the death step, it waits for
+    // the host's reload and then follows with a reload of its own (TickBbscSpectate). Respawning
+    // in place there kept the old load (test 2026-10-20 01:01, Vicar Amelia: the guest stayed in
+    // the fight with the boss bar and no enemies while the host's world had reloaded, and the
+    // host's copy of the guest was invisible).
+    const bool guest_waits_for_host = repeat && session_state == 6 && !LivingPartnerExists();
+    if (repeat && (guest_waits_for_host || (BbscBossFightAtDeath() && LivingPartnerExists()))) {
         // Same rule as the death step: in a boss fight the dead player waits for the boss kill or
         // for nobody to be left alive (TickBbscSpectate).
         bbsc_spectate_name = "repeat death";
         bbsc_spectate_since_ms = now;
+        bbsc_spectate_chr = player;
         bbsc_spectate_alone_since_ms = 0;
+        bbsc_spectate_logged_wait = false;
+        bbsc_spectate_saw_wipe = guest_waits_for_host;
+        bbsc_spectate_wipe_warped = false;
+        bbsc_spectate_host_back_ms = 0;
+        bbsc_spectate_revivals_at_death =
+            bbsc_own_down ? bbsc_revivals_at_own_down : bbsc_peer_revivals.load();
         bbsc_boss_cleared_since_ms = 0;
         bbsc_death_mode = BbscDeathMode::Spectate;
         bbsc_spectate_active = true;
-        LOG_INFO(Debug, "BBSC death: repeat death in a boss fight (session state {}) -> spectate "
-                        "until the boss dies or nobody is alive",
-                 session_state);
+        if (guest_waits_for_host) {
+            LOG_INFO(Debug, "BBSC death: repeat death with nobody alive (guest) -> wait for the "
+                            "host's reload, then follow it");
+        } else {
+            LOG_INFO(Debug, "BBSC death: repeat death in a boss fight (session state {}) -> "
+                            "spectate until the boss dies or nobody is alive",
+                     session_state);
+        }
         BBSC_TIMELINE("DEATH", "death: repeat death in a boss fight (session state {}) -> spectate "
                         "until the boss dies or nobody is alive",
                  session_state);
+        return;
+    }
+    // The host's repeat death with nobody left alive is a wipe: the guests wait for the host's
+    // reload and follow it, so the host must reload, not revive in place (2026-10-20 17:48: the
+    // guest died, the host died a second later, BBSC revived the host in place, and the guest sat
+    // dead waiting for a reload that never came until he left).
+    if (repeat && session_state == 3 && !LivingPartnerExists()) {
+        LOG_INFO(Debug, "BBSC death: repeat death of the host with nobody alive (a wipe) - the "
+                        "normal reload, so the guests can follow it");
+        bbsc_spectate_active = false;
+        BbscApplyDeathPenalty("wipe");
+        RequestBbscDeathReload("host's repeat death in a wipe");
+        bbsc_wipe_reload_ms = now;
         return;
     }
     if (repeat) {
@@ -14727,6 +14848,76 @@ bool BbscEraseLocalEffect(s32 id) {
     using EraseFn = void PS4_SYSV_ABI (*)(u64 manager, u64 node, s32 now);
     reinterpret_cast<EraseFn>(image_base + 0x017E1D90)(manager, node, 1);
     return BbscLocalEffectNode(id) == 0;
+}
+
+// A boss bar left on a guest's screen (2026-10-20 00:14, screenshot: Darkbeast Paarl's bar at a
+// lamp after the wipe follow). The death script that wipes the gauge (Failed_BossAreaMission,
+// 0x0138B302..0x0138B396) did not run for that load. Within BbscStaleBarAfterLoadMs of a load of the
+// guest's own character, a bar the host has not had for BbscStaleBarHostQuietMs (its packets say
+// -1) is wiped the same way. A guest that loads into a running fight is not a case that happens:
+// the fight's fog keeps it out.
+constexpr s64 BbscStaleBarAfterLoadMs = 60'000;
+constexpr s64 BbscStaleBarHostQuietMs = 3'000;
+void TickBbscStaleBossBar() {
+    static s64 last_ms = 0;
+    static u64 last_chr = 0;
+    static s64 loaded_ms = 0;
+    static s64 host_quiet_since_ms = 0;
+    // Only a bar that was there from the load on is a leftover. One that shows up after the load is
+    // a fight starting (2026-10-20 16:33: Darkbeast Paarl's bar was wiped 33 ms after it appeared,
+    // 38 s after the guest's load, because the host's packets still said "no boss"; the guest's
+    // deaths then counted as outside a boss fight).
+    static bool bar_since_load = false;
+    const s64 now = SteadyNowMs();
+    if (image_base == 0 || now - last_ms < 500) {
+        return;
+    }
+    last_ms = now;
+    const u64 chr = GetLocalPlayerCharacter();
+    if (chr != last_chr) {
+        last_chr = chr;
+        loaded_ms = now;
+        bar_since_load = chr != 0 && BbscGaugeBossId() != -1;
+    }
+    if (BbscGaugeBossId() == -1) {
+        bar_since_load = false; // gone once: whatever comes next is a new fight
+    }
+    if (!bar_since_load) {
+        host_quiet_since_ms = 0;
+        return;
+    }
+    if (GetSessionState() != 6 || chr == 0 || GetCharacterHp(chr) <= 0 ||
+        now - loaded_ms > BbscStaleBarAfterLoadMs) {
+        host_quiet_since_ms = 0;
+        return;
+    }
+    const bool host_fresh = now - bbsc_host_boss_ms.load() < BbscLifeFreshMs;
+    if (!host_fresh || bbsc_host_boss_id.load() != -1) {
+        host_quiet_since_ms = 0;
+        return;
+    }
+    if (host_quiet_since_ms == 0) {
+        host_quiet_since_ms = now;
+    }
+    const s32 own = BbscGaugeBossId();
+    if (own == -1 || now - host_quiet_since_ms < BbscStaleBarHostQuietMs) {
+        return;
+    }
+    const u64 gauge = ReadValue<u64>(image_base + BossGaugePointerOffset, 0);
+    if (!ReadablePointer(gauge, 0x1694) || !HasMemoryAccess(gauge + 0x1658, 0x3C, MemoryProt::CpuWrite)) {
+        return;
+    }
+    for (size_t slot = 0; slot < 3; ++slot) {
+        const size_t at = 0x1658 + slot * 0x14;
+        WriteValue<s32>(gauge, at, -1);
+        WriteValue<s32>(gauge, at + 4, -1);
+        WriteValue<s32>(gauge, at + 8, 0);
+        WriteValue<s32>(gauge, at + 0xC, 0);
+        WriteValue<u8>(gauge, at + 0x10, 0);
+    }
+    LOG_INFO(Debug, "BBSC boss bar: boss {} was still on the guest's bar {} ms after a load while "
+                    "the host has none - cleared",
+             own, now - loaded_ms);
 }
 
 // Test 2026-10-05 14:42: with 9020 on both players, the host world found the invader's sign
@@ -16082,6 +16273,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscStageWatch();
         TickBbscHostDeathNotice();
         TickBbscBossUnlock();
+        TickBbscStaleBossBar();
         CaptureBbscGuestLoot();
         TickBbscGuestLootReset();
         TickBbscDreamStateRestore();
