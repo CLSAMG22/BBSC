@@ -212,8 +212,9 @@ unsigned HeldPadButtons() {
 
 void CinematicPadRead(unsigned buttons, unsigned char rx, unsigned char ry, unsigned char lx,
                       unsigned char ly) {
-    (void)lx;
-    cine_held_buttons = buttons;
+    // The left stick moving as bit 0x40000000, for the revive (it stops on it).
+    const bool moving = std::hypot(PadAxis(lx), PadAxis(ly)) > 0.3f;
+    cine_held_buttons = buttons | (moving ? 0x40000000u : 0u);
     std::scoped_lock lock{cine_mutex};
     constexpr unsigned L1 = 0x400, R1 = 0x800;
     const unsigned pressed = buttons & ~pad_last;

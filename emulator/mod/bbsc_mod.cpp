@@ -805,7 +805,10 @@ using PadReadStateFn = int PS4_SYSV_ABI (*)(s32 handle, u8* data);
 PadReadStateFn original_pad_read = nullptr;
 constexpr u32 PadL3 = 0x2, PadR3 = 0x4, PadUp = 0x10, PadRight = 0x20, PadDown = 0x40,
               PadLeft = 0x80, PadL1 = 0x400, PadR1 = 0x800, PadTriangle = 0x1000,
-              PadCircle = 0x2000, PadCross = 0x4000, PadSquare = 0x8000, PadTouchpad = 0x100000;
+              PadCircle = 0x2000, PadCross = 0x4000, PadSquare = 0x8000, PadTouchpad = 0x100000,
+              PadL2 = 0x100, PadR2 = 0x200;
+// Not a pad button: HeldPadButtons sets it while the left stick (or WASD) moves the hunter.
+constexpr u32 PadMoving = 0x40000000;
 struct CinePad {
     u32 buttons = 0;
     u32 last_buttons = 0;
@@ -837,6 +840,9 @@ int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
     ++pad_reads;
     u32 buttons = 0;
     std::memcpy(&buttons, data, 4);
+    if (std::hypot(PadAxis(data[4]), PadAxis(data[5])) > 0.3f) {
+        buttons |= PadMoving;
+    }
     std::scoped_lock lock{cine_mutex};
     const u32 pressed = buttons & ~cine_pad.last_buttons;
     cine_pad.last_buttons = buttons;
@@ -901,6 +907,9 @@ void InstallPadWrapper() {
 // dead when the camera comes on by itself). Called with cine_mutex held.
 void ApplyCinePadLocked(u32 buttons, float lx, float ly, float rx, float ry, float l2, float r2,
                         const char* source) {
+    // For HeldPadButtons (the revive stops on them): the triggers as L2 / R2, the stick moving.
+    buttons |= (l2 > 0.5f ? PadL2 : 0) | (r2 > 0.5f ? PadR2 : 0) |
+               (std::hypot(lx, ly) > 0.3f ? PadMoving : 0);
     const u32 pressed = buttons & ~cine_pad.last_buttons;
     cine_pad.last_buttons = buttons;
     if ((buttons & (PadL3 | PadR3)) == (PadL3 | PadR3) && (pressed & (PadL3 | PadR3)) != 0) {
@@ -1292,6 +1301,13 @@ unsigned HeldPadButtons() {
     }
     buttons |= (GetAsyncKeyState('E') & 0x8000) != 0 ? PadCross : 0;
     buttons |= (GetAsyncKeyState('G') & 0x8000) != 0 ? PadCircle : 0;
+    const auto key = [](int k) { return (GetAsyncKeyState(k) & 0x8000) != 0; };
+    if (key('W') || key('A') || key('S') || key('D')) {
+        buttons |= PadMoving;
+    }
+    if (key(VK_LBUTTON) || key(VK_RBUTTON) || key(VK_SPACE)) {
+        buttons |= PadR1; // attacks, the dodge: anything that is not the revive
+    }
     return buttons;
 }
 

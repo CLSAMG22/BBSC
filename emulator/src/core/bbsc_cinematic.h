@@ -55,7 +55,8 @@ void CinematicSetWatching(bool watching);
 void CinematicPadRead(unsigned buttons, unsigned char rx, unsigned char ry, unsigned char lx,
                       unsigned char ly);
 // The PS4 pad buttons held now (Cross 0x4000, Circle 0x2000, ...), with keyboard E as Cross and G
-// as Circle while the game window is in front (mod only). For the co-op revive.
+// as Circle while the game window is in front (mod only). For the co-op revive. Bit 0x40000000:
+// the left stick (or WASD) is moving the hunter.
 unsigned HeldPadButtons();
 
 } // namespace Core::Bbsc

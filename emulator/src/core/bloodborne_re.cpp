@@ -8663,6 +8663,10 @@ constexpr s64 BbscReviveForgetMs = 10'000;
 constexpr s64 BbscReviveGiveUpHoldMs = 1'500;
 constexpr u32 BbscPadCross = 0x4000;
 constexpr u32 BbscPadCircle = 0x2000;
+// Anything but X stops a revive: the left stick or WASD (HeldPadButtons' moving bit), attacks,
+// the dodge, items, the lantern.
+constexpr u32 BbscPadMoving = 0x40000000;
+constexpr u32 BbscPadActions = 0x100 | 0x200 | 0x400 | 0x800 | 0x1000 | 0x2000 | 0x8000;
 
 bool BbscReviveEnabled() {
     static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_REVIVE");
@@ -8750,11 +8754,16 @@ bool BbscReviveGiveUp() {
 // gesture's text id - 800 (item/10 800..822), x5 its loop. The deaths are 024xxx: the behaviour
 // graph (c0000.anibnd c0000.hkx) names its lying states BeDead24001, BeDead24011, ... (19xxx is
 // not a death: 19001 left the body in a wrong pose, 2026-10-24 12:02).
+// The kneel is Pray (809): down on one knee, hands together, 3.83 s, then its own loop, still
+// kneeling (clip lengths from the hkaSplineCompressedAnimation headers in c0000_a00_hi.anibnd).
+// Make Contact (820) looked like sitting (2026-10-24 12:31), Deep Respect (819) is a standing bow.
+// The test state replays its clip until something else plays, so the start runs once and the
+// loop takes over as it ends.
 constexpr u64 BbscAnimDispatchOffset = 0x01A1BA90;
-constexpr s32 BbscReviveKneelStartAnim = 104200; // Make Contact: down on the knees (Deep Respect,
-constexpr s32 BbscReviveKneelLoopAnim = 104205;  // 104190, is a standing bow) ... and staying there
+constexpr s32 BbscReviveKneelStartAnim = 104090; // Pray: down on one knee
+constexpr s32 BbscReviveKneelLoopAnim = 104095;  // Pray, kneeling
 constexpr s32 BbscFallenPoseAnim = 24001;        // BeDead24001: lying after a normal death
-constexpr s64 BbscReviveKneelEveryMs = 2'500;
+constexpr s64 BbscReviveKneelEveryMs = 3'800;
 constexpr s64 BbscReviveGlowEveryMs = 3'000;
 
 // The animation test state has no way out of its own (2026-10-24: the reviver could not move any
@@ -8803,6 +8812,9 @@ void BbscAddEffect(u64 chr, s32 id) {
                                                float, float, float, float, s32);
     reinterpret_cast<AddSpEffect>(add)(chr, id, chr, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0);
 }
+
+// Fallen player -> its copy that got the physics reset for this fall (cleared when it gets up).
+std::map<u32, u64> bbsc_fallen_reset;
 
 u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     static std::vector<u32> logged;
@@ -8859,6 +8871,15 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     // The phantom's death breaks the body into shards (2026-10-24 11:32, screenshot): flags and
     // opacity alone did not bring it back. TickBbscRemoteRevive does, with a physics reset and
     // Idle_wild first, so the same steps run once per fall - the body then stands where it fell.
+    // Without that reset the body stayed gone, lying or not (2026-10-24 12:30, both screens): it
+    // runs once per copy and fall, before the first lying pose.
+    if (bbsc_fallen_reset[id] != best) {
+        bbsc_fallen_reset[id] = best;
+        using PhysicsReset = void PS4_SYSV_ABI (*)(u64 chr, u8 flag);
+        reinterpret_cast<PhysicsReset>(image_base + 0x018BCF30)(best, 1);
+        LOG_INFO(Debug, "BBSC revive: fallen player {:08x}'s copy {:#x} reset where it lies", id,
+                 best);
+    }
     // Lying here too: the animation test is not sent to the others, so the copy stood while its
     // owner lay (2026-10-24 12:12, screenshot). Every 2 s; TickBbscRevive puts it back to idle once
     // the fallen hunter got up (the test state has no way out of its own).
@@ -8933,7 +8954,19 @@ void TickBbscRevive() {
                           choice ? "lamp on Circle" : "boss fight");
         }
     }
+    static u64 reset_me = 0;
+    if (!down) {
+        reset_me = 0;
+    }
     if (down) {
+        // Our own body stayed gone with opacity and drawing alone (2026-10-24 12:30): the same
+        // physics reset the copies get, once per fall, before the lying pose.
+        if (me != 0 && reset_me != me && ReadablePointer(me, 0x3B8)) {
+            reset_me = me;
+            using PhysicsReset = void PS4_SYSV_ABI (*)(u64 chr, u8 flag);
+            reinterpret_cast<PhysicsReset>(image_base + 0x018BCF30)(me, 1);
+            LOG_INFO(Debug, "BBSC revive: our own body {:#x} reset where it lies", me);
+        }
         // A phantom's death breaks the body into shards on the others' screens, and their copy
         // follows our animation: lying in the normal death pose instead, the body stays.
         static s64 posed_ms = 0;
@@ -8971,7 +9004,8 @@ void TickBbscRevive() {
     const s32 hp = me != 0 ? GetCharacterHp(me) : -1;
     const bool hit = last_hp > 0 && hp >= 0 && hp < last_hp;
     last_hp = hp;
-    const bool held = (Bbsc::HeldPadButtons() & BbscPadCross) != 0;
+    const u32 pad = Bbsc::HeldPadButtons();
+    const bool held = (pad & BbscPadCross) != 0;
     if (!held) {
         blocked = false;
     }
@@ -9044,6 +9078,7 @@ void TickBbscRevive() {
             if (ReadablePointer(it->second, 0x3B8)) {
                 BbscPlayIdle(it->second); // up again (revived, at the lamp) or gone
             }
+            bbsc_fallen_reset.erase(it->first);
             it = posed.erase(it);
         }
     }
@@ -9061,25 +9096,16 @@ void TickBbscRevive() {
         LOG_INFO(Debug, "BBSC revive: interrupted by a hit at {}%", static_cast<int>(progress * 100));
         BbscAnnounce(u"Revival interrupted.", "revive interrupted");
     }
-    // Moving stops it like a hit: more than half a metre from where the filling started.
-    static std::array<float, 3> fill_from{};
-    if (filling && body.has_value()) {
-        float d = 0.0f;
-        for (size_t i = 0; i < 3; ++i) {
-            const float delta = body->position[i] - fill_from[i];
-            d += delta * delta;
-        }
-        if (d > 0.25f) {
-            blocked = true;
-            LOG_INFO(Debug, "BBSC revive: moved away while reviving - stopped at {}%",
-                     static_cast<int>(progress * 100));
-            BbscAnnounce(u"Revival interrupted.", "revive interrupted");
-        }
+    // Moving or any other action stops it like a hit. Not by distance: the kneel holds the
+    // hunter in place and the stick only turned it (2026-10-24 12:31).
+    const bool acting = (pad & (BbscPadMoving | BbscPadActions)) != 0;
+    if (filling && acting) {
+        blocked = true;
+        LOG_INFO(Debug, "BBSC revive: moved or acted while reviving (pad {:#x}) - stopped at {}%",
+                 pad, static_cast<int>(progress * 100));
+        BbscAnnounce(u"Revival interrupted.", "revive interrupted");
     }
-    const bool now_filling = target != 0 && held && !blocked && progress < 1.0f;
-    if (now_filling && !filling && body.has_value()) {
-        fill_from = {body->position[0], body->position[1], body->position[2]};
-    }
+    const bool now_filling = target != 0 && held && !blocked && !acting && progress < 1.0f;
     if (now_filling && !filling) {
         LOG_INFO(Debug, "BBSC revive: reviving player {:08x} from {}%", target,
                  static_cast<int>(progress * 100));
