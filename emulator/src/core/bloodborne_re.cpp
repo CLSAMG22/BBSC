@@ -8868,7 +8868,7 @@ void InstallBbscFadeGuard() {
 // game uses slots 1-0x10; BBSC takes 0x20. ActionButtonParam row 1 is empty in the game (all
 // zeros, nothing refers to it): BBSC fills it like row 4200 ("Search Body") with its own text -
 // event text 10010104 "Revive Hunter" (an empty "*" slot beside "Pick Up Item") on the reviver's
-// side, 10010715 "Return to Lamp" (another) on the fallen hunter's. execInvalidTime 0: the game
+// side, 10010715 "Return to Lamp" and the free camera's touchpad (another) on the fallen hunter's. execInvalidTime 0: the game
 // hides a row for that long after a press, and the revive is held.
 // A dead hunter gets no prompt (2026-10-24 18:59, the fallen side): the registration refuses when
 // neither [[[chr+0x3B0]+8]+0x10] bit 0 nor [R+0x5D] bit 2 is set (0x01CD937D-0x01CD938D), and the
@@ -12489,12 +12489,10 @@ bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s
             const bool lamp_choice =
                 bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Downed;
             const std::string free_cam = std::string{BbscIconTouchpad} + ": free camera.";
-            // Down outside a boss fight: the lamp is the game's own prompt (TickBbscRevive), the
-            // free camera still needs a word (2026-10-24 18:34, the user: "no msg to tell the
-            // button to respawn or freelook").
-            if (lamp_choice) {
-                BbscWatchNotice(free_cam, "watch camera (down)", now);
-            } else {
+            // Down outside a boss fight: the lamp and the free camera are both on the game's own
+            // prompt (TickBbscRevive, text 10010715), with their icons - no banner (2026-10-24,
+            // the user: "just the two buttons when dead").
+            if (!lamp_choice) {
                 BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. {}: next hunter.\n{}",
                                                        index + 1, size, BbscIconR1, free_cam)
                                          : "Watching the living hunter.\n" + free_cam,

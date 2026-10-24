@@ -171,7 +171,12 @@ replace(15000035, r'^\*$', "You are in the host's Hunter's Dream.")
 # The co-op revive's prompts (bloodborne_re.cpp, BbscShowButtonPrompt): the game's action button
 # shows them with the button's icon. Two more empty "*" slots, the first beside "Pick Up Item".
 replace(10010104, r'^\*$', 'Revive Hunter')
-replace(10010715, r'^\*$', 'Return to Lamp')
+# The fallen hunter's prompt names the free camera too, on the right, with the touchpad's icon
+# (2026-10-24, the user: "free camera should be on the right"): the game's own icon tag, as its
+# tutorial texts write them (血文字 1110: <img src="KG_TP_L" vspace='-8'>), spaced with the
+# ideographic space its key guides use.
+replace(10010715, r'^\*$', 'Return to Lamp\u3000\u3000\u3000\u3000'
+        '<img src="KG_TP_L" vspace=\'-8\'> Free Camera')
 
 # The Duel Bell (PvP toggle, bloodborne_re.cpp "PvP toggle item"): goods 4313 is an unused key item
 # with empty slots in the item name / info / caption tables (msg/engus/item.msgbnd: 10, 20, 24).
