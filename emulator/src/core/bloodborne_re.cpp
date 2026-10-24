@@ -3840,6 +3840,62 @@ void TickBbscReinsertV8() {
     LogBbscSessionShape("v8 restarted", true);
 }
 
+// A phantom at home (2026-10-24 20:10, the user: "can't ring on guest"): the kept death sets the
+// own-world restore type to the phantom's (see SetOwnWorldRestoreType) and TickBbscReinsertV8
+// puts it back once the respawn is done or times out - both on this game thread. The host crashed
+// in that respawn's load and the guest's game froze there (20:05:46, log ends), so it was never
+// put back, the save kept it, and the next start built the guest as type 1 in its own world:
+// slot and character type 1, own world 1, session state 0 - and the bells refused it ("not for
+// this player type"). At home, not loading, with no kept death pending, any phantom type left on
+// the restore record, the slot (+0xA4) or the live character (+0x78) is set back to 0, once.
+bool BbscIsPhantomType(s32 type) {
+    return type == 1 || type == 2 || type == 12 || type == 13;
+}
+
+void TickBbscHomeTypeRepair() {
+    static s64 last_ms = 0;
+    const s64 now = SteadyNowMs();
+    if (now - last_ms < 1'000) {
+        return;
+    }
+    last_ms = now;
+    const u64 global = GetGlobalState();
+    if (bbsc_v8_pending || GetSessionState() != 0 || !ReadablePointer(global, 0x1593) ||
+        ReadValue<u8>(global, 0x1592) != 1 || ReadValue<u8>(global, 0x08) != 0 ||
+        GetBbscLocalPlayerHp() <= 0) {
+        return;
+    }
+    const u64 record = ReadValue<u64>(image_base + 0x0553B188, 0);
+    const s32 restore = ReadablePointer(record, 0x08) ? ReadValue<s32>(record, 4) : -1;
+    const s32 slot_type = GetLocalPlayerType();
+    const s32 chr_type = GetLocalCharacterType();
+    if (!BbscIsPhantomType(restore) && !BbscIsPhantomType(slot_type) &&
+        !BbscIsPhantomType(chr_type)) {
+        return;
+    }
+    if (BbscIsPhantomType(restore)) {
+        SetOwnWorldRestoreType(0, nullptr);
+    }
+    const u64 slots = ReadValue<u64>(image_base + PlayerSlotManagerPointerOffset, 0);
+    const u64 local = ReadablePointer(slots, 0x10) ? ReadValue<u64>(slots, 0x08) : 0;
+    if (BbscIsPhantomType(slot_type) && ReadablePointer(local, 0xA8) &&
+        HasMemoryAccess(local + 0xA4, 4, MemoryProt::CpuWrite)) {
+        WriteValue<s32>(local, 0xA4, 0);
+    }
+    const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
+    const u64 player = ReadablePointer(world_chr, 0x68) ? ReadValue<u64>(world_chr, 0x60) : 0;
+    if (BbscIsPhantomType(chr_type) && ReadablePointer(player, 0x80) &&
+        HasMemoryAccess(player + 0x78, 4, MemoryProt::CpuWrite)) {
+        WriteValue<s32>(player, 0x78, 0);
+    }
+    LOG_WARNING(Debug, "BBSC home type: a phantom's type at home (restore {}, slot {}, character {}) "
+                       "- set back to 0",
+                restore, slot_type, chr_type);
+    BBSC_TIMELINE("SESSION", "home type: a phantom's type at home (restore {}, slot {}, character {}) "
+                             "- set back to 0",
+                  restore, slot_type, chr_type);
+}
+
 // Self-heal (host and guest): a member task that reached CreateWait (6) but whose character is gone
 // for BbscSelfHealMissingMs while no load is running gets its create step re-run. This is what
 // brings the guest back on the host's screen after a HOST death (the host's load destroys the
@@ -17207,6 +17263,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         if (BbscRejoinEnabled()) {
             TrackBbscSignType();
             TickBbscReinsertV8();
+            TickBbscHomeTypeRepair();
             TickBbscSelfHeal();
             static s64 last_shape_ms = 0;
             if (const s64 now = SteadyNowMs(); now - last_shape_ms > 1'000) {
