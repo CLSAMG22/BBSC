@@ -13578,6 +13578,10 @@ std::string BbscBannerText() {
     return out;
 }
 
+constexpr s64 BbscFallenQuietMs = 8'000;
+extern s64 bbsc_death_script_ms; // see "Late death steps"
+bool BbscReviveEnabled(); // see "Reviving a fallen hunter"
+
 bool BbscJoinQuiet() {
     const s32 state = GetSessionState();
     if (state != 4 && state != 5 && state != 6) {
@@ -13596,14 +13600,21 @@ void PS4_SYSV_ABI BbscBannerMenuHook(u64 /*tag*/, const GuestRegisterSnapshot* r
     const std::string text = BbscBannerText();
     const bool own = bbsc_banner_own_pending;
     bbsc_banner_own_pending = false;
-    const bool hide = !own && BbscJoinQuiet();
+    // The game's own "You died." on a guest who now waits to be revived (2026-10-24, the user: no
+    // banner when you fall; BBSC no longer raises it, the game still shows it): the banners of the
+    // first BbscFallenQuietMs after our death step started are hidden.
+    const bool fallen_quiet = BbscReviveEnabled() && bbsc_death_script_ms != 0 &&
+                              SteadyNowMs() - bbsc_death_script_ms < BbscFallenQuietMs &&
+                              (GetSessionState() == 3 || GetSessionState() == 6);
+    const bool hide = !own && (BbscJoinQuiet() || fallen_quiet);
     if (hide) {
         WriteValue<u8>(image_base + BannerPendingOffset, 0, 0);
     }
     const s64 now = SteadyNowMs();
     if (text != last_text || now - last_ms > 2'000 || hide) {
         LOG_INFO(Debug, "BBSC banner: \"{}\" {} (session state {})", text,
-                 hide ? "hidden - guest joining" : (own ? "shown (BBSC's own)" : "shown"),
+                 hide ? (fallen_quiet ? "hidden - we just fell" : "hidden - guest joining")
+                      : (own ? "shown (BBSC's own)" : "shown"),
                  GetSessionState());
     }
     last_text = text;
