@@ -7554,10 +7554,10 @@ bool BbscRespawnInPlace(std::string_view why) {
     const u64 stats = ReadValue<u64>(modules, 0x20);
     if (ReadablePointer(stats, 0x100)) {
         using SetHp = void PS4_SYSV_ABI (*)(u64 chr, s32 hp);
-        // A revive by a partner gives half the HP back (2026-10-24).
+        // A revive by a partner gives the full HP back too (2026-10-24 19:10, the user: half was
+        // "not full life").
         const s32 max_hp = ReadValue<s32>(stats, 0xFC);
-        reinterpret_cast<SetHp>(image_base + 0x018BCD40)(
-            player, revived ? std::max<s32>(1, max_hp / 2) : max_hp);
+        reinterpret_cast<SetHp>(image_base + 0x018BCD40)(player, max_hp);
     }
     const u64 control_flags = ReadValue<u64>(control, 0x38);
     if (ReadablePointer(control_flags, 0x50)) {
@@ -9186,7 +9186,12 @@ void TickBbscRevive() {
     const auto stamina = me != 0 ? BbscStamina(me) : std::nullopt;
     const bool rested = !stamina.has_value() || stamina->second <= 0 ||
                         stamina->first >= stamina->second;
-    const bool may_fill = held && !blocked && !hit && !acting && (filling || rested);
+    // A stop that was not ours (the fallen hunter's news came late) picks up again without
+    // the full stamina for a moment (2026-10-24 19:09: three stops with no reason logged, each
+    // asking to catch the breath though the reviver held still).
+    static s64 soft_stop_ms = 0;
+    const bool resuming = soft_stop_ms != 0 && now - soft_stop_ms < 2'000;
+    const bool may_fill = held && !blocked && !hit && !acting && (filling || rested || resuming);
     u32 target = 0;
     float progress = 0.0f;
     std::array<float, 3> target_position{};
@@ -9200,8 +9205,12 @@ void TickBbscRevive() {
                 it = bbsc_fallen.erase(it); // got up, went to the lamp, or left
                 continue;
             }
+            // The one being revived stays the target while it was heard from at all lately: a
+            // fallen game in the background sends late.
+            const s64 fresh =
+                filling && it->first == near_id ? BbscReviveForgetMs : BbscReviveFreshMs;
             if (body.has_value() && hp > 0 && fallen.map == map &&
-                now - fallen.received_ms <= BbscReviveFreshMs) {
+                now - fallen.received_ms <= fresh) {
                 float d = 0.0f;
                 for (size_t i = 0; i < 3; ++i) {
                     const float delta = fallen.position[i] - body->position[i];
@@ -9292,7 +9301,8 @@ void TickBbscRevive() {
     if (target != 0 && !now_filling && progress < 1.0f) {
         BbscShowButtonPrompt(BbscReviveButtonText);
         static s64 breath_ms = 0;
-        if (held && !rested && !filling && now - breath_ms > 5'000) {
+        if (held && !rested && !filling && !resuming && !blocked && !acting &&
+            now - breath_ms > 5'000) {
             breath_ms = now;
             BbscAnnounce(u"Catch your breath first.", "revive needs full stamina");
         }
@@ -9305,9 +9315,21 @@ void TickBbscRevive() {
                  static_cast<int>(progress * 100));
         BbscAnnounce(u"Reviving the fallen hunter...", "reviving");
     }
-    if (filling && !now_filling && target != 0 && progress < 1.0f) {
-        SendBbscRevivePacket(4, target, map, target_position,
-                             static_cast<u8>(std::clamp(progress * 100.0f, 0.0f, 100.0f)));
+    if (filling && !now_filling && progress < 1.0f) {
+        const bool ours = !held || acting || hit || blocked;
+        soft_stop_ms = ours ? 0 : now;
+        LOG_INFO(Debug, "BBSC revive: stopped at {}% ({})", static_cast<int>(progress * 100),
+                 !held    ? "X let go"
+                 : ours   ? "moved, acted or hit"
+                 : target == 0 ? "the fallen hunter is out of reach or not heard from"
+                               : "other");
+        if (target != 0) {
+            SendBbscRevivePacket(4, target, map, target_position,
+                                 static_cast<u8>(std::clamp(progress * 100.0f, 0.0f, 100.0f)));
+        }
+    }
+    if (now_filling) {
+        soft_stop_ms = 0;
     }
     filling = now_filling;
     static s64 kneel_ms = 0;
