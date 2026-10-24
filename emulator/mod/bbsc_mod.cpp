@@ -805,7 +805,7 @@ using PadReadStateFn = int PS4_SYSV_ABI (*)(s32 handle, u8* data);
 PadReadStateFn original_pad_read = nullptr;
 constexpr u32 PadL3 = 0x2, PadR3 = 0x4, PadUp = 0x10, PadRight = 0x20, PadDown = 0x40,
               PadLeft = 0x80, PadL1 = 0x400, PadR1 = 0x800, PadTriangle = 0x1000,
-              PadCross = 0x4000, PadSquare = 0x8000;
+              PadCircle = 0x2000, PadCross = 0x4000, PadSquare = 0x8000;
 struct CinePad {
     u32 buttons = 0;
     u32 last_buttons = 0;
@@ -1082,6 +1082,7 @@ bool PollSdlPadLocked() {
     buttons |= pressed(9) ? PadL1 : 0;
     buttons |= pressed(10) ? PadR1 : 0;
     buttons |= pressed(0) ? PadCross : 0;
+    buttons |= pressed(1) ? PadCircle : 0;
     buttons |= pressed(2) ? PadSquare : 0;
     buttons |= pressed(3) ? PadTriangle : 0;
     const auto axis = [&](int a) { return static_cast<float>(sdl.axis(gamepad, a)) / 32767.0f; };
@@ -1137,6 +1138,7 @@ bool PollXInputPadLocked() {
     buttons |= (xb & 0x0100) ? PadL1 : 0;
     buttons |= (xb & 0x0200) ? PadR1 : 0;
     buttons |= (xb & 0x1000) ? PadCross : 0;
+    buttons |= (xb & 0x2000) ? PadCircle : 0;
     buttons |= (xb & 0x4000) ? PadSquare : 0;
     buttons |= (xb & 0x8000) ? PadTriangle : 0;
     const auto axis = [](SHORT v) { return StickAxis(static_cast<float>(v) / 32767.0f); };
@@ -1262,6 +1264,21 @@ void CinematicForceOff() {
     cine_looking = false;
     cine_mouse_owned = false;
     cine_pad_hidden = false;
+}
+
+unsigned HeldPadButtons() {
+    unsigned buttons = 0;
+    {
+        std::scoped_lock lock{cine_mutex};
+        buttons = cine_pad.buttons;
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    if (pid == GetCurrentProcessId()) {
+        buttons |= (GetAsyncKeyState('E') & 0x8000) != 0 ? PadCross : 0;
+        buttons |= (GetAsyncKeyState('G') & 0x8000) != 0 ? PadCircle : 0;
+    }
+    return buttons;
 }
 
 void CinematicForceOn() {

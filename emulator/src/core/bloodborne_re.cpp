@@ -4163,7 +4163,12 @@ struct BbscTransform {
     std::array<float, 4> rotation{};
 };
 
-enum class BbscDeathMode : u8 { Spectate, RespawnNow };
+// Downed (2026-10-24): no boss fight, the fallen hunter waits to be revived or for its own choice
+// to go to the lamp (see "Reviving a fallen hunter").
+enum class BbscDeathMode : u8 { Spectate, RespawnNow, Downed };
+bool BbscReviveEnabled();   // see "Reviving a fallen hunter"
+bool BbscReviveGiveUp();    // the fallen hunter held Circle: to the lamp
+std::atomic<bool> bbsc_revive_received{false}; // a partner finished reviving us
 
 BbscDeathMode bbsc_death_mode = BbscDeathMode::Spectate;
 s64 bbsc_boss_cleared_since_ms = 0;
@@ -7383,6 +7388,8 @@ bool BbscDiedRightAfterRespawn(std::string_view why) {
     return true;
 }
 
+constexpr std::string_view BbscRevivedWhy = "revived by a hunter";
+
 bool BbscRespawnInPlace(std::string_view why) {
     // Replicates the local-player branch of the game's event revive 0x013CBAD0(10000, ...)
     // (CONFIRMED statically), in the same order, WITHOUT its final CSMultiPlayMan::Stop call:
@@ -7434,7 +7441,11 @@ bool BbscRespawnInPlace(std::string_view why) {
     // nothing under the guest. The host's position is used only while the host's map is loaded
     // here; otherwise the nearest lamp of OUR map, and the follow then reloads us into the host's.
     bool partner_here = !guest;
-    if (guest) {
+    const bool revived = why == BbscRevivedWhy; // a partner revived us: up where we fell
+    if (revived) {
+        target = ReadCharacterTransform(player);
+        where = "where we fell";
+    } else if (guest) {
         s32 host_lamp = -1;
         u32 host_map = 0;
         {
@@ -7466,7 +7477,7 @@ bool BbscRespawnInPlace(std::string_view why) {
                 where = "partner";
             }
         }
-    } else {
+    } else if (!revived) {
         target = ResolveLastLampTransform();
     }
     if (!target.has_value()) {
@@ -7541,7 +7552,10 @@ bool BbscRespawnInPlace(std::string_view why) {
     const u64 stats = ReadValue<u64>(modules, 0x20);
     if (ReadablePointer(stats, 0x100)) {
         using SetHp = void PS4_SYSV_ABI (*)(u64 chr, s32 hp);
-        reinterpret_cast<SetHp>(image_base + 0x018BCD40)(player, ReadValue<s32>(stats, 0xFC));
+        // A revive by a partner gives half the HP back (2026-10-24).
+        const s32 max_hp = ReadValue<s32>(stats, 0xFC);
+        reinterpret_cast<SetHp>(image_base + 0x018BCD40)(
+            player, revived ? std::max<s32>(1, max_hp / 2) : max_hp);
     }
     const u64 control_flags = ReadValue<u64>(control, 0x38);
     if (ReadablePointer(control_flags, 0x50)) {
@@ -8458,7 +8472,9 @@ void PS4_SYSV_ABI BbscSpectateDeathHook(u64 tag, const GuestRegisterSnapshot* re
     bbsc_spectate_revivals_at_death = bbsc_peer_revivals.load();
     bbsc_boss_cleared_since_ms = 0;
     bbsc_death_mode = BbscBossFightAtDeath() || guest_waits_for_host ? BbscDeathMode::Spectate
+                      : BbscReviveEnabled()                          ? BbscDeathMode::Downed
                                                                       : BbscDeathMode::RespawnNow;
+    bbsc_revive_received = false;
     bbsc_spectate_active = true;
     if (guest_waits_for_host) {
         LOG_INFO(Debug, "BBSC death: {} with nobody alive (guest) -> wait for the host's reload, "
@@ -8470,6 +8486,8 @@ void PS4_SYSV_ABI BbscSpectateDeathHook(u64 tag, const GuestRegisterSnapshot* re
              session_state,
              bbsc_death_mode == BbscDeathMode::Spectate
                  ? "boss fight: spectate until the boss dies or nobody is alive"
+             : bbsc_death_mode == BbscDeathMode::Downed
+                 ? "no boss fight: down until revived, or the lamp on Circle"
                  : "no boss fight: respawn at the last lamp without a reload");
 }
 
@@ -8500,7 +8518,17 @@ void TickBbscSpectate() {
     if (session_alive && LivingPartnerExists()) {
         std::string_view respawn_why;
         const u64 chr = GetLocalPlayerCharacter();
-        if (bbsc_death_mode == BbscDeathMode::RespawnNow) {
+        if (bbsc_revive_received.exchange(false)) {
+            // A partner revived us: up where we fell, no curtain, no death penalty.
+            if (BbscRespawnInPlace(BbscRevivedWhy)) {
+                bbsc_spectate_active = false;
+                BbscAnnounce(u"Revived by a fellow hunter.", "revived");
+                return;
+            }
+            LOG_WARNING(Debug, "BBSC revive: getting up failed - waiting as before");
+        }
+        if (bbsc_death_mode == BbscDeathMode::RespawnNow ||
+            (bbsc_death_mode == BbscDeathMode::Downed && BbscReviveGiveUp())) {
             respawn_why = "no boss fight";
         } else if (chr != 0 && bbsc_spectate_chr != 0 && chr != bbsc_spectate_chr) {
             respawn_why = "a load ended the boss fight";
@@ -8602,6 +8630,240 @@ void TickBbscSpectate() {
     bbsc_spectate_releasing = true;
     RequestBbscDeathReload(reason);
     bbsc_spectate_releasing = false;
+}
+
+// ---- Reviving a fallen hunter (2026-10-24) ---------------------------------------------------------
+// The user: in co-op a fallen hunter waits where it fell, and another hunter revives it: stand
+// beside it and hold X (keyboard E) for 15 s. A hit stops the revive, and so do letting go and
+// walking away; what was filled stays and drains slowly, so coming back continues from there.
+// Outside a boss fight the fallen hunter can give up and go to the lamp (hold Circle, keyboard G);
+// in a boss fight it gets no choice and waits for a revive, the kill or the wipe, as before. A
+// revived hunter gets up where it fell with half its HP, and with no death penalty from BBSC.
+// The prompts are BBSC's banner for now. Relay "SHAD" 0x2A: u8 kind (1 down: the sender lies at
+// map / position; 2 reviving: target, percent; 3 revived: the target gets up), u32 sender, u32
+// target, u32 map, 3 x float position, u8 percent. Switch SHADPS4_BBSC_REVIVE (on).
+constexpr u8 BbscReviveType = 0x2A;
+constexpr s64 BbscReviveFillMs = 15'000;
+constexpr s64 BbscReviveDrainMs = 45'000; // a full bar empties in this long while nobody fills it
+constexpr float BbscReviveRange = 2.5f;   // metres between the reviver and the fallen
+constexpr s64 BbscReviveSendMs = 500;
+constexpr s64 BbscReviveFreshMs = 2'000;  // a fallen hunter not heard from this long got up
+constexpr s64 BbscReviveGiveUpHoldMs = 1'500;
+constexpr u32 BbscPadCross = 0x4000;
+constexpr u32 BbscPadCircle = 0x2000;
+
+bool BbscReviveEnabled() {
+    static const bool enabled = EnvFlagEnabled("SHADPS4_BBSC_REVIVE");
+    return enabled;
+}
+
+struct BbscFallen {
+    u32 map = 0;
+    std::array<float, 3> position{};
+    s64 received_ms = 0;
+    float progress = 0.0f; // 0..1, kept between tries
+};
+std::mutex bbsc_revive_mutex;
+std::map<u32, BbscFallen> bbsc_fallen; // relay player id -> a fallen hunter of our session
+std::atomic<int> bbsc_revive_seen_percent{-1}; // we are down: the last progress a reviver sent
+
+void SendBbscRevivePacket(u8 kind, u32 target, u32 map, const std::array<float, 3>& position,
+                          u8 percent) {
+    std::array<u8, 31> packet{'S', 'H', 'A', 'D', BbscReviveType, kind};
+    const u32 self = bbsc_life_own_id.load();
+    std::memcpy(packet.data() + 6, &self, 4);
+    std::memcpy(packet.data() + 10, &target, 4);
+    std::memcpy(packet.data() + 14, &map, 4);
+    std::memcpy(packet.data() + 18, position.data(), 12);
+    packet[30] = percent;
+    Libraries::Np::NpSignaling::Helpers::SendBbscWorldFlagsToPeers(packet.data(),
+                                                                    static_cast<u32>(packet.size()));
+}
+
+// Relay thread (OnBbscRevivePacket).
+void BbscReviveRelayPacket(std::uint8_t kind, std::uint32_t player, std::uint32_t target,
+                           std::uint32_t map, float x, float y, float z, std::uint8_t percent) {
+    const u32 self = bbsc_life_own_id.load();
+    if (player == self || !BbscReviveEnabled()) {
+        return;
+    }
+    if (kind == 1) {
+        std::scoped_lock lock{bbsc_revive_mutex};
+        BbscFallen& fallen = bbsc_fallen[player];
+        fallen.map = map;
+        fallen.position = {x, y, z};
+        fallen.received_ms = SteadyNowMs();
+    } else if (kind == 2 && target == self) {
+        bbsc_revive_seen_percent = percent;
+    } else if (kind == 3 && target == self) {
+        bbsc_revive_received = true;
+    }
+}
+
+// The fallen hunter's choice, outside a boss fight: Circle held for a moment.
+bool BbscReviveGiveUp() {
+    static s64 held_since_ms = 0;
+    const s64 now = SteadyNowMs();
+    if ((Bbsc::HeldPadButtons() & BbscPadCircle) == 0) {
+        held_since_ms = 0;
+        return false;
+    }
+    if (held_since_ms == 0) {
+        held_since_ms = now;
+    }
+    if (now - held_since_ms < BbscReviveGiveUpHoldMs) {
+        return false;
+    }
+    held_since_ms = 0;
+    LOG_INFO(Debug, "BBSC revive: the fallen hunter chose the lamp");
+    BBSC_TIMELINE("DEATH", "revive: the fallen hunter chose the lamp");
+    return true;
+}
+
+void TickBbscRevive() {
+    static s64 last_ms = 0;
+    static s64 sent_ms = 0;
+    static bool was_down = false;
+    static int seen_percent = -1;
+    static u32 near_id = 0;
+    static s64 prompted_ms = 0;
+    static s32 last_hp = -1;
+    static bool blocked = false;   // hit while reviving: until X is let go
+    static bool filling = false;
+    static s64 progress_sent_ms = 0;
+    const s64 now = SteadyNowMs();
+    const s64 step = last_ms == 0 ? 0 : std::min<s64>(now - last_ms, 250);
+    last_ms = now;
+    const s32 state = GetSessionState();
+    if (!BbscReviveEnabled() || image_base == 0 || (state != 3 && state != 6)) {
+        std::scoped_lock lock{bbsc_revive_mutex};
+        bbsc_fallen.clear();
+        was_down = false;
+        near_id = 0;
+        filling = false;
+        return;
+    }
+    const u64 me = GetLocalPlayerCharacter();
+    const auto body = me != 0 ? ReadCharacterTransform(me) : std::nullopt;
+    const u32 map = GetCurrentPackedMap();
+
+    // Down: tell the others where we lie (a dead body does not move).
+    const bool down = bbsc_spectate_active && !bbsc_spectate_saw_wipe &&
+                      (bbsc_death_mode == BbscDeathMode::Downed ||
+                       bbsc_death_mode == BbscDeathMode::Spectate);
+    if (down != was_down) {
+        was_down = down;
+        seen_percent = -1;
+        bbsc_revive_seen_percent = -1;
+        if (down) {
+            const bool choice = bbsc_death_mode == BbscDeathMode::Downed;
+            LOG_INFO(Debug, "BBSC revive: we are down ({}) - waiting for a fellow hunter",
+                     choice ? "the lamp on Circle" : "boss fight, no choice");
+            BBSC_TIMELINE("DEATH", "revive: down, waiting for a fellow hunter ({})",
+                          choice ? "lamp on Circle" : "boss fight");
+            BbscAnnounceAfterCurtain(choice ? u"You have fallen. A fellow hunter can revive you.\n"
+                                              u"Hold Circle to return to the lamp."
+                                            : u"You have fallen.\nA fellow hunter can revive you.",
+                                     "down");
+        }
+    }
+    if (down) {
+        if (body.has_value() && now - sent_ms >= BbscReviveSendMs) {
+            sent_ms = now;
+            SendBbscRevivePacket(1, 0, map, {body->position[0], body->position[1], body->position[2]}, 0);
+        }
+        const int percent = bbsc_revive_seen_percent.load();
+        if (percent >= 0 && seen_percent < 0) {
+            BbscAnnounce(u"A fellow hunter is reviving you...", "being revived");
+        }
+        seen_percent = percent;
+        return;
+    }
+
+    // Alive: a fallen hunter beside us?
+    const s32 hp = me != 0 ? GetCharacterHp(me) : -1;
+    const bool hit = last_hp > 0 && hp >= 0 && hp < last_hp;
+    last_hp = hp;
+    const bool held = (Bbsc::HeldPadButtons() & BbscPadCross) != 0;
+    if (!held) {
+        blocked = false;
+    }
+    u32 target = 0;
+    float progress = 0.0f;
+    std::array<float, 3> target_position{};
+    {
+        std::scoped_lock lock{bbsc_revive_mutex};
+        float best = BbscReviveRange * BbscReviveRange;
+        for (auto it = bbsc_fallen.begin(); it != bbsc_fallen.end();) {
+            BbscFallen& fallen = it->second;
+            if (now - fallen.received_ms > BbscReviveFreshMs) {
+                it = bbsc_fallen.erase(it); // got up, went to the lamp, or left
+                continue;
+            }
+            if (body.has_value() && hp > 0 && fallen.map == map) {
+                float d = 0.0f;
+                for (size_t i = 0; i < 3; ++i) {
+                    const float delta = fallen.position[i] - body->position[i];
+                    d += delta * delta;
+                }
+                if (d <= best) {
+                    best = d;
+                    target = it->first;
+                }
+            }
+            ++it;
+        }
+        for (auto& [id, fallen] : bbsc_fallen) {
+            const bool fill = id == target && held && !blocked && !hit;
+            if (fill) {
+                fallen.progress += static_cast<float>(step) / BbscReviveFillMs;
+            } else {
+                fallen.progress = std::max(0.0f, fallen.progress -
+                                                     static_cast<float>(step) / BbscReviveDrainMs);
+            }
+            if (id == target) {
+                progress = fallen.progress;
+                target_position = fallen.position;
+            }
+        }
+        if (target != 0 && progress >= 1.0f) {
+            bbsc_fallen.erase(target);
+        }
+    }
+    if (target != near_id) {
+        near_id = target;
+        if (target != 0 && now - prompted_ms > 10'000) {
+            prompted_ms = now;
+            BbscAnnounce(u"A fellow hunter has fallen.\nHold X beside it to revive it.", "revive prompt");
+        }
+    }
+    if (hit && filling) {
+        blocked = true;
+        LOG_INFO(Debug, "BBSC revive: interrupted by a hit at {}%", static_cast<int>(progress * 100));
+        BbscAnnounce(u"Revival interrupted.", "revive interrupted");
+    }
+    const bool now_filling = target != 0 && held && !blocked && progress < 1.0f;
+    if (now_filling && !filling) {
+        LOG_INFO(Debug, "BBSC revive: reviving player {:08x} from {}%", target,
+                 static_cast<int>(progress * 100));
+        BbscAnnounce(u"Reviving the fallen hunter...", "reviving");
+    }
+    filling = now_filling;
+    if (filling && now - progress_sent_ms >= 1'000) {
+        progress_sent_ms = now;
+        SendBbscRevivePacket(2, target, map, target_position,
+                             static_cast<u8>(std::clamp(progress * 100.0f, 0.0f, 100.0f)));
+    }
+    if (target != 0 && progress >= 1.0f) {
+        for (int i = 0; i < 3; ++i) {
+            SendBbscRevivePacket(3, target, map, target_position, 100); // the relay may drop one
+        }
+        filling = false;
+        near_id = 0;
+        LOG_INFO(Debug, "BBSC revive: player {:08x} revived", target);
+        BBSC_TIMELINE("DEATH", "revive: we revived player {:08x}", target);
+        BbscAnnounce(u"The fallen hunter is back on its feet.", "revive done");
+    }
 }
 
 // Boss kill keeps the co-op (CONFIRMED statically, 2026-09-16). The boss clear Lua chain is
@@ -16060,6 +16322,7 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
         TickBbscEchoCounter();
         TickBbscSharedProgress();
         TickBbscSpectate();
+        TickBbscRevive();
         TickBbscFollowBroadcast();
         TickBbscWorldFlagsBroadcast();
         TickBbscFollowHost();
@@ -16804,6 +17067,11 @@ void NoteBbscHostRangOurSign(std::uint32_t sender) {
 
 std::int32_t GetBbscRelaySessionState() {
     return bbsc_relay_session_state.load();
+}
+
+void OnBbscRevivePacket(std::uint8_t kind, std::uint32_t player, std::uint32_t target,
+                        std::uint32_t map, float x, float y, float z, std::uint8_t percent) {
+    BbscReviveRelayPacket(kind, player, target, map, x, y, z, percent);
 }
 
 void OnBbscLifePacket(std::uint32_t player, std::uint8_t dead, std::uint32_t sequence) {
