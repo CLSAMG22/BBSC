@@ -55,11 +55,11 @@ for i in (102100, 102200, 102600, 102700):
 for i in (103100, 103200, 103300, 103400, 103500):
     replace(i, r'^You died\.\s*(\n)?Returning to your world\.$', 'You died.')
 replace(103101, r'^Your beckoner has died\.', 'The host died.\nYou stay in their game.')
-replace(103001, r'^Cooperator <\?deadName\?> has died\.$', '<?deadName?> died.\nThey will respawn.')
+replace(103001, r'^Cooperator <\?deadName\?> has died\.$', '<?deadName?> has fallen.')
 for i in (103006, 103007, 103056, 103057):
-    replace(i, r'^Confederate <\?deadName\?> has died\.$', '<?deadName?> died.\nThey will respawn.')
+    replace(i, r'^Confederate <\?deadName\?> has died\.$', '<?deadName?> has fallen.')
 for i in range(103051, 103056):
-    replace(i, r'^Old Hunter <\?deadName\?> has died\.$', '<?deadName?> died.\nThey will respawn.')
+    replace(i, r'^Old Hunter <\?deadName\?> has died\.$', '<?deadName?> has fallen.')
 replace(106200, r'^Beckoner <\?hostName\?> has fallen\.', 'The host <?hostName?> died.\nYou stay in their game.')
 
 # Boss battles. The battle lines keep the game's own boss-name tag. The two generic "final battle"

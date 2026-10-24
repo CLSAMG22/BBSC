@@ -7764,7 +7764,8 @@ void TickBbscHostDeathNotice() {
         last_notice_ms = now;
         LOG_INFO(Debug, "BBSC host death notice: host copy {:#x} - hp {}, dead flag {}", chr, hp,
                  dead_flag);
-        BbscAnnounce(u"The host died.\nThey will respawn at the lamp.",
+        BbscAnnounce(BbscReviveEnabled() ? u"The host has fallen."
+                                         : u"The host died.\nThey will respawn at the lamp.",
                      "host died");
     }
 }
@@ -8858,8 +8859,14 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     // The phantom's death breaks the body into shards (2026-10-24 11:32, screenshot): flags and
     // opacity alone did not bring it back. TickBbscRemoteRevive does, with a physics reset and
     // Idle_wild first, so the same steps run once per fall - the body then stands where it fell.
-    // Its pose comes from the fallen hunter's own game (TickBbscRevive plays the lying death pose
-    // there): standing it up or posing it here was undone by that sync (2026-10-24 11:41).
+    // Lying here too: the animation test is not sent to the others, so the copy stood while its
+    // owner lay (2026-10-24 12:12, screenshot). Every 2 s; TickBbscRevive puts it back to idle once
+    // the fallen hunter got up (the test state has no way out of its own).
+    static std::map<u32, s64> laid_ms;
+    if (SteadyNowMs() - laid_ms[id] >= 2'000) {
+        laid_ms[id] = SteadyNowMs();
+        BbscPlayAnimation(best, BbscFallenPoseAnim);
+    }
     if (opacity < 0.99f) {
         WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
     }
@@ -8934,6 +8941,20 @@ void TickBbscRevive() {
             posed_ms = now;
             BbscPlayAnimation(me, BbscFallenPoseAnim);
         }
+        // Our own body is gone from our own screen too (2026-10-24 12:12): drawn again, as the
+        // others' copies are. The death flags stay: we are dead.
+        if (me != 0 && ReadablePointer(me, 0x3B8)) {
+            const u64 own_modules = ReadValue<u64>(me, 0x3B0);
+            const u64 own_draw =
+                ReadablePointer(own_modules, 0x60) ? ReadValue<u64>(own_modules, 0x58) : 0;
+            const u64 own_state = ReadablePointer(own_draw, 0x30) ? ReadValue<u64>(own_draw, 0x28) : 0;
+            if (ReadValue<float>(me, 0x208) < 0.99f) {
+                WriteValue<u64>(me, 0x208, 0x3F8000003F800000ull);
+            }
+            if (ReadablePointer(own_state, 0x10) && ReadValue<u8>(own_state, 0x0C) == 0) {
+                WriteValue<u8>(own_state, 0x0C, 1);
+            }
+        }
         if (body.has_value() && now - sent_ms >= BbscReviveSendMs) {
             sent_ms = now;
             SendBbscRevivePacket(1, 0, map, {body->position[0], body->position[1], body->position[2]}, 0);
@@ -9005,13 +9026,25 @@ void TickBbscRevive() {
     }
     static s64 shown_ms = 0;
     static std::map<u32, u64> copies; // fallen player -> its copy here, from the last look
-    if (!lying.empty() && now - shown_ms >= 100) {
+    static std::map<u32, u64> posed;  // copies laid down here, put back to idle when they get up
+    if (now - shown_ms >= 100) {
         shown_ms = now;
         copies.clear();
         for (const auto& [id, at] : lying) {
             if (const u64 copy = ShowBbscFallenCopy(id, at)) {
                 copies[id] = copy;
+                posed[id] = copy;
             }
+        }
+        for (auto it = posed.begin(); it != posed.end();) {
+            if (copies.contains(it->first)) {
+                ++it;
+                continue;
+            }
+            if (ReadablePointer(it->second, 0x3B8)) {
+                BbscPlayIdle(it->second); // up again (revived, at the lamp) or gone
+            }
+            it = posed.erase(it);
         }
     }
     if (target != near_id) {
@@ -9028,7 +9061,25 @@ void TickBbscRevive() {
         LOG_INFO(Debug, "BBSC revive: interrupted by a hit at {}%", static_cast<int>(progress * 100));
         BbscAnnounce(u"Revival interrupted.", "revive interrupted");
     }
+    // Moving stops it like a hit: more than half a metre from where the filling started.
+    static std::array<float, 3> fill_from{};
+    if (filling && body.has_value()) {
+        float d = 0.0f;
+        for (size_t i = 0; i < 3; ++i) {
+            const float delta = body->position[i] - fill_from[i];
+            d += delta * delta;
+        }
+        if (d > 0.25f) {
+            blocked = true;
+            LOG_INFO(Debug, "BBSC revive: moved away while reviving - stopped at {}%",
+                     static_cast<int>(progress * 100));
+            BbscAnnounce(u"Revival interrupted.", "revive interrupted");
+        }
+    }
     const bool now_filling = target != 0 && held && !blocked && progress < 1.0f;
+    if (now_filling && !filling && body.has_value()) {
+        fill_from = {body->position[0], body->position[1], body->position[2]};
+    }
     if (now_filling && !filling) {
         LOG_INFO(Debug, "BBSC revive: reviving player {:08x} from {}%", target,
                  static_cast<int>(progress * 100));
@@ -9038,9 +9089,14 @@ void TickBbscRevive() {
     static s64 kneel_ms = 0;
     static s64 glow_ms = 0;
     if (filling) {
-        if (now - kneel_ms >= BbscReviveKneelEveryMs) {
-            BbscPlayAnimation(me, kneel_ms == 0 ? BbscReviveKneelStartAnim : BbscReviveKneelLoopAnim);
+        static bool kneel_held = false;
+        if (kneel_ms == 0) {
+            BbscPlayAnimation(me, BbscReviveKneelStartAnim);
             kneel_ms = now;
+            kneel_held = false;
+        } else if (!kneel_held && now - kneel_ms >= BbscReviveKneelEveryMs) {
+            BbscPlayAnimation(me, BbscReviveKneelLoopAnim); // once: replays showed as a loop
+            kneel_held = true;
         }
         if (now - glow_ms >= BbscReviveGlowEveryMs) {
             glow_ms = now;
