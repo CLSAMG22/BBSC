@@ -171,12 +171,10 @@ replace(15000035, r'^\*$', "You are in the host's Hunter's Dream.")
 # The co-op revive's prompts (bloodborne_re.cpp, BbscShowButtonPrompt): the game's action button
 # shows them with the button's icon. Two more empty "*" slots, the first beside "Pick Up Item".
 replace(10010104, r'^\*$', 'Revive Hunter')
-# The fallen hunter's two prompts, "Return to Lamp" and "Free Camera" (2026-10-24, the user). The
-# prompt (menu/fe.gfx, ActionButton1) draws only its own buttons, from a clip (Button_0), and none
-# of the KG_ icon images - <img src="KG_TP_L"> drew nothing there (19:21 test) - so the free camera
-# is a button prompt of its own. 10010774 is another empty "*" slot.
+# The fallen hunter's prompt. The prompt (menu/fe.gfx, ActionButton1) draws only its own button,
+# from a clip (Button_0), and none of the KG_ icon images: <img src="KG_TP_L"> drew nothing there
+# (19:21 test), so the free camera has no prompt and starts by itself.
 replace(10010715, r'^\*$', 'Return to Lamp')
-replace(10010774, r'^\*$', 'Free Camera')
 
 # The Duel Bell (PvP toggle, bloodborne_re.cpp "PvP toggle item"): goods 4313 is an unused key item
 # with empty slots in the item name / info / caption tables (msg/engus/item.msgbnd: 10, 20, 24).
