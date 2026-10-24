@@ -8848,6 +8848,30 @@ void PS4_SYSV_ABI BbscFadeStoreHook(u64, const GuestRegisterSnapshot* registers)
     }
 }
 
+// The reviver could not be hit while kneeling (2026-10-24 20:31, the user): the kneel is an event
+// clip, and every event clip (101260 / 101261 / 101263 / 101264 in a00.tae) carries TAE jump
+// table events 8 and 0x36 for its whole length, which no gesture does. The jump table (event type
+// 0) is handled at 0x01A21732: esi = id - 1, then a table at 0x01A246F0; id 8 sets
+// [[chr+0x3B0]+8]+0x1BC bit 1 (0x01A22B79), id 0x36 [[chr+0x58]+0x38]+0x3E bit 0 (0x01A22DA8),
+// every frame the clip runs (CONFIRMED statically). The hook right after esi is set
+// (0x01A21749, the character at [r14+0x10]) sends those two to slot 1 (id 2), which goes
+// straight to the end, while that character is the one reviving - so a hit stops the revive.
+constexpr u64 BbscJumpTableSiteOffset = 0x01A21749;
+std::atomic<u64> bbsc_reviver_chr{0}; // the local hunter while it kneels to revive
+
+void PS4_SYSV_ABI BbscJumpTableHook(u64, const GuestRegisterSnapshot* registers) {
+    const u64 reviver = bbsc_reviver_chr.load(std::memory_order_relaxed);
+    if (reviver == 0 || !ReadablePointer(registers->r14, 0x18) ||
+        ReadValue<u64>(registers->r14, 0x10) != reviver) {
+        return;
+    }
+    const u32 index = static_cast<u32>(registers->rsi);
+    if (index == 8 - 1 || index == 0x36 - 1) {
+        auto* changed = const_cast<GuestRegisterSnapshot*>(registers);
+        changed->rsi = (changed->rsi & ~0xFFFFFFFFull) | 1; // slot 1: no effect
+    }
+}
+
 void InstallBbscFadeGuard() {
     if (image_base == 0 || !BbscReviveEnabled()) {
         return;
@@ -8858,6 +8882,14 @@ void InstallBbscFadeGuard() {
         LOG_INFO(Debug, "BBSC revive: fade guard on (a fallen body keeps its opacity)");
     } else {
         LOG_ERROR(Debug, "BBSC revive: fade guard hook failed at {:#x}", BbscFadeStoreOffset);
+    }
+    // mov r13b, [rbx+0x18]; mov rcx, [r14+0x10]
+    static constexpr std::array<u8, 8> JumpSite{0x44, 0x8A, 0x6B, 0x18, 0x49, 0x8B, 0x4E, 0x10};
+    if (InstallGuestCodeHook(reinterpret_cast<void*>(image_base + BbscJumpTableSiteOffset),
+                             std::span<const u8>{JumpSite}, 0, BbscJumpTableHook)) {
+        LOG_INFO(Debug, "BBSC revive: the kneel no longer keeps hits off the reviver");
+    } else {
+        LOG_ERROR(Debug, "BBSC revive: jump table hook failed at {:#x}", BbscJumpTableSiteOffset);
     }
 }
 
@@ -9136,9 +9168,9 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     const int drawing = ReadablePointer(draw_state, 0x10) ? ReadValue<u8>(draw_state, 0x0C) : -1;
     // The death flags hide the body too, only the name stayed (2026-10-24 11:24, screenshot): the
     // same ones TickBbscRemoteRevive clears, [[chr+0x58]+0x38]+0x48 bits 0-1 and [chr+0x58]+0x114
-    // bit 0. No Idle_wild here: the body keeps lying as it fell. The dead flag +0x114 stays set
-    // now: with it cleared the boss went on attacking the fallen hunter's body (2026-10-24 20:20,
-    // the user), and the fade hook keeps the body seen without it.
+    // bit 0. No Idle_wild here: the body keeps lying as it fell. Both death flags stay set now:
+    // with them cleared the boss went on attacking the fallen hunter's body (2026-10-24 20:20,
+    // the user; +0x114 kept alone, 20:30, was not enough), and the fade hook keeps the body seen.
     const u64 control = ReadablePointer(best, 0x60) ? ReadValue<u64>(best, 0x58) : 0;
     const u64 control_flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
     const int flags48 = ReadablePointer(control_flags, 0x50) ? ReadValue<u8>(control_flags, 0x48) : -1;
@@ -9169,10 +9201,17 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     if (drawing == 0) {
         WriteValue<u8>(draw_state, 0x0C, 1);
     }
-    if (flags48 > 0 && (flags48 & 3) != 0) {
-        WriteValue<u8>(control_flags, 0x48, static_cast<u8>(flags48 & 0xFC));
+    // A repeat death (the one BBSC raises itself, see TickBbscDeadWatchdog) sets neither death
+    // flag on the copy: it read +0x48 0, +0x114 0 with 0 HP, and the boss went on attacking it
+    // (2026-10-24 20:32). The game's own death sets both bit 0s (20:29: +0x48 0x1, +0x114 0x1,
+    // the body seen); a copy that lies here gets them the same way.
+    if (flags48 >= 0 && (flags48 & 1) == 0) {
+        WriteValue<u8>(control_flags, 0x48, static_cast<u8>(flags48 | 1));
     }
-    const bool changed = opacity < 0.99f || drawing == 0 || (flags48 > 0 && (flags48 & 3) != 0);
+    if (dead114 >= 0 && (dead114 & 1) == 0) {
+        WriteValue<u16>(control, 0x114, static_cast<u16>(dead114 | 1));
+    }
+    const bool changed = opacity < 0.99f || drawing == 0;
     static std::map<u32, s64> watched_ms;
     if (SteadyNowMs() - watched_ms[id] >= 3'000) {
         watched_ms[id] = SteadyNowMs();
@@ -9540,6 +9579,7 @@ void TickBbscRevive() {
         soft_stop_ms = 0;
     }
     filling = now_filling;
+    bbsc_reviver_chr = filling ? me : 0;
     static s64 kneel_ms = 0;
     static s64 glow_ms = 0;
     if (filling) {
