@@ -191,6 +191,8 @@
 {30, 15000011, u"You caught up with <?hostName?>."}, // *
 {30, 15000012, u"<?joinName?> caught up with you."}, // *
 {30, 15000035, u"You are in the host's Hunter's Dream."}, // *
+{30, 10010104, u"Revive Hunter"}, // *
+{30, 10010715, u"Return to Lamp"}, // *
 {10, 4016, u"Hunt Bell"}, // (empty)
 {20, 4016, u"Ring to call other players into your game.\nCosts no Insight."}, // (empty)
 {24, 4016, u"An old bell carried by the hunters of the\nworkshop, its toll heard across every world.\n\nRing it, and hunters who answer with a\nKin Bell may join your hunt. Together you\nwalk the night, through every lamp,\ndeath and dream, until the hunt is done."}, // (empty)

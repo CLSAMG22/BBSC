@@ -168,6 +168,10 @@ replace(1122, r'Small Resonant Bell', "Join another player's game\nwith the Kin 
 replace(15000011, r'^\*$', 'You caught up with <?hostName?>.')
 replace(15000012, r'^\*$', '<?joinName?> caught up with you.')
 replace(15000035, r'^\*$', "You are in the host's Hunter's Dream.")
+# The co-op revive's prompts (bloodborne_re.cpp, BbscShowButtonPrompt): the game's action button
+# shows them with the button's icon. Two more empty "*" slots, the first beside "Pick Up Item".
+replace(10010104, r'^\*$', 'Revive Hunter')
+replace(10010715, r'^\*$', 'Return to Lamp')
 
 # The Duel Bell (PvP toggle, bloodborne_re.cpp "PvP toggle item"): goods 4313 is an unused key item
 # with empty slots in the item name / info / caption tables (msg/engus/item.msgbnd: 10, 20, 24).
