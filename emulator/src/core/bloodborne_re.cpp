@@ -9201,10 +9201,22 @@ void TickBbscRevive() {
     // Moving or any other action stops it like a hit. Not by distance: the kneel holds the
     // hunter in place and the stick only turned it (2026-10-24 12:31).
     const bool acting = (pad & (BbscPadMoving | BbscPadActions)) != 0;
-    // Full stamina to start (2026-10-24, the user); then the bar empties as the revive goes.
+    // Stamina to start (2026-10-24, the user): what the mirrored bar needs (1 - progress), so a
+    // fresh revive needs it full and a resumed one only its share - 2% spare, as the bar shows
+    // full a point or two under the maximum ("catch your breath" came with the bar full, 19:28).
+    // Then the bar empties as the revive goes.
     const auto stamina = me != 0 ? BbscStamina(me) : std::nullopt;
+    float last_progress = 0.0f;
+    {
+        std::scoped_lock lock{bbsc_revive_mutex};
+        if (const auto it = bbsc_fallen.find(near_id); it != bbsc_fallen.end()) {
+            last_progress = it->second.progress;
+        }
+    }
+    const float stamina_needed = std::max(0.0f, 1.0f - last_progress - 0.02f);
     const bool rested = !stamina.has_value() || stamina->second <= 0 ||
-                        stamina->first >= stamina->second;
+                        static_cast<float>(stamina->first) >=
+                            stamina_needed * static_cast<float>(stamina->second);
     // A stop that was not ours (the fallen hunter's news came late) picks up again without
     // the full stamina for a moment (2026-10-24 19:09: three stops with no reason logged, each
     // asking to catch the breath though the reviver held still).
@@ -9323,7 +9335,13 @@ void TickBbscRevive() {
         if (held && !rested && !filling && !resuming && !blocked && !acting &&
             now - breath_ms > 5'000) {
             breath_ms = now;
-            BbscAnnounce(u"Catch your breath first.", "revive needs full stamina");
+            BbscAnnounce(u"Catch your breath first.", "revive needs stamina");
+            if (stamina.has_value()) {
+                LOG_INFO(Debug, "BBSC revive: stamina {} of {}, {}% needed (progress {}%)",
+                         stamina->first, stamina->second,
+                         static_cast<int>(stamina_needed * 100.0f),
+                         static_cast<int>(last_progress * 100.0f));
+            }
         }
     }
     if (now_filling) {
