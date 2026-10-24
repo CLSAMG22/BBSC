@@ -9068,6 +9068,27 @@ void BbscSetStamina(u64 chr, float fraction) {
 // Fallen player -> its copy that got the physics reset for this fall (cleared when it gets up).
 std::map<u32, u64> bbsc_fallen_reset;
 
+// Is chr still one of the world's characters? A copy BBSC keeps a pointer to can be freed by a
+// load (2026-10-24 20:05: the host rested at a lamp while the guest was down and crashed in the
+// load).
+bool BbscCharacterInWorld(u64 chr) {
+    const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
+    if (chr == 0 || !ReadablePointer(world_chr, 0x70)) {
+        return false;
+    }
+    const s32 count = ReadValue<s32>(world_chr, 0x30);
+    const u64 entries = ReadValue<u64>(world_chr, 0x38);
+    if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
+        return false;
+    }
+    for (s32 i = 0; i < count; ++i) {
+        if (ReadValue<u64>(entries, static_cast<size_t>(i) * 0x38) == chr) {
+            return true;
+        }
+    }
+    return false;
+}
+
 u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     static std::vector<u32> logged;
     const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
@@ -9177,13 +9198,32 @@ void TickBbscRevive() {
     const s64 now = SteadyNowMs();
     const s64 step = last_ms == 0 ? 0 : std::min<s64>(now - last_ms, 250);
     last_ms = now;
+    static std::map<u32, u64> copies; // fallen player -> its copy here, from the last look
+    static std::map<u32, u64> posed;  // copies laid down here, put back to idle when they get up
     const s32 state = GetSessionState();
+    const u64 global = GetGlobalState();
+    const bool loading = !ReadablePointer(global, 0x10) || ReadValue<u8>(global, 0x08) != 0;
+    if (loading) {
+        // Nothing during a load: the characters BBSC poses can be freed under it (20:05 crash,
+        // the host resting at a lamp with the guest down). The copies are looked up again after.
+        copies.clear();
+        posed.clear();
+        bbsc_fallen_reset.clear();
+        for (auto& body : bbsc_fallen_bodies) {
+            body = 0;
+        }
+        filling = false;
+        return;
+    }
     if (!BbscReviveEnabled() || image_base == 0 || (state != 3 && state != 6)) {
         std::scoped_lock lock{bbsc_revive_mutex};
         bbsc_fallen.clear();
         was_down = false;
         near_id = 0;
         filling = false;
+        copies.clear();
+        posed.clear();
+        bbsc_fallen_reset.clear();
         for (auto& body : bbsc_fallen_bodies) {
             body = 0;
         }
@@ -9370,8 +9410,6 @@ void TickBbscRevive() {
         }
     }
     static s64 shown_ms = 0;
-    static std::map<u32, u64> copies; // fallen player -> its copy here, from the last look
-    static std::map<u32, u64> posed;  // copies laid down here, put back to idle when they get up
     if (now - shown_ms >= 100) {
         shown_ms = now;
         copies.clear();
@@ -9395,8 +9433,8 @@ void TickBbscRevive() {
                 ++it;
                 continue;
             }
-            if (ReadablePointer(it->second, 0x3B8)) {
-                BbscPlayIdle(it->second); // up again (revived, at the lamp) or gone
+            if (BbscCharacterInWorld(it->second)) {
+                BbscPlayIdle(it->second); // up again (revived, at the lamp); a gone one is left
             }
             bbsc_fallen_reset.erase(it->first);
             it = posed.erase(it);
