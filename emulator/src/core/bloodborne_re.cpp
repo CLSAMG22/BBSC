@@ -8719,7 +8719,8 @@ void TickBbscSpectate() {
 // sender, u32 target, u32 map, 3 x float position, u8 percent. Switch SHADPS4_BBSC_REVIVE (on).
 constexpr u8 BbscReviveType = 0x2A;
 constexpr s64 BbscReviveFillMs = 8'000; // 15 s at first; 8 s (2026-10-24 19:39, the user)
-constexpr s64 BbscReviveDrainMs = 45'000; // a full bar empties in this long while nobody fills it
+constexpr s64 BbscReviveDrainMs = 10'000; // a full bar empties in this long while nobody fills it
+                                          // (45 s at first; faster, 2026-10-24 20:45, the user)
 constexpr float BbscReviveRange = 2.5f;   // metres between the reviver and the fallen
 constexpr s64 BbscReviveSendMs = 500;
 constexpr s64 BbscReviveFreshMs = 3'000;  // a fallen hunter heard from this recently can be revived
@@ -9052,11 +9053,17 @@ bool BbscShowButtonPrompt(const BbscButtonPrompt& prompt, u64 dead_chr = 0) {
 // rbp-0x208 is the clip "Text_0" INSIDE the Text_0 sprite, child of the ActionButton1/Text_0
 // holder r14+0x110, at 0, 0 there - its x is counted from the sprite's -237.75: the first try
 // moved the text 76 left, 2026-10-24 19:57), Button_0 just before its icon frame (0x01B5793C:
-// its holder at rbp-0x260, a child of ActionButton1 itself). Any other text puts both back where
-// fe.gfx has them.
-// The text widths are measured off the 2026-10-24 screenshots (fe.gfx units, the 24 px font):
-// no text width call of the game's is known yet.
+// its holder at rbp-0x260, a child of ActionButton1 itself).
+// Every prompt now (2026-10-24, the user: "it is normally centered"): the width is the text
+// field's own "textWidth", read with the menu's value interface GetMember (slot 0x28: Scaleform's
+// order, which the game's own calls confirm - 0x10 / 0x18 add and release a reference, 0x58 the
+// array size, 0x138 SetText, 0xE0 / 0xE8 the display info) on the field the update just wrote
+// (its value at rbp-0xA0: interface +0x10, type +0x18, data +0x20). A grey prompt goes to the clip
+// "Text_1" instead (0x01B57600-0x01B57681, holder rbp-0x158), hooked the same way. If the width
+// cannot be read, BBSC's own two prompts use the widths measured off the 2026-10-24 screenshots
+// (fe.gfx units, the 24 px font) and any other prompt keeps the game's places.
 constexpr u64 BbscPromptTextSetOffset = 0x01B577BB;
+constexpr u64 BbscPromptGreyTextSetOffset = 0x01B57681;
 constexpr u64 BbscPromptButtonSetOffset = 0x01B5793C;
 constexpr u64 BbscMenuSetPositionOffset = 0x01ACB8C0;
 constexpr s32 BbscPromptButtonX = -276; // fe.gfx: Button_0 -276.45, -11.5
@@ -9085,10 +9092,59 @@ void BbscMenuSetPosition(u64 holder, s32 x, s32 y) {
     reinterpret_cast<SetPosition>(image_base + BbscMenuSetPositionOffset)(object, x, y);
 }
 
-void PS4_SYSV_ABI BbscPromptTextHook(u64, const GuestRegisterSnapshot* registers) {
+// The width of the text field whose value the prompt update holds at value (a GFx value), or -1.
+s32 BbscMenuTextWidth(u64 value) {
+    if (!ReadablePointer(value, 0x28)) {
+        return -1;
+    }
+    const u64 iface = ReadValue<u64>(value, 0x10);
+    const u32 type = ReadValue<u32>(value, 0x18);
+    const u64 data = ReadValue<u64>(value, 0x20);
+    const u64 vtable = ReadablePointer(iface, 8) ? ReadValue<u64>(iface, 0) : 0;
+    if ((type & 0x8F) != 0x0A || data == 0 || !ReadablePointer(vtable, 0x30) ||
+        !IsEbootCodeAddress(ReadValue<u64>(vtable, 0x28))) {
+        return -1; // not a display object
+    }
+    alignas(16) static std::array<u8, 0x40> result{};
+    result.fill(0);
+    static constexpr char Name[] = "textWidth";
+    using GetMember = bool PS4_SYSV_ABI (*)(u64 iface, u64 data, const char* name, u64 result,
+                                            bool is_display_object);
+    if (!reinterpret_cast<GetMember>(ReadValue<u64>(vtable, 0x28))(
+            iface, data, Name, reinterpret_cast<u64>(result.data()), true)) {
+        return -1;
+    }
+    // Scaleform value types: 3 int, 4 unsigned, 5 number.
+    double width = -1.0;
+    switch (*reinterpret_cast<const u32*>(result.data() + 0x18) & 0x8F) {
+    case 3:
+        width = *reinterpret_cast<const s32*>(result.data() + 0x20);
+        break;
+    case 4:
+        width = *reinterpret_cast<const u32*>(result.data() + 0x20);
+        break;
+    case 5:
+        width = *reinterpret_cast<const double*>(result.data() + 0x20);
+        break;
+    default:
+        break;
+    }
+    return width > 0.0 && width < 2'000.0 ? static_cast<s32>(width + 0.5) : -1;
+}
+
+// tag 0: the normal text (clip Text_0, holder rbp-0x208); 1: a grey prompt (Text_1, rbp-0x158).
+void PS4_SYSV_ABI BbscPromptTextHook(u64 tag, const GuestRegisterSnapshot* registers) {
     const u64 text = registers->rbx;
-    s32 width = -1;
+    s32 width = BbscMenuTextWidth(registers->rbp - 0xA0);
+    static bool logged = false;
+    if (!logged && width > 0) {
+        logged = true;
+        LOG_INFO(Debug, "BBSC revive: prompt text width read from the menu: {}", width);
+    }
     for (const BbscCentredPrompt& prompt : BbscCentredPrompts) {
+        if (width > 0) {
+            break;
+        }
         const size_t bytes = (prompt.text.size() + 1) * sizeof(char16_t);
         if (text != 0 && ReadablePointer(text, bytes) &&
             std::u16string_view{reinterpret_cast<const char16_t*>(text), prompt.text.size() + 1} ==
@@ -9096,7 +9152,7 @@ void PS4_SYSV_ABI BbscPromptTextHook(u64, const GuestRegisterSnapshot* registers
             width = prompt.width;
         }
     }
-    const u64 text_holder = registers->rbp - 0x208;
+    const u64 text_holder = registers->rbp - (tag == 0 ? 0x208 : 0x158);
     if (width < 0) {
         if (bbsc_prompt_moved) {
             bbsc_prompt_moved = false;
@@ -9130,10 +9186,14 @@ void InstallBbscPromptCentring() {
     const bool text = InstallGuestCodeHook(
         reinterpret_cast<void*>(image_base + BbscPromptTextSetOffset), std::span<const u8>{TextSite},
         0, BbscPromptTextHook);
+    // 0x01B57681: the same mov eax, [rbp-0x88], after the grey text's SetText
+    const bool grey = InstallGuestCodeHook(
+        reinterpret_cast<void*>(image_base + BbscPromptGreyTextSetOffset),
+        std::span<const u8>{TextSite}, 1, BbscPromptTextHook);
     const bool button = InstallGuestCodeHook(
         reinterpret_cast<void*>(image_base + BbscPromptButtonSetOffset),
         std::span<const u8>{ButtonSite}, 0, BbscPromptButtonHook);
-    LOG_INFO(Debug, "BBSC revive: prompt centring text={} button={}", text, button);
+    LOG_INFO(Debug, "BBSC revive: prompt centring text={} grey={} button={}", text, grey, button);
 }
 
 // The bar (2026-10-24, the user: "use the stamina to show a progress bar"): the fallen hunter's
