@@ -13633,8 +13633,11 @@ void TickBbscDeadWatchdog() {
     }
     const u64 player = GetLocalPlayerCharacter();
     const s32 hp = ReadablePointer(player, 0x3B8) ? GetCharacterHp(player) : -1;
-    // A held death during a boss fight is meant to stay dead until the boss is over.
-    const bool spectating = bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Spectate;
+    // A held death during a boss fight is meant to stay dead until the boss is over, and a downed
+    // hunter until it is revived or chooses the lamp (2026-10-24: the watchdog revived a downed
+    // guest at the lamp 8 s after it fell).
+    const bool spectating = bbsc_spectate_active && (bbsc_death_mode == BbscDeathMode::Spectate ||
+                                                     bbsc_death_mode == BbscDeathMode::Downed);
     if (!session_alive || hp > 0 || hp < 0 || spectating || BbscCurtainActive()) {
         bbsc_dead_since_ms = 0;
         return;
@@ -13679,6 +13682,27 @@ void TickBbscDeadWatchdog() {
         BBSC_TIMELINE("DEATH", "death: repeat death in a boss fight (session state {}) -> spectate "
                         "until the boss dies or nobody is alive",
                  session_state);
+        return;
+    }
+    if (repeat && BbscReviveEnabled() && LivingPartnerExists()) {
+        // A repeat death outside a boss fight waits to be revived too, as the first one does.
+        bbsc_spectate_name = "repeat death";
+        bbsc_spectate_since_ms = now;
+        bbsc_spectate_chr = player;
+        bbsc_spectate_alone_since_ms = 0;
+        bbsc_spectate_logged_wait = false;
+        bbsc_spectate_saw_wipe = false;
+        bbsc_spectate_wipe_warped = false;
+        bbsc_spectate_host_back_ms = 0;
+        bbsc_spectate_revivals_at_death = bbsc_peer_revivals.load();
+        bbsc_boss_cleared_since_ms = 0;
+        bbsc_death_mode = BbscDeathMode::Downed;
+        bbsc_revive_received = false;
+        bbsc_spectate_active = true;
+        LOG_INFO(Debug, "BBSC death: repeat death (session state {}) -> down until revived, or the "
+                        "lamp on Circle",
+                 session_state);
+        BBSC_TIMELINE("DEATH", "death: repeat death -> down until revived, or the lamp on Circle");
         return;
     }
     if (repeat) {
