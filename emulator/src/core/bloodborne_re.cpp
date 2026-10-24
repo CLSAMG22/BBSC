@@ -14940,7 +14940,9 @@ bool BbscHomeSettled(s64 now, s64& since_ms) {
 // comes as a second copy (upgrading the guest's own copy needs the weapon's record, not mapped yet).
 // Armour (2026-10-24, the user: "add armor") is code 0x1 + the EquipParamProtector id, one piece
 // per row and no upgrade levels, sent as 0xB0000000 | id; its item lot category is 1 (lot 21000
-// gives armour 190000 that way). The rows named "NOT NEEDED" (1000, 900000, ...) are never held.
+// gives armour 190000 that way). The rows named "NOT NEEDED" (1000, 900000, ...) can be held
+// (2026-10-24 18:33: the host had 901000 and the guest got it): all 144 of them, and 3 unnamed
+// debug rows, have sellValue -1 (row +0x1C), no real piece does, so those stay home.
 constexpr u32 BbscGearWeaponTag = 0x90000000u;
 constexpr u32 BbscGearRuneTag = 0xA0000000u;
 constexpr u32 BbscGearArmorTag = 0xB0000000u;
@@ -14952,6 +14954,7 @@ bool BbscIsGearTag(u32 tagged) {
 constexpr s32 BbscGearLot = 15000;
 constexpr size_t BbscItemLotRowSize = 0x94;
 constexpr size_t BbscGemGenRowSize = 0x90;
+constexpr size_t BbscProtectorRowSize = 0x10C;
 std::vector<u32> bbsc_communion_gear; // guest: tagged gear from the last chalice
 
 // The lookup codes of the used slots of an inventory (slot +4 repeats the code; anything else read
@@ -14985,6 +14988,15 @@ bool BbscGemIsRune(u32 gem) {
     return false;
 }
 
+// Not a "NOT NEEDED" placeholder (sellValue -1), see the armour note above.
+bool BbscArmorIsReal(u32 armor) {
+    const u64 table = BbscGameParamTable("EQUIP_PARAM_PROTECTOR_ST");
+    if (const u64 row = table != 0 ? BbscParamRow(table, armor, BbscProtectorRowSize) : 0) {
+        return ReadValue<s32>(row, 0x1C) != -1;
+    }
+    return false;
+}
+
 // Host: our weapons, armour and runes, tagged for the chalice's answer.
 std::vector<u32> BbscHeldGearTagged() {
     std::vector<u32> gear;
@@ -14996,7 +15008,7 @@ std::vector<u32> BbscHeldGearTagged() {
                 tagged = BbscGearWeaponTag | id;
             } else if ((code >> 28) == 0x8 && BbscGemIsRune(id)) {
                 tagged = BbscGearRuneTag | id;
-            } else if ((code >> 28) == 0x1) {
+            } else if ((code >> 28) == 0x1 && BbscArmorIsReal(id)) {
                 tagged = BbscGearArmorTag | id;
             }
             if (tagged != 0 && std::ranges::find(gear, tagged) == gear.end()) {
@@ -15062,6 +15074,9 @@ void QueueBbscGearGifts(std::string_view when, const char* from = "the host's wo
     bbsc_gear_gifts.queue.clear();
     bbsc_gear_gifts.awarded.clear();
     for (const u32 tagged : bbsc_communion_gear) {
+        if ((tagged & 0xF0000000u) == BbscGearArmorTag && !BbscArmorIsReal(tagged & 0x0FFFFFFFu)) {
+            continue; // a placeholder row, whoever sent it
+        }
         if (!BbscHasGear(tagged)) {
             bbsc_gear_gifts.queue.push_back(tagged);
         }
