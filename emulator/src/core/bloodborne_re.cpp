@@ -8906,7 +8906,8 @@ void TickBbscRevive() {
         near_id = target;
         if (target != 0 && now - prompted_ms > 10'000) {
             prompted_ms = now;
-            BbscAnnounce(u"A fellow hunter has fallen.\nHold X (E) beside it to revive it.",
+            BbscAnnounce(u"A fellow hunter has fallen.\nHold <img src=\"KG_R_D\" vspace='-8'> "
+                         u"beside it to revive it.",
                          "revive prompt");
         }
     }
@@ -11940,7 +11941,7 @@ struct BbscWatchState {
 };
 BbscWatchState bbsc_watch;
 constexpr float BbscWatchHeadHeight = 1.4f; // metres above the feet
-std::array<char16_t, 160> bbsc_watch_notice{}; // stays valid while the banner shows it
+std::array<char16_t, 256> bbsc_watch_notice{}; // stays valid while the banner shows it
 
 std::vector<u64> BbscWatchTargets() {
     std::vector<u64> out;
@@ -11974,6 +11975,11 @@ std::vector<u64> BbscWatchTargets() {
 }
 
 // The co-op banner, at most every 1.5 s (switching fast would queue one banner per press).
+// The game's button icons, as its tutorial texts (menu category 2) write them.
+constexpr std::string_view BbscIconCircle = "<img src=\"KG_R_R\" vspace='-8'>";
+constexpr std::string_view BbscIconR1 = "<img src=\"KG_R1\" vspace='-8'>";
+constexpr std::string_view BbscIconTouchpad = "<img src=\"KG_TP_L\" vspace='-8'>";
+
 void BbscWatchNotice(std::string_view text, std::string_view what, s64 now) {
     if (now - bbsc_watch.notice_ms < 1'500) {
         return;
@@ -12041,12 +12047,15 @@ bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s
             // named only keyboard keys).
             const bool lamp_choice =
                 bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Downed;
-            // The banner shows two lines.
-            const std::string lamp = "\nHold Circle (G): return to the lamp.";
-            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. Tab / R1: next hunter.{}",
-                                                   index + 1, size,
-                                                   lamp_choice ? lamp : "\nF / touchpad: free camera.")
-                                     : fmt::format("Watching the living hunter. F / touchpad: free camera.{}",
+            // The banner shows two lines. The buttons are the game's own icons (its tutorial texts
+            // use <img src="KG_..."> the same way), so they follow BBport's prompt choice:
+            // PlayStation, Xbox or keyboard (2026-10-24, the user: icons by input).
+            const std::string lamp = "\nHold " + std::string{BbscIconCircle} + ": return to the lamp.";
+            const std::string free_cam = std::string{BbscIconTouchpad} + ": free camera.";
+            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. {}: next hunter.{}",
+                                                   index + 1, size, BbscIconR1,
+                                                   lamp_choice ? lamp : "\n" + free_cam)
+                                     : fmt::format("Watching the living hunter. {}{}", free_cam,
                                                    lamp_choice ? lamp : ""),
                             "watch camera", now);
         } else {
