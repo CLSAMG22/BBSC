@@ -9054,20 +9054,18 @@ bool BbscShowButtonPrompt(const BbscButtonPrompt& prompt, u64 dead_chr = 0) {
 // holder r14+0x110, at 0, 0 there - its x is counted from the sprite's -237.75: the first try
 // moved the text 76 left, 2026-10-24 19:57), Button_0 just before its icon frame (0x01B5793C:
 // its holder at rbp-0x260, a child of ActionButton1 itself).
-// Every prompt now (2026-10-24, the user: "it is normally centered"): the width is the text
-// field's own "textWidth", read with the menu's value interface GetMember (slot 0x28: Scaleform's
-// order, which the game's own calls confirm - 0x10 / 0x18 add and release a reference, 0x58 the
-// array size, 0x138 SetText, 0xE0 / 0xE8 the display info) on the field the update just wrote
-// (its value at rbp-0xA0: interface +0x10, type +0x18, data +0x20). A grey prompt goes to the clip
-// "Text_1" instead (0x01B57600-0x01B57681, holder rbp-0x158), hooked the same way. If the width
-// cannot be read, BBSC's own two prompts use the widths measured off the 2026-10-24 screenshots
-// (fe.gfx units, the 24 px font) and any other prompt keeps the game's places.
+// The width is the text field's own "textWidth", read with the menu's value interface GetMember
+// (slot 0x28: Scaleform's order, which the game's own calls confirm - 0x10 / 0x18 add and release
+// a reference, 0x58 the array size, 0x138 SetText, 0xE0 / 0xE8 the display info) on the field the
+// update just wrote (its value at rbp-0xA0: interface +0x10, type +0x18, data +0x20); if it cannot
+// be read, the widths measured off the 2026-10-24 screenshots (fe.gfx units, the 24 px font). A
+// grey prompt goes to the clip "Text_1" instead (0x01B57600-0x01B57681, holder rbp-0x158), hooked
+// the same way.
 constexpr u64 BbscPromptTextSetOffset = 0x01B577BB;
 constexpr u64 BbscPromptGreyTextSetOffset = 0x01B57681;
 constexpr u64 BbscPromptButtonSetOffset = 0x01B5793C;
 constexpr u64 BbscMenuSetPositionOffset = 0x01ACB8C0;
-constexpr s32 BbscPromptButtonX = -276; // fe.gfx: Button_0 -276.45, -11.5
-constexpr s32 BbscPromptButtonY = -11;
+constexpr s32 BbscPromptButtonX = -276; // fe.gfx: Button_0 -276.45, -11.5 (y kept as the game has it)
 constexpr s32 BbscPromptTextX = -238; // fe.gfx: the Text_0 sprite -237.75, -12.05; the text
                                       // clip in it at 0, 0
 struct BbscCentredPrompt {
@@ -9132,47 +9130,126 @@ s32 BbscMenuTextWidth(u64 value) {
     return width > 0.0 && width < 2'000.0 ? static_cast<s32>(width + 0.5) : -1;
 }
 
+// The place (x, y) of a prompt part in its parent, read the way 0x01ACB8C0 reads it before it
+// writes: the object's value (its vtable +0 fills one, the value at +8: interface +0x18, type
+// +0x20, data +0x28), then GetDisplayInfo (0xE0), x and y doubles at +0x00 / +0x08; the value is
+// released (0x18) when it holds a reference, as there.
+std::optional<std::pair<double, double>> BbscMenuGetPosition(u64 holder) {
+    const u64 object = ReadablePointer(holder, 0x10) ? ReadValue<u64>(holder, 0x08) : 0;
+    const u64 vtable = ReadablePointer(object, 8) ? ReadValue<u64>(object, 0) : 0;
+    if (!ReadablePointer(vtable, 8) || !IsEbootCodeAddress(ReadValue<u64>(vtable, 0))) {
+        return std::nullopt;
+    }
+    alignas(16) static std::array<u8, 0x40> value{};
+    value.fill(0);
+    using GetValue = void PS4_SYSV_ABI (*)(u64 out, u64 object);
+    reinterpret_cast<GetValue>(ReadValue<u64>(vtable, 0))(reinterpret_cast<u64>(value.data()),
+                                                          object);
+    const u64 iface = *reinterpret_cast<const u64*>(value.data() + 0x18);
+    const u32 type = *reinterpret_cast<const u32*>(value.data() + 0x20);
+    const u64 data = *reinterpret_cast<const u64*>(value.data() + 0x28);
+    const u64 iface_vtable = ReadablePointer(iface, 8) ? ReadValue<u64>(iface, 0) : 0;
+    if (!ReadablePointer(iface_vtable, 0xF0)) {
+        return std::nullopt;
+    }
+    std::optional<std::pair<double, double>> place;
+    if ((type & 0x8F) != 0) {
+        alignas(16) static std::array<u8, 0x100> info{};
+        info.fill(0);
+        using GetDisplayInfo = bool PS4_SYSV_ABI (*)(u64 iface, u64 data, u64 info);
+        if (reinterpret_cast<GetDisplayInfo>(ReadValue<u64>(iface_vtable, 0xE0))(
+                iface, data, reinterpret_cast<u64>(info.data()))) {
+            place = std::pair{*reinterpret_cast<const double*>(info.data()),
+                              *reinterpret_cast<const double*>(info.data() + 8)};
+        }
+    }
+    if ((type & 0x40) != 0) {
+        using Release = void PS4_SYSV_ABI (*)(u64 iface, u64 value, u64 data);
+        reinterpret_cast<Release>(ReadValue<u64>(iface_vtable, 0x18))(
+            iface, reinterpret_cast<u64>(value.data() + 8), data);
+    }
+    return place;
+}
+
+// Only BBSC's own prompts are moved (2026-10-24 20:49, the user: the game's own were centred
+// before, the X on the line of "Return to the Hunter's Dream" and "L3 Switch Action" on the
+// second - putting them back to fe.gfx's places broke that). Before the first move the text's
+// and the button's places are read and kept, y is never changed, and the next other prompt gets
+// exactly those places back. A prompt with a second line ([r13+2], 0x01B5798F) is left alone.
+std::optional<std::pair<double, double>> bbsc_prompt_text_place;   // the game's, before we moved
+std::optional<std::pair<double, double>> bbsc_prompt_button_place; // the game's, before we moved
+u64 bbsc_prompt_moved_holder_offset = 0;                             // which text clip we moved
+
 // tag 0: the normal text (clip Text_0, holder rbp-0x208); 1: a grey prompt (Text_1, rbp-0x158).
 void PS4_SYSV_ABI BbscPromptTextHook(u64 tag, const GuestRegisterSnapshot* registers) {
     const u64 text = registers->rbx;
-    s32 width = BbscMenuTextWidth(registers->rbp - 0xA0);
-    static bool logged = false;
-    if (!logged && width > 0) {
-        logged = true;
-        LOG_INFO(Debug, "BBSC revive: prompt text width read from the menu: {}", width);
-    }
+    bool ours = false;
+    s32 width = -1;
     for (const BbscCentredPrompt& prompt : BbscCentredPrompts) {
-        if (width > 0) {
-            break;
-        }
         const size_t bytes = (prompt.text.size() + 1) * sizeof(char16_t);
         if (text != 0 && ReadablePointer(text, bytes) &&
             std::u16string_view{reinterpret_cast<const char16_t*>(text), prompt.text.size() + 1} ==
                 std::u16string_view{prompt.text.data(), prompt.text.size() + 1}) {
+            ours = true;
             width = prompt.width;
         }
     }
-    const u64 text_holder = registers->rbp - (tag == 0 ? 0x208 : 0x158);
-    if (width < 0) {
+    const bool two_lines = ReadablePointer(registers->r13, 3) && ReadValue<u8>(registers->r13, 2) != 0;
+    const u64 holder_offset = tag == 0 ? 0x208 : 0x158;
+    const u64 text_holder = registers->rbp - holder_offset;
+    if (!ours || two_lines) {
         if (bbsc_prompt_moved) {
             bbsc_prompt_moved = false;
-            BbscMenuSetPosition(text_holder, 0, 0);
-            bbsc_prompt_button_x = BbscPromptButtonX;
+            if (bbsc_prompt_text_place && bbsc_prompt_moved_holder_offset == holder_offset) {
+                BbscMenuSetPosition(text_holder, static_cast<s32>(bbsc_prompt_text_place->first),
+                                    static_cast<s32>(bbsc_prompt_text_place->second));
+            }
+            if (bbsc_prompt_button_place) {
+                bbsc_prompt_button_x = static_cast<s32>(bbsc_prompt_button_place->first);
+            }
         }
         return;
     }
+    if (const s32 measured = BbscMenuTextWidth(registers->rbp - 0xA0); measured > 0) {
+        width = measured;
+    }
+    if (!bbsc_prompt_moved) {
+        bbsc_prompt_text_place = BbscMenuGetPosition(text_holder);
+        bbsc_prompt_button_place.reset();
+        if (bbsc_prompt_text_place) {
+            LOG_INFO(Debug, "BBSC revive: prompt text clip at {:.1f}, {:.1f} before centring (width {})",
+                     bbsc_prompt_text_place->first, bbsc_prompt_text_place->second, width);
+        }
+    }
+    if (!bbsc_prompt_text_place) {
+        return; // its place cannot be read: nothing is moved
+    }
     const s32 group = (BbscPromptTextX - BbscPromptButtonX) + width;
     const s32 button_x = -group / 2;
-    // Where the text starts, as an offset from its sprite's own place.
+    // Where the text starts, as an offset from its sprite's own place; y as the game had it.
     BbscMenuSetPosition(text_holder,
-                        button_x + (BbscPromptTextX - BbscPromptButtonX) - BbscPromptTextX, 0);
+                        button_x + (BbscPromptTextX - BbscPromptButtonX) - BbscPromptTextX,
+                        static_cast<s32>(bbsc_prompt_text_place->second));
     bbsc_prompt_button_x = button_x;
     bbsc_prompt_moved = true;
+    bbsc_prompt_moved_holder_offset = holder_offset;
 }
 
 void PS4_SYSV_ABI BbscPromptButtonHook(u64, const GuestRegisterSnapshot* registers) {
-    if (const auto x = std::exchange(bbsc_prompt_button_x, std::nullopt)) {
-        BbscMenuSetPosition(registers->rbp - 0x260, *x, BbscPromptButtonY);
+    const auto x = std::exchange(bbsc_prompt_button_x, std::nullopt);
+    if (!x) {
+        return;
+    }
+    const u64 holder = registers->rbp - 0x260;
+    if (!bbsc_prompt_button_place) {
+        bbsc_prompt_button_place = BbscMenuGetPosition(holder);
+        if (bbsc_prompt_button_place) {
+            LOG_INFO(Debug, "BBSC revive: prompt button at {:.1f}, {:.1f} before centring",
+                     bbsc_prompt_button_place->first, bbsc_prompt_button_place->second);
+        }
+    }
+    if (bbsc_prompt_button_place) {
+        BbscMenuSetPosition(holder, *x, static_cast<s32>(bbsc_prompt_button_place->second));
     }
 }
 
