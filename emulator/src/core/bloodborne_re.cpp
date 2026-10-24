@@ -9136,7 +9136,9 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     const int drawing = ReadablePointer(draw_state, 0x10) ? ReadValue<u8>(draw_state, 0x0C) : -1;
     // The death flags hide the body too, only the name stayed (2026-10-24 11:24, screenshot): the
     // same ones TickBbscRemoteRevive clears, [[chr+0x58]+0x38]+0x48 bits 0-1 and [chr+0x58]+0x114
-    // bit 0. No Idle_wild here: the body keeps lying as it fell.
+    // bit 0. No Idle_wild here: the body keeps lying as it fell. The dead flag +0x114 stays set
+    // now: with it cleared the boss went on attacking the fallen hunter's body (2026-10-24 20:20,
+    // the user), and the fade hook keeps the body seen without it.
     const u64 control = ReadablePointer(best, 0x60) ? ReadValue<u64>(best, 0x58) : 0;
     const u64 control_flags = ReadablePointer(control, 0x40) ? ReadValue<u64>(control, 0x38) : 0;
     const int flags48 = ReadablePointer(control_flags, 0x50) ? ReadValue<u8>(control_flags, 0x48) : -1;
@@ -9170,11 +9172,15 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     if (flags48 > 0 && (flags48 & 3) != 0) {
         WriteValue<u8>(control_flags, 0x48, static_cast<u8>(flags48 & 0xFC));
     }
-    if (dead114 > 0 && (dead114 & 1) != 0) {
-        WriteValue<u16>(control, 0x114, static_cast<u16>(dead114 & 0xFFFE));
+    const bool changed = opacity < 0.99f || drawing == 0 || (flags48 > 0 && (flags48 & 3) != 0);
+    static std::map<u32, s64> watched_ms;
+    if (SteadyNowMs() - watched_ms[id] >= 3'000) {
+        watched_ms[id] = SteadyNowMs();
+        LOG_INFO(Debug, "BBSC revive: copy of {:08x} as found - opacity {:.2f}, drawing {}, +0x48 "
+                        "{:#x}, +0x114 {:#x}, chr+0x1E4 {:#x}, hp {}",
+                 id, opacity, drawing, flags48, dead114, ReadValue<u8>(best, 0x1E4),
+                 GetCharacterHp(best));
     }
-    const bool changed = opacity < 0.99f || drawing == 0 || (flags48 > 0 && (flags48 & 3) != 0) ||
-                         (dead114 > 0 && (dead114 & 1) != 0);
     if (changed && std::ranges::find(logged, id) == logged.end()) {
         logged.push_back(id);
         LOG_INFO(Debug, "BBSC revive: fallen player {:08x} drawn again where it lies (opacity {:.2f}, "
@@ -9259,6 +9265,40 @@ void TickBbscRevive() {
     }
     if (down) {
         bbsc_fallen_bodies[0] = me;
+        // Fell in a boss fight and the fight is over without a kill (a wipe that did not take, a
+        // fog left behind): the normal choice of the lamp, with its prompt (2026-10-24, the user:
+        // "as a fallback he should have the prompt"). A kill still gets everyone up as before.
+        static s64 no_boss_since_ms = 0;
+        if (bbsc_death_mode == BbscDeathMode::Spectate && !BossFightActive() &&
+            bbsc_boss_killed_ms < bbsc_spectate_since_ms) {
+            if (no_boss_since_ms == 0) {
+                no_boss_since_ms = now;
+            } else if (now - no_boss_since_ms >= 5'000) {
+                bbsc_death_mode = BbscDeathMode::Downed;
+                bbsc_free_camera_on_down = true;
+                no_boss_since_ms = 0;
+                LOG_INFO(Debug, "BBSC revive: the boss fight is over - down with the lamp's choice");
+                BBSC_TIMELINE("DEATH", "revive: the boss fight is over - down with the lamp's choice");
+            }
+        } else {
+            no_boss_since_ms = 0;
+        }
+        static s64 watched_ms = 0;
+        if (me != 0 && now - watched_ms >= 3'000) {
+            watched_ms = now;
+            const u64 own_modules = ReadValue<u64>(me, 0x3B0);
+            const u64 own_draw =
+                ReadablePointer(own_modules, 0x60) ? ReadValue<u64>(own_modules, 0x58) : 0;
+            const u64 own_state = ReadablePointer(own_draw, 0x30) ? ReadValue<u64>(own_draw, 0x28) : 0;
+            const u64 own_control = ReadablePointer(me, 0x60) ? ReadValue<u64>(me, 0x58) : 0;
+            LOG_INFO(Debug, "BBSC revive: own body as found - opacity {:.2f}, drawing {}, +0x114 {:#x}, "
+                            "chr+0x1E4 {:#x}, mode {}",
+                     ReadValue<float>(me, 0x208),
+                     ReadablePointer(own_state, 0x10) ? ReadValue<u8>(own_state, 0x0C) : -1,
+                     ReadablePointer(own_control, 0x118) ? ReadValue<u16>(own_control, 0x114) : -1,
+                     ReadValue<u8>(me, 0x1E4),
+                     bbsc_death_mode == BbscDeathMode::Downed ? "down" : "boss fight");
+        }
         if (bbsc_death_mode == BbscDeathMode::Downed) {
             BbscShowButtonPrompt(BbscLampPrompt, me);
         }
