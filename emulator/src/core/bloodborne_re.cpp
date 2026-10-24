@@ -8944,6 +8944,98 @@ bool BbscShowButtonPrompt(const BbscButtonPrompt& prompt, u64 dead_chr = 0) {
     return pressed;
 }
 
+// Centred prompts (2026-10-24, the user: icon and text centred). The game draws every prompt the
+// same way, CONFIRMED from menu/fe.gfx: ActionButtonTop sits at the screen's centre (952.6 of
+// 1920) and in it ActionButton1 holds Button_0 at x -276.45 and Text_0 at -237.75, the text
+// field left-aligned; the C++ never moves them (the prompt update 0x01B5773A-0x01B57B99 only sets
+// the text, "Text_0" then "Text", and the button's icon frame on "Button_0"). A short text so
+// sits left of centre. For BBSC's own prompts the pair is moved with the game's own menu position
+// call 0x01ACB8C0(object, int x, int y) (GetDisplayInfo 0xE0 / SetDisplayInfo 0xE8, x and y
+// doubles at +0x00 / +0x08, flags |= 3; the object is what the update's holders keep at +8):
+// Text_0 right after its update set the text (0x01B577BB: Text_0's holder at rbp-0x208, the
+// text, UTF-16, in rbx), Button_0 just before its icon frame (0x01B5793C: its holder at
+// rbp-0x260). Any other text puts both back where fe.gfx has them.
+// The text widths are measured off the 2026-10-24 screenshots (fe.gfx units, the 24 px font):
+// no text width call of the game's is known yet.
+constexpr u64 BbscPromptTextSetOffset = 0x01B577BB;
+constexpr u64 BbscPromptButtonSetOffset = 0x01B5793C;
+constexpr u64 BbscMenuSetPositionOffset = 0x01ACB8C0;
+constexpr s32 BbscPromptButtonX = -276; // fe.gfx: Button_0 -276.45, -11.5
+constexpr s32 BbscPromptButtonY = -11;
+constexpr s32 BbscPromptTextX = -238; // fe.gfx: Text_0 -237.75, -12.05
+constexpr s32 BbscPromptTextY = -12;
+struct BbscCentredPrompt {
+    std::u16string_view text;
+    s32 width;
+};
+constexpr std::array<BbscCentredPrompt, 2> BbscCentredPrompts{{
+    {u"Revive Hunter", 175},
+    {u"Return to Lamp", 191},
+}};
+std::optional<s32> bbsc_prompt_button_x; // the button's place for this update, then applied
+bool bbsc_prompt_moved = false;
+
+// holder: one of the prompt update's locals, {vtable, object}.
+void BbscMenuSetPosition(u64 holder, s32 x, s32 y) {
+    const u64 object = ReadablePointer(holder, 0x10) ? ReadValue<u64>(holder, 0x08) : 0;
+    const u64 vtable = ReadablePointer(object, 8) ? ReadValue<u64>(object, 0) : 0;
+    if (!ReadablePointer(vtable, 8) || !IsEbootCodeAddress(ReadValue<u64>(vtable, 0))) {
+        return;
+    }
+    using SetPosition = void PS4_SYSV_ABI (*)(u64 object, s32 x, s32 y);
+    reinterpret_cast<SetPosition>(image_base + BbscMenuSetPositionOffset)(object, x, y);
+}
+
+void PS4_SYSV_ABI BbscPromptTextHook(u64, const GuestRegisterSnapshot* registers) {
+    const u64 text = registers->rbx;
+    s32 width = -1;
+    for (const BbscCentredPrompt& prompt : BbscCentredPrompts) {
+        const size_t bytes = (prompt.text.size() + 1) * sizeof(char16_t);
+        if (text != 0 && ReadablePointer(text, bytes) &&
+            std::u16string_view{reinterpret_cast<const char16_t*>(text), prompt.text.size() + 1} ==
+                std::u16string_view{prompt.text.data(), prompt.text.size() + 1}) {
+            width = prompt.width;
+        }
+    }
+    const u64 text_holder = registers->rbp - 0x208;
+    if (width < 0) {
+        if (bbsc_prompt_moved) {
+            bbsc_prompt_moved = false;
+            BbscMenuSetPosition(text_holder, BbscPromptTextX, BbscPromptTextY);
+            bbsc_prompt_button_x = BbscPromptButtonX;
+        }
+        return;
+    }
+    const s32 group = (BbscPromptTextX - BbscPromptButtonX) + width;
+    const s32 button_x = -group / 2;
+    BbscMenuSetPosition(text_holder, button_x + (BbscPromptTextX - BbscPromptButtonX),
+                        BbscPromptTextY);
+    bbsc_prompt_button_x = button_x;
+    bbsc_prompt_moved = true;
+}
+
+void PS4_SYSV_ABI BbscPromptButtonHook(u64, const GuestRegisterSnapshot* registers) {
+    if (const auto x = std::exchange(bbsc_prompt_button_x, std::nullopt)) {
+        BbscMenuSetPosition(registers->rbp - 0x260, *x, BbscPromptButtonY);
+    }
+}
+
+void InstallBbscPromptCentring() {
+    if (image_base == 0 || !BbscReviveEnabled()) {
+        return;
+    }
+    // 0x01B577BB: mov eax, [rbp-0x88]; 0x01B5793C: lea rdi, [rbp-0x260]
+    static constexpr std::array<u8, 6> TextSite{0x8B, 0x85, 0x78, 0xFF, 0xFF, 0xFF};
+    static constexpr std::array<u8, 7> ButtonSite{0x48, 0x8D, 0xBD, 0xA0, 0xFD, 0xFF, 0xFF};
+    const bool text = InstallGuestCodeHook(
+        reinterpret_cast<void*>(image_base + BbscPromptTextSetOffset), std::span<const u8>{TextSite},
+        0, BbscPromptTextHook);
+    const bool button = InstallGuestCodeHook(
+        reinterpret_cast<void*>(image_base + BbscPromptButtonSetOffset),
+        std::span<const u8>{ButtonSite}, 0, BbscPromptButtonHook);
+    LOG_INFO(Debug, "BBSC revive: prompt centring text={} button={}", text, button);
+}
+
 // The bar (2026-10-24, the user: "use the stamina to show a progress bar"): the fallen hunter's
 // stamina is the progress, 0 up to full, and drains back as the progress does; the reviver must
 // start with full stamina and spends it as the revive goes. Stamina is [[chr+0x3B0]+0x20]+0x134,
@@ -18703,6 +18795,7 @@ void InstallReverseEngineeringTrace() {
     InstallBbscDreamHooks();
     InstallBbscFloorGuardAndPickupTrace();
     InstallBbscFadeGuard();
+    InstallBbscPromptCentring();
     InstallBbscCinematicHook();
     InstallBbscQuitHook();
     InstallBbscDeathTraceHooks();
