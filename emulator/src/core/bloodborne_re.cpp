@@ -9501,7 +9501,9 @@ void TickBbscRevive() {
         // fog left behind): the normal choice of the lamp, with its prompt (2026-10-24, the user:
         // "as a fallback he should have the prompt"). A kill still gets everyone up as before.
         static s64 no_boss_since_ms = 0;
-        if (bbsc_death_mode == BbscDeathMode::Spectate && !BossFightActive() &&
+        // The same rule that made it a boss-fight death (BbscBossFightAtDeath: the bar, a bar
+        // moments ago with no kill since, and whatever else it counts) says when the fight is over.
+        if (bbsc_death_mode == BbscDeathMode::Spectate && !BbscBossFightAtDeath() &&
             bbsc_boss_killed_ms < bbsc_spectate_since_ms) {
             if (no_boss_since_ms == 0) {
                 no_boss_since_ms = now;
