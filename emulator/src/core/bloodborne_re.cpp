@@ -8650,7 +8650,10 @@ constexpr s64 BbscReviveFillMs = 15'000;
 constexpr s64 BbscReviveDrainMs = 45'000; // a full bar empties in this long while nobody fills it
 constexpr float BbscReviveRange = 2.5f;   // metres between the reviver and the fallen
 constexpr s64 BbscReviveSendMs = 500;
-constexpr s64 BbscReviveFreshMs = 2'000;  // a fallen hunter not heard from this long got up
+constexpr s64 BbscReviveFreshMs = 3'000;  // a fallen hunter heard from this recently can be revived
+// Kept, progress and all, this long without news (2026-10-24: a fallen game in the background sent
+// late and every try started from 0%); after that it got up, went to the lamp or left.
+constexpr s64 BbscReviveForgetMs = 10'000;
 constexpr s64 BbscReviveGiveUpHoldMs = 1'500;
 constexpr u32 BbscPadCross = 0x4000;
 constexpr u32 BbscPadCircle = 0x2000;
@@ -8890,11 +8893,12 @@ void TickBbscRevive() {
         float best = BbscReviveRange * BbscReviveRange;
         for (auto it = bbsc_fallen.begin(); it != bbsc_fallen.end();) {
             BbscFallen& fallen = it->second;
-            if (now - fallen.received_ms > BbscReviveFreshMs) {
+            if (now - fallen.received_ms > BbscReviveForgetMs) {
                 it = bbsc_fallen.erase(it); // got up, went to the lamp, or left
                 continue;
             }
-            if (body.has_value() && hp > 0 && fallen.map == map) {
+            if (body.has_value() && hp > 0 && fallen.map == map &&
+                now - fallen.received_ms <= BbscReviveFreshMs) {
                 float d = 0.0f;
                 for (size_t i = 0; i < 3; ++i) {
                     const float delta = fallen.position[i] - body->position[i];
@@ -8924,7 +8928,7 @@ void TickBbscRevive() {
             bbsc_fallen.erase(target);
         }
         for (const auto& [id, fallen] : bbsc_fallen) {
-            if (fallen.map == map) {
+            if (fallen.map == map && now - fallen.received_ms <= BbscReviveFreshMs) {
                 lying.emplace_back(id, fallen.position);
             }
         }
