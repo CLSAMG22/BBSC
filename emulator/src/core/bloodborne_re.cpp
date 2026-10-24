@@ -8746,13 +8746,28 @@ bool BbscReviveGiveUp() {
 // command, kind) takes kind 1 when command+0x19 has bit 0x10 and behaviour+0x378 >= 0, looks up
 // the W_AnimeTest state (0x01DF15B0), builds the clip name from behaviour+0x378 (0x012E7170) and
 // plays it. The numbers are the hkx files in chr/c0000*.anibnd: gestures 104000 + 10 x the
-// gesture's text id - 800 (item/10 800..822), x5 its loop; deaths 19000 + 10 x n, +1 lying.
+// gesture's text id - 800 (item/10 800..822), x5 its loop. The deaths are 024xxx: the behaviour
+// graph (c0000.anibnd c0000.hkx) names its lying states BeDead24001, BeDead24011, ... (19xxx is
+// not a death: 19001 left the body in a wrong pose, 2026-10-24 12:02).
 constexpr u64 BbscAnimDispatchOffset = 0x01A1BA90;
-constexpr s32 BbscReviveKneelStartAnim = 104190; // Deep Respect: down on one knee
-constexpr s32 BbscReviveKneelLoopAnim = 104195;  // ... and staying there
-constexpr s32 BbscFallenPoseAnim = 19001;        // W_Dead_Normal00_Idle: lying after a normal death
+constexpr s32 BbscReviveKneelStartAnim = 104200; // Make Contact: down on the knees (Deep Respect,
+constexpr s32 BbscReviveKneelLoopAnim = 104205;  // 104190, is a standing bow) ... and staying there
+constexpr s32 BbscFallenPoseAnim = 24001;        // BeDead24001: lying after a normal death
 constexpr s64 BbscReviveKneelEveryMs = 2'500;
 constexpr s64 BbscReviveGlowEveryMs = 3'000;
+
+// The animation test state has no way out of its own (2026-10-24: the reviver could not move any
+// more, even after the revive): Idle_wild, as BbscRespawnInPlace plays it, ends it.
+void BbscPlayIdle(u64 chr) {
+    const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
+    const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
+    if (ReadablePointer(behaviour, 0x388)) {
+        using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
+        reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
+                                                                 image_base + 0x04992C40);
+        LOG_INFO(Debug, "BBSC revive: back to idle on {:#x}", chr);
+    }
+}
 
 void BbscPlayAnimation(u64 chr, s32 anim) {
     const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
@@ -9034,6 +9049,9 @@ void TickBbscRevive() {
             }
         }
     } else {
+        if (kneel_ms != 0 && me != 0) {
+            BbscPlayIdle(me); // done, let go or hit: up again
+        }
         kneel_ms = 0;
         glow_ms = 0;
     }
