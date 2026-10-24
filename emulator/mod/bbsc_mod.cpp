@@ -805,13 +805,14 @@ using PadReadStateFn = int PS4_SYSV_ABI (*)(s32 handle, u8* data);
 PadReadStateFn original_pad_read = nullptr;
 constexpr u32 PadL3 = 0x2, PadR3 = 0x4, PadUp = 0x10, PadRight = 0x20, PadDown = 0x40,
               PadLeft = 0x80, PadL1 = 0x400, PadR1 = 0x800, PadTriangle = 0x1000,
-              PadCircle = 0x2000, PadCross = 0x4000, PadSquare = 0x8000;
+              PadCircle = 0x2000, PadCross = 0x4000, PadSquare = 0x8000, PadTouchpad = 0x100000;
 struct CinePad {
     u32 buttons = 0;
     u32 last_buttons = 0;
     float lx = 0.0f, ly = 0.0f, rx = 0.0f, ry = 0.0f, l2 = 0.0f, r2 = 0.0f;
     int speed_steps = 0, smooth_steps = 0;
     int switch_steps = 0; // R1 / L1 presses: the hunter to watch while dead
+    int free_presses = 0; // touchpad (Xbox: View) presses: watch <-> fly freely while dead
     bool zoom_reset = false;
 };
 CinePad cine_pad;
@@ -860,6 +861,7 @@ int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
     cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
     cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
     cine_pad.switch_steps += ((pressed & PadR1) ? 1 : 0) - ((pressed & PadL1) ? 1 : 0);
+    cine_pad.free_presses += (pressed & PadTouchpad) != 0 ? 1 : 0;
     // The game sees a controller at rest (connected, nothing pressed).
     const u32 rest_buttons = buttons & 0x80000000u;
     std::memcpy(data, &rest_buttons, 4);
@@ -920,6 +922,10 @@ void ApplyCinePadLocked(u32 buttons, float lx, float ly, float rx, float ry, flo
     cine_pad.speed_steps += ((pressed & PadUp) ? 1 : 0) - ((pressed & PadDown) ? 1 : 0);
     cine_pad.smooth_steps += ((pressed & PadRight) ? 1 : 0) - ((pressed & PadLeft) ? 1 : 0);
     cine_pad.zoom_reset = cine_pad.zoom_reset || (pressed & PadTriangle) != 0;
+    // While dead: R1 / L1 the next / previous hunter, the touchpad (View) watch <-> free. Only the
+    // game's own pad reads counted them before (2026-10-24: not working with the controller).
+    cine_pad.switch_steps += ((pressed & PadR1) ? 1 : 0) - ((pressed & PadL1) ? 1 : 0);
+    cine_pad.free_presses += (pressed & PadTouchpad) != 0 ? 1 : 0;
 }
 
 float StickAxis(float v) {
@@ -1085,6 +1091,7 @@ bool PollSdlPadLocked() {
     buttons |= pressed(1) ? PadCircle : 0;
     buttons |= pressed(2) ? PadSquare : 0;
     buttons |= pressed(3) ? PadTriangle : 0;
+    buttons |= pressed(20) || pressed(4) ? PadTouchpad : 0; // touchpad, or Back / View
     const auto axis = [&](int a) { return static_cast<float>(sdl.axis(gamepad, a)) / 32767.0f; };
     ApplyCinePadLocked(buttons, StickAxis(axis(0)), StickAxis(axis(1)), StickAxis(axis(2)),
                        StickAxis(axis(3)), std::clamp(axis(4), 0.0f, 1.0f),
@@ -1141,6 +1148,7 @@ bool PollXInputPadLocked() {
     buttons |= (xb & 0x2000) ? PadCircle : 0;
     buttons |= (xb & 0x4000) ? PadSquare : 0;
     buttons |= (xb & 0x8000) ? PadTriangle : 0;
+    buttons |= (xb & 0x0020) ? PadTouchpad : 0; // Back / View
     const auto axis = [](SHORT v) { return StickAxis(static_cast<float>(v) / 32767.0f); };
     // XInput's y grows upwards.
     ApplyCinePadLocked(buttons, axis(state.pad.lx), -axis(state.pad.ly), axis(state.pad.rx),
@@ -1225,7 +1233,8 @@ CinematicInput TakeCinematicInput() {
                       (CineKeyPressed('Q', down('Q')) ? 1 : 0) +
                       (CineKeyPressed(VK_LBUTTON, down(VK_LBUTTON)) ? 1 : 0) + p.switch_steps;
     cine_pad.switch_steps = 0;
-    c.toggle_free = CineKeyPressed('F', down('F'));
+    c.toggle_free = CineKeyPressed('F', down('F')) || p.free_presses > 0;
+    cine_pad.free_presses = 0;
     c.pad_move_x = p.lx;
     c.pad_move_y = -p.ly; // stick up = smaller y = forward
     c.pad_rise = ((p.buttons & PadR1) ? 1.0f : 0.0f) - ((p.buttons & PadL1) ? 1.0f : 0.0f);
@@ -1269,8 +1278,10 @@ void CinematicForceOff() {
 unsigned HeldPadButtons() {
     unsigned buttons = 0;
     {
+        // last_buttons, not buttons: buttons only follows the pad while the camera is on
+        // (2026-10-24: a living hunter's X never reached the revive).
         std::scoped_lock lock{cine_mutex};
-        buttons = cine_pad.buttons;
+        buttons = cine_pad.last_buttons;
     }
     DWORD pid = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &pid);

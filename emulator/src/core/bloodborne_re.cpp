@@ -8720,6 +8720,69 @@ bool BbscReviveGiveUp() {
     return true;
 }
 
+// A fallen hunter's copy fades out with its death; while it waits to be revived it is drawn again
+// where it lies, so the others can find it (2026-10-24, the user: "dead player has no body"). The
+// remote copy nearest to the spot it reported (within 3 m) gets the visibility of
+// TickBbscRemoteRevive: opacity chr+0x208 back to 1 and drawing on.
+void ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
+    static std::vector<u32> logged;
+    const u64 world_chr = ReadValue<u64>(image_base + CandidateLocalStatePointerOffset, 0);
+    if (!ReadablePointer(world_chr, 0x70)) {
+        return;
+    }
+    const u64 local = ReadValue<u64>(world_chr, 0x60);
+    const s32 count = ReadValue<s32>(world_chr, 0x30);
+    const u64 entries = ReadValue<u64>(world_chr, 0x38);
+    if (count <= 0 || count > 64 || !ReadablePointer(entries, static_cast<size_t>(count) * 0x38)) {
+        return;
+    }
+    u64 best = 0;
+    float best_d = 9.0f;
+    for (s32 i = 0; i < count; ++i) {
+        const u64 chr = ReadValue<u64>(entries, static_cast<size_t>(i) * 0x38);
+        if (chr == 0 || chr == local || !ReadablePointer(chr, 0x410) ||
+            IsInvaderType(GetCharacterType(chr))) {
+            continue;
+        }
+        if (const auto t = ReadCharacterTransform(chr)) {
+            float d = 0.0f;
+            for (size_t k = 0; k < 3; ++k) {
+                const float delta = t->position[k] - at[k];
+                d += delta * delta;
+            }
+            if (d < best_d) {
+                best_d = d;
+                best = chr;
+            }
+        }
+    }
+    if (best == 0) {
+        if (std::ranges::find(logged, id) == logged.end()) {
+            logged.push_back(id);
+            LOG_INFO(Debug, "BBSC revive: no copy of fallen player {:08x} within 3 m of where it lies",
+                     id);
+        }
+        return;
+    }
+    const u64 modules = ReadValue<u64>(best, 0x3B0);
+    const u64 draw = ReadablePointer(modules, 0x60) ? ReadValue<u64>(modules, 0x58) : 0;
+    const u64 draw_state = ReadablePointer(draw, 0x30) ? ReadValue<u64>(draw, 0x28) : 0;
+    const float opacity = ReadValue<float>(best, 0x208);
+    const int drawing = ReadablePointer(draw_state, 0x10) ? ReadValue<u8>(draw_state, 0x0C) : -1;
+    if (opacity < 0.99f) {
+        WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
+    }
+    if (drawing == 0) {
+        WriteValue<u8>(draw_state, 0x0C, 1);
+    }
+    if ((opacity < 0.99f || drawing == 0) && std::ranges::find(logged, id) == logged.end()) {
+        logged.push_back(id);
+        LOG_INFO(Debug, "BBSC revive: fallen player {:08x} drawn again where it lies (opacity {:.2f}, "
+                        "drawing {})",
+                 id, opacity, drawing);
+    }
+}
+
 void TickBbscRevive() {
     static s64 last_ms = 0;
     static s64 sent_ms = 0;
@@ -8761,10 +8824,6 @@ void TickBbscRevive() {
                      choice ? "the lamp on Circle" : "boss fight, no choice");
             BBSC_TIMELINE("DEATH", "revive: down, waiting for a fellow hunter ({})",
                           choice ? "lamp on Circle" : "boss fight");
-            BbscAnnounceAfterCurtain(choice ? u"You have fallen. A fellow hunter can revive you.\n"
-                                              u"Hold Circle to return to the lamp."
-                                            : u"You have fallen.\nA fellow hunter can revive you.",
-                                     "down");
         }
     }
     if (down) {
@@ -8791,6 +8850,7 @@ void TickBbscRevive() {
     u32 target = 0;
     float progress = 0.0f;
     std::array<float, 3> target_position{};
+    std::vector<std::pair<u32, std::array<float, 3>>> lying;
     {
         std::scoped_lock lock{bbsc_revive_mutex};
         float best = BbscReviveRange * BbscReviveRange;
@@ -8829,12 +8889,25 @@ void TickBbscRevive() {
         if (target != 0 && progress >= 1.0f) {
             bbsc_fallen.erase(target);
         }
+        for (const auto& [id, fallen] : bbsc_fallen) {
+            if (fallen.map == map) {
+                lying.emplace_back(id, fallen.position);
+            }
+        }
+    }
+    static s64 shown_ms = 0;
+    if (!lying.empty() && now - shown_ms >= 500) {
+        shown_ms = now;
+        for (const auto& [id, at] : lying) {
+            ShowBbscFallenCopy(id, at);
+        }
     }
     if (target != near_id) {
         near_id = target;
         if (target != 0 && now - prompted_ms > 10'000) {
             prompted_ms = now;
-            BbscAnnounce(u"A fellow hunter has fallen.\nHold X beside it to revive it.", "revive prompt");
+            BbscAnnounce(u"A fellow hunter has fallen.\nHold X (E) beside it to revive it.",
+                         "revive prompt");
         }
     }
     if (hit && filling) {
@@ -11963,10 +12036,18 @@ bool BbscWatchCamera(u64 director, u64 render, const Bbsc::CinematicInput& in, s
         if (!bbsc_watch.told) {
             bbsc_watch.told = true;
             bbsc_watch.notice_ms = 0;
-            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}.\nTab / R1: next "
-                                                   "hunter.\nF: free camera.",
-                                                   index + 1, size)
-                                     : std::string{"Watching the living hunter.\nF: free camera."},
+            // A downed hunter outside a boss fight can go to the lamp: said here, with the button
+            // and the key (2026-10-24, the user: the game's YOU DIED is enough, and the notice
+            // named only keyboard keys).
+            const bool lamp_choice =
+                bbsc_spectate_active && bbsc_death_mode == BbscDeathMode::Downed;
+            // The banner shows two lines.
+            const std::string lamp = "\nHold Circle (G): return to the lamp.";
+            BbscWatchNotice(size > 1 ? fmt::format("Watching hunter {} of {}. Tab / R1: next hunter.{}",
+                                                   index + 1, size,
+                                                   lamp_choice ? lamp : "\nF / touchpad: free camera.")
+                                     : fmt::format("Watching the living hunter. F / touchpad: free camera.{}",
+                                                   lamp_choice ? lamp : ""),
                             "watch camera", now);
         } else {
             BbscWatchNotice(fmt::format("Watching hunter {} of {}.", index + 1, size),
