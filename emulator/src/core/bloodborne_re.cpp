@@ -9276,14 +9276,6 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
         WriteValue<u16>(control, 0x114, static_cast<u16>(dead114 | 1));
     }
     const bool changed = opacity < 0.99f || drawing == 0;
-    static std::map<u32, s64> watched_ms;
-    if (SteadyNowMs() - watched_ms[id] >= 3'000) {
-        watched_ms[id] = SteadyNowMs();
-        LOG_INFO(Debug, "BBSC revive: copy of {:08x} as found - opacity {:.2f}, drawing {}, +0x48 "
-                        "{:#x}, +0x114 {:#x}, chr+0x1E4 {:#x}, hp {}",
-                 id, opacity, drawing, flags48, dead114, ReadValue<u8>(best, 0x1E4),
-                 GetCharacterHp(best));
-    }
     if (changed && std::ranges::find(logged, id) == logged.end()) {
         logged.push_back(id);
         LOG_INFO(Debug, "BBSC revive: fallen player {:08x} drawn again where it lies (opacity {:.2f}, "
@@ -9385,22 +9377,6 @@ void TickBbscRevive() {
             }
         } else {
             no_boss_since_ms = 0;
-        }
-        static s64 watched_ms = 0;
-        if (me != 0 && now - watched_ms >= 3'000) {
-            watched_ms = now;
-            const u64 own_modules = ReadValue<u64>(me, 0x3B0);
-            const u64 own_draw =
-                ReadablePointer(own_modules, 0x60) ? ReadValue<u64>(own_modules, 0x58) : 0;
-            const u64 own_state = ReadablePointer(own_draw, 0x30) ? ReadValue<u64>(own_draw, 0x28) : 0;
-            const u64 own_control = ReadablePointer(me, 0x60) ? ReadValue<u64>(me, 0x58) : 0;
-            LOG_INFO(Debug, "BBSC revive: own body as found - opacity {:.2f}, drawing {}, +0x114 {:#x}, "
-                            "chr+0x1E4 {:#x}, mode {}",
-                     ReadValue<float>(me, 0x208),
-                     ReadablePointer(own_state, 0x10) ? ReadValue<u8>(own_state, 0x0C) : -1,
-                     ReadablePointer(own_control, 0x118) ? ReadValue<u16>(own_control, 0x114) : -1,
-                     ReadValue<u8>(me, 0x1E4),
-                     bbsc_death_mode == BbscDeathMode::Downed ? "down" : "boss fight");
         }
         if (bbsc_death_mode == BbscDeathMode::Downed) {
             BbscShowButtonPrompt(BbscLampPrompt, me);
