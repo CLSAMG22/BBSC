@@ -8741,6 +8741,7 @@ bool BbscReviveGiveUp() {
 // hunter who gets up. Events play through 0x01A19F60(behaviour, name), as Idle_wild does in
 // BbscRespawnInPlace; effects through the character's own add, vtable +0x3F0 (see "Invasions").
 constexpr char16_t BbscReviveKneelEvent[] = u"W_UseItemMessage";
+constexpr char16_t BbscFallenPoseEvent[] = u"W_Dead_Normal00_Idle"; // lying after a normal death
 constexpr s64 BbscReviveKneelEveryMs = 2'500;
 constexpr s64 BbscReviveGlowEveryMs = 3'000;
 
@@ -8748,10 +8749,15 @@ void BbscPlayEvent(u64 chr, const char16_t* name) {
     const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
     const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
     const int ready = ReadablePointer(behaviour, 0x388) ? ReadValue<u8>(behaviour, 0x384) : -1;
-    static s64 logged_ms = 0;
-    if (SteadyNowMs() - logged_ms > 5'000) {
-        logged_ms = SteadyNowMs();
-        LOG_INFO(Debug, "BBSC revive: kneel event {} (behaviour {:#x}, ready {})",
+    static std::map<std::u16string, s64> logged_ms;
+    s64& last = logged_ms[name];
+    if (SteadyNowMs() - last > 5'000) {
+        last = SteadyNowMs();
+        std::string ascii;
+        for (const char16_t* c = name; *c != 0; ++c) {
+            ascii.push_back(static_cast<char>(*c));
+        }
+        LOG_INFO(Debug, "BBSC revive: event {} on {:#x} {} (behaviour {:#x}, ready {})", ascii, chr,
                  ready > 0 ? "sent" : "NOT sent", behaviour, ready);
     }
     if (ready > 0) {
@@ -8838,9 +8844,16 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
             reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
                                                                      image_base + 0x04992C40);
         }
-        LOG_INFO(Debug, "BBSC revive: fallen player {:08x}'s body stood up where it fell (physics "
-                        "reset, Idle_wild)",
+        LOG_INFO(Debug, "BBSC revive: fallen player {:08x}'s body back where it fell (physics "
+                        "reset, Idle_wild), now laid down",
                  id);
+    }
+    // Then lying, in the game's own death pose (2026-10-24, the user: "no body on floor?"), again
+    // every 2 s in case something stands it up.
+    static std::map<u32, s64> laid_ms;
+    if (SteadyNowMs() - laid_ms[id] >= 2'000) {
+        laid_ms[id] = SteadyNowMs();
+        BbscPlayEvent(best, BbscFallenPoseEvent);
     }
     if (opacity < 0.99f) {
         WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
