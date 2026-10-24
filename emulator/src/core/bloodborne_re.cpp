@@ -8868,8 +8868,10 @@ void InstallBbscFadeGuard() {
 // game uses slots 1-0x10; BBSC takes 0x20. ActionButtonParam row 1 is empty in the game (all
 // zeros, nothing refers to it): BBSC fills it like row 4200 ("Search Body") with its own text -
 // event text 10010104 "Revive Hunter" (an empty "*" slot beside "Pick Up Item") on the reviver's
-// side, 10010715 "Return to Lamp" and the free camera's touchpad (another) on the fallen hunter's. execInvalidTime 0: the game
-// hides a row for that long after a press, and the revive is held.
+// side, 10010715 "Return to Lamp" and the free camera's keys (another) on the fallen hunter's.
+// execInvalidTime 0: the game hides a row for that long after a press, and the revive is held.
+// The prompt (menu/fe.gfx, ActionButton1) draws its one button from a clip at a fixed place, the
+// text left-aligned after it, and has no other button icons: a short text sits left of centre.
 // A dead hunter gets no prompt (2026-10-24 18:59, the fallen side): the registration refuses when
 // neither [[[chr+0x3B0]+8]+0x10] bit 0 nor [R+0x5D] bit 2 is set (0x01CD937D-0x01CD938D), and the
 // first is the character's "may act" bit - 0 on the fallen hunter, read from its running game.
