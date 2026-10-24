@@ -8713,6 +8713,9 @@ void BbscReviveRelayPacket(std::uint8_t kind, std::uint32_t player, std::uint32_
     } else if (kind == 2 && target == self) {
         bbsc_revive_seen_percent = percent;
         bbsc_revive_seen_ms = SteadyNowMs();
+    } else if (kind == 4 && target == self) {
+        bbsc_revive_seen_percent = percent; // stopped there: the bar drains from it now
+        bbsc_revive_seen_ms = 0;
     } else if (kind == 3 && target == self) {
         bbsc_revive_received = true;
     }
@@ -8867,6 +8870,10 @@ void InstallBbscFadeGuard() {
 // event text 10010104 "Revive Hunter" (an empty "*" slot beside "Pick Up Item") on the reviver's
 // side, 10010715 "Return to Lamp" (another) on the fallen hunter's. execInvalidTime 0: the game
 // hides a row for that long after a press, and the revive is held.
+// A dead hunter gets no prompt (2026-10-24 18:59, the fallen side): the registration refuses when
+// neither [[[chr+0x3B0]+8]+0x10] bit 0 nor [R+0x5D] bit 2 is set (0x01CD937D-0x01CD938D), and the
+// first is the character's "may act" bit - 0 on the fallen hunter, read from its running game.
+// For the fallen hunter it is set for the call only and put back right after (game thread).
 u64 BbscGameParamTable(std::string_view type);     // see "The BBSC hunter's kit"
 u64 BbscParamRow(u64 table, u32 id, size_t size); // see "The BBSC hunter's kit"
 constexpr u64 BbscButtonManagerPointer = 0x05540048;
@@ -8877,7 +8884,7 @@ constexpr s32 BbscReviveButtonText = 10010104;
 constexpr s32 BbscLampButtonText = 10010715;
 constexpr size_t BbscActionButtonRowSize = 0x48;
 
-void BbscShowButtonPrompt(s32 text) {
+void BbscShowButtonPrompt(s32 text, u64 dead_chr = 0) {
     const u64 table = BbscGameParamTable("ACTIONBUTTON_PARAM_ST");
     const u64 row = table != 0 ? BbscParamRow(table, BbscReviveButtonRow, BbscActionButtonRowSize) : 0;
     const u64 manager = ReadValue<u64>(image_base + BbscButtonManagerPointer, 0);
@@ -8907,10 +8914,19 @@ void BbscShowButtonPrompt(s32 text) {
         WriteValue<u8>(row, 0x44, 1);                  // execButtonCircle
         LOG_INFO(Debug, "BBSC revive: prompt row {} now shows text {}", BbscReviveButtonRow, text);
     }
+    const u64 modules = ReadablePointer(dead_chr, 0x3B8) ? ReadValue<u64>(dead_chr, 0x3B0) : 0;
+    const u64 acts = ReadablePointer(modules, 0x10) ? ReadValue<u64>(modules, 0x08) : 0;
+    const u8 act_bits = ReadablePointer(acts, 0x11) ? ReadValue<u8>(acts, 0x10) : 1;
+    if ((act_bits & 1) == 0) {
+        WriteValue<u8>(acts, 0x10, static_cast<u8>(act_bits | 1));
+    }
     using Register = bool PS4_SYSV_ABI (*)(u64 manager, u32 slot, s32 row, u32 off, u32 r8,
                                            u32 r9, float xmm0, u32 stack0, u32 stack1);
     reinterpret_cast<Register>(image_base + BbscButtonRegisterOffset)(
         manager, BbscReviveButtonSlot, BbscReviveButtonRow, 0, 0, 1, 0.0f, 0, 0);
+    if ((act_bits & 1) == 0) {
+        WriteValue<u8>(acts, 0x10, act_bits);
+    }
 }
 
 // The bar (2026-10-24, the user: "use the stamina to show a progress bar"): the fallen hunter's
@@ -9092,15 +9108,22 @@ void TickBbscRevive() {
     if (down) {
         bbsc_fallen_bodies[0] = me;
         if (bbsc_death_mode == BbscDeathMode::Downed) {
-            BbscShowButtonPrompt(BbscLampButtonText);
+            BbscShowButtonPrompt(BbscLampButtonText, me);
         }
-        // The bar: the reviver's last word while it fills (one a second), drained at the
-        // reviver's own rate once it stops.
-        const int sent = bbsc_revive_seen_percent.load();
-        if (sent >= 0 && now - bbsc_revive_seen_ms.load() < 1'500) {
-            bar = std::max(bar, static_cast<float>(sent) / 100.0f);
-            bar = std::min(bar + static_cast<float>(step) / BbscReviveFillMs, 1.0f);
+        // The bar: the reviver's last word while it fills (four a second), carried on at the
+        // fill rate from there, so it mirrors the reviver's own bar (2026-10-24, the user: "both
+        // stamina bars are not fully in sync"); from where it stopped (kind 4), drained at the
+        // reviver's drain rate.
+        const int heard = bbsc_revive_seen_percent.load();
+        const s64 heard_ms = bbsc_revive_seen_ms.load();
+        if (heard >= 0 && heard_ms != 0 && now - heard_ms < 750) {
+            bar = std::min(static_cast<float>(heard) / 100.0f +
+                               static_cast<float>(now - heard_ms) / BbscReviveFillMs,
+                           1.0f);
         } else {
+            if (heard >= 0 && heard_ms == 0) {
+                bar = std::min(bar, static_cast<float>(heard) / 100.0f); // where it stopped
+            }
             bar = std::max(0.0f, bar - static_cast<float>(step) / BbscReviveDrainMs);
         }
         if (me != 0) {
@@ -9265,7 +9288,6 @@ void TickBbscRevive() {
                  pad, static_cast<int>(progress * 100));
         BbscAnnounce(u"Revival interrupted.", "revive interrupted");
     }
-    static float stamina_from = 0.0f; // the progress when this fill started
     const bool now_filling = target != 0 && may_fill && progress < 1.0f;
     if (target != 0 && !now_filling && progress < 1.0f) {
         BbscShowButtonPrompt(BbscReviveButtonText);
@@ -9275,16 +9297,17 @@ void TickBbscRevive() {
             BbscAnnounce(u"Catch your breath first.", "revive needs full stamina");
         }
     }
-    if (now_filling && !filling) {
-        stamina_from = progress;
-    }
-    if (now_filling && stamina_from < 1.0f) {
-        BbscSetStamina(me, (1.0f - progress) / (1.0f - stamina_from));
+    if (now_filling) {
+        BbscSetStamina(me, 1.0f - progress); // the fallen hunter's bar, mirrored
     }
     if (now_filling && !filling) {
         LOG_INFO(Debug, "BBSC revive: reviving player {:08x} from {}%", target,
                  static_cast<int>(progress * 100));
         BbscAnnounce(u"Reviving the fallen hunter...", "reviving");
+    }
+    if (filling && !now_filling && target != 0 && progress < 1.0f) {
+        SendBbscRevivePacket(4, target, map, target_position,
+                             static_cast<u8>(std::clamp(progress * 100.0f, 0.0f, 100.0f)));
     }
     filling = now_filling;
     static s64 kneel_ms = 0;
@@ -9312,7 +9335,7 @@ void TickBbscRevive() {
         kneel_ms = 0;
         glow_ms = 0;
     }
-    if (filling && now - progress_sent_ms >= 1'000) {
+    if (filling && now - progress_sent_ms >= 250) {
         progress_sent_ms = now;
         SendBbscRevivePacket(2, target, map, target_position,
                              static_cast<u8>(std::clamp(progress * 100.0f, 0.0f, 100.0f)));
