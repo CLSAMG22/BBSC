@@ -8740,30 +8740,40 @@ bool BbscReviveGiveUp() {
 // holds X), the fallen body glows with the Blood Vial's effect (SpEffect 3010), and so does the
 // hunter who gets up. Events play through 0x01A19F60(behaviour, name), as Idle_wild does in
 // BbscRespawnInPlace; effects through the character's own add, vtable +0x3F0 (see "Invasions").
-constexpr char16_t BbscReviveKneelEvent[] = u"W_UseItemMessage";
-constexpr char16_t BbscFallenPoseEvent[] = u"W_Dead_Normal00_Idle"; // lying after a normal death
+// Animations by number: events like W_UseItemMessage or W_Dead_Normal00_Idle are sent and ignored
+// (2026-10-24 logs). The game's own code fires only Idle_wild and W_AnimeTest - its debug
+// animation test, CONFIRMED statically: the behaviour command dispatcher 0x01A1BA90(behaviour,
+// command, kind) takes kind 1 when command+0x19 has bit 0x10 and behaviour+0x378 >= 0, looks up
+// the W_AnimeTest state (0x01DF15B0), builds the clip name from behaviour+0x378 (0x012E7170) and
+// plays it. The numbers are the hkx files in chr/c0000*.anibnd: gestures 104000 + 10 x the
+// gesture's text id - 800 (item/10 800..822), x5 its loop; deaths 19000 + 10 x n, +1 lying.
+constexpr u64 BbscAnimDispatchOffset = 0x01A1BA90;
+constexpr s32 BbscReviveKneelStartAnim = 104190; // Deep Respect: down on one knee
+constexpr s32 BbscReviveKneelLoopAnim = 104195;  // ... and staying there
+constexpr s32 BbscFallenPoseAnim = 19001;        // W_Dead_Normal00_Idle: lying after a normal death
 constexpr s64 BbscReviveKneelEveryMs = 2'500;
 constexpr s64 BbscReviveGlowEveryMs = 3'000;
 
-void BbscPlayEvent(u64 chr, const char16_t* name) {
+void BbscPlayAnimation(u64 chr, s32 anim) {
     const u64 modules = ReadablePointer(chr, 0x3B8) ? ReadValue<u64>(chr, 0x3B0) : 0;
     const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
-    const int ready = ReadablePointer(behaviour, 0x388) ? ReadValue<u8>(behaviour, 0x384) : -1;
-    static std::map<std::u16string, s64> logged_ms;
-    s64& last = logged_ms[name];
+    if (!ReadablePointer(behaviour, 0x388)) {
+        return;
+    }
+    alignas(16) static std::array<u8, 0x40> command{};
+    command[0x19] = 0x10;
+    const s32 before = ReadValue<s32>(behaviour, 0x378);
+    WriteValue<s32>(behaviour, 0x378, anim);
+    using Dispatch = void PS4_SYSV_ABI (*)(u64 behaviour, u64 command, u32 kind);
+    reinterpret_cast<Dispatch>(image_base + BbscAnimDispatchOffset)(
+        behaviour, reinterpret_cast<u64>(command.data()), 1);
+    WriteValue<s32>(behaviour, 0x378, before);
+    static std::map<s32, s64> logged_ms;
+    s64& last = logged_ms[anim];
     if (SteadyNowMs() - last > 5'000) {
         last = SteadyNowMs();
-        std::string ascii;
-        for (const char16_t* c = name; *c != 0; ++c) {
-            ascii.push_back(static_cast<char>(*c));
-        }
-        LOG_INFO(Debug, "BBSC revive: event {} on {:#x} {} (behaviour {:#x}, ready {})", ascii, chr,
-                 ready > 0 ? "sent" : "NOT sent", behaviour, ready);
-    }
-    if (ready > 0) {
-        using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
-        reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
-                                                                 reinterpret_cast<u64>(name));
+        LOG_INFO(Debug, "BBSC revive: animation {} played on {:#x} (test slot was {})", anim, chr,
+                 before);
     }
 }
 
@@ -8833,28 +8843,8 @@ u64 ShowBbscFallenCopy(u32 id, const std::array<float, 3>& at) {
     // The phantom's death breaks the body into shards (2026-10-24 11:32, screenshot): flags and
     // opacity alone did not bring it back. TickBbscRemoteRevive does, with a physics reset and
     // Idle_wild first, so the same steps run once per fall - the body then stands where it fell.
-    static std::map<u32, u64> stood;
-    if (stood[id] != best) {
-        stood[id] = best;
-        using PhysicsReset = void PS4_SYSV_ABI (*)(u64 chr, u8 flag);
-        reinterpret_cast<PhysicsReset>(image_base + 0x018BCF30)(best, 1);
-        const u64 behaviour = ReadablePointer(modules, 0x38) ? ReadValue<u64>(modules, 0x30) : 0;
-        if (ReadablePointer(behaviour, 0x388) && ReadValue<u8>(behaviour, 0x384) != 0) {
-            using PlayAnimation = void PS4_SYSV_ABI (*)(u64 behaviour, u64 name_utf16);
-            reinterpret_cast<PlayAnimation>(image_base + 0x01A19F60)(behaviour,
-                                                                     image_base + 0x04992C40);
-        }
-        LOG_INFO(Debug, "BBSC revive: fallen player {:08x}'s body back where it fell (physics "
-                        "reset, Idle_wild), now laid down",
-                 id);
-    }
-    // Then lying, in the game's own death pose (2026-10-24, the user: "no body on floor?"), again
-    // every 2 s in case something stands it up.
-    static std::map<u32, s64> laid_ms;
-    if (SteadyNowMs() - laid_ms[id] >= 2'000) {
-        laid_ms[id] = SteadyNowMs();
-        BbscPlayEvent(best, BbscFallenPoseEvent);
-    }
+    // Its pose comes from the fallen hunter's own game (TickBbscRevive plays the lying death pose
+    // there): standing it up or posing it here was undone by that sync (2026-10-24 11:41).
     if (opacity < 0.99f) {
         WriteValue<u64>(best, 0x208, 0x3F8000003F800000ull);
     }
@@ -8922,6 +8912,13 @@ void TickBbscRevive() {
         }
     }
     if (down) {
+        // A phantom's death breaks the body into shards on the others' screens, and their copy
+        // follows our animation: lying in the normal death pose instead, the body stays.
+        static s64 posed_ms = 0;
+        if (me != 0 && now - posed_ms >= 2'000) {
+            posed_ms = now;
+            BbscPlayAnimation(me, BbscFallenPoseAnim);
+        }
         if (body.has_value() && now - sent_ms >= BbscReviveSendMs) {
             sent_ms = now;
             SendBbscRevivePacket(1, 0, map, {body->position[0], body->position[1], body->position[2]}, 0);
@@ -9027,8 +9024,8 @@ void TickBbscRevive() {
     static s64 glow_ms = 0;
     if (filling) {
         if (now - kneel_ms >= BbscReviveKneelEveryMs) {
+            BbscPlayAnimation(me, kneel_ms == 0 ? BbscReviveKneelStartAnim : BbscReviveKneelLoopAnim);
             kneel_ms = now;
-            BbscPlayEvent(me, BbscReviveKneelEvent);
         }
         if (now - glow_ms >= BbscReviveGlowEveryMs) {
             glow_ms = now;
