@@ -8952,9 +8952,12 @@ bool BbscShowButtonPrompt(const BbscButtonPrompt& prompt, u64 dead_chr = 0) {
 // sits left of centre. For BBSC's own prompts the pair is moved with the game's own menu position
 // call 0x01ACB8C0(object, int x, int y) (GetDisplayInfo 0xE0 / SetDisplayInfo 0xE8, x and y
 // doubles at +0x00 / +0x08, flags |= 3; the object is what the update's holders keep at +8):
-// Text_0 right after its update set the text (0x01B577BB: Text_0's holder at rbp-0x208, the
-// text, UTF-16, in rbx), Button_0 just before its icon frame (0x01B5793C: its holder at
-// rbp-0x260). Any other text puts both back where fe.gfx has them.
+// the text right after its update set it (0x01B577BB: the text, UTF-16, in rbx; the holder at
+// rbp-0x208 is the clip "Text_0" INSIDE the Text_0 sprite, child of the ActionButton1/Text_0
+// holder r14+0x110, at 0, 0 there - its x is counted from the sprite's -237.75: the first try
+// moved the text 76 left, 2026-10-24 19:57), Button_0 just before its icon frame (0x01B5793C:
+// its holder at rbp-0x260, a child of ActionButton1 itself). Any other text puts both back where
+// fe.gfx has them.
 // The text widths are measured off the 2026-10-24 screenshots (fe.gfx units, the 24 px font):
 // no text width call of the game's is known yet.
 constexpr u64 BbscPromptTextSetOffset = 0x01B577BB;
@@ -8962,8 +8965,8 @@ constexpr u64 BbscPromptButtonSetOffset = 0x01B5793C;
 constexpr u64 BbscMenuSetPositionOffset = 0x01ACB8C0;
 constexpr s32 BbscPromptButtonX = -276; // fe.gfx: Button_0 -276.45, -11.5
 constexpr s32 BbscPromptButtonY = -11;
-constexpr s32 BbscPromptTextX = -238; // fe.gfx: Text_0 -237.75, -12.05
-constexpr s32 BbscPromptTextY = -12;
+constexpr s32 BbscPromptTextX = -238; // fe.gfx: the Text_0 sprite -237.75, -12.05; the text
+                                      // clip in it at 0, 0
 struct BbscCentredPrompt {
     std::u16string_view text;
     s32 width;
@@ -9001,15 +9004,16 @@ void PS4_SYSV_ABI BbscPromptTextHook(u64, const GuestRegisterSnapshot* registers
     if (width < 0) {
         if (bbsc_prompt_moved) {
             bbsc_prompt_moved = false;
-            BbscMenuSetPosition(text_holder, BbscPromptTextX, BbscPromptTextY);
+            BbscMenuSetPosition(text_holder, 0, 0);
             bbsc_prompt_button_x = BbscPromptButtonX;
         }
         return;
     }
     const s32 group = (BbscPromptTextX - BbscPromptButtonX) + width;
     const s32 button_x = -group / 2;
-    BbscMenuSetPosition(text_holder, button_x + (BbscPromptTextX - BbscPromptButtonX),
-                        BbscPromptTextY);
+    // Where the text starts, as an offset from its sprite's own place.
+    BbscMenuSetPosition(text_holder,
+                        button_x + (BbscPromptTextX - BbscPromptButtonX) - BbscPromptTextX, 0);
     bbsc_prompt_button_x = button_x;
     bbsc_prompt_moved = true;
 }
