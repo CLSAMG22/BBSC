@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-04 - BBport 1.9.4+: wait for BBport's loader
+
+- bb-probe.exe changes the game image (relocations, patches, page protections) for a few seconds
+  after it appears and ends with a protect pass that undoes a writable mapping made earlier. The mod
+  now waits until the image layout and protections stay unchanged for 1.5 s (30 s at most) before it
+  patches.
+- The pad import slot is read and written through ReadSlotSafely/WriteSlotSafely: BBport links the
+  imports itself and a raw read of an unreadable page closes the game.
+
 ## 2026-10-04 (c) - mod 11: Silencing Blank ends the co-op cleanly; Memory Altar for the guest
 
 - New tool: tools\gamedata\lua50.py - reads the game's compiled Lua (Lua 5.0 with one extra empty list

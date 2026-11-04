@@ -74,6 +74,11 @@ constexpr u64 EbootSize = 0x056D4000ULL; // CUSA03173 01.09 image size
 constexpr DWORD WaitForImageMs = 180'000;
 constexpr DWORD SettleMs = 20;            // let the emulator finish its own load-time patching
 constexpr DWORD WatchMs = 500;
+// bb-probe.exe works on the image for seconds after it appears: relocations, patches (Quit to
+// Desktop, Rebirth), GPU start-up, final per-page protect pass. Stable = protections unchanged.
+constexpr DWORD HostStableMs = 1'500;
+constexpr DWORD HostSampleMs = 100;
+constexpr DWORD HostWaitMaxMs = 30'000;
 
 HMODULE self_module = nullptr;
 std::filesystem::path mod_dir;
@@ -260,6 +265,53 @@ u64 FindEbootBase() {
     return 0;
 }
 
+// Fingerprint of the image's region layout and protections.
+u64 ImageProtectionPrint() {
+    u64 print = 1469598103934665603ULL;
+    const auto mix = [&print](u64 value) {
+        print ^= value;
+        print *= 1099511628211ULL;
+    };
+    MEMORY_BASIC_INFORMATION info{};
+    u64 at = EbootBase;
+    while (at < EbootBase + EbootSize &&
+           VirtualQuery(reinterpret_cast<void*>(at), &info, sizeof(info)) != 0) {
+        const u64 base = reinterpret_cast<u64>(info.BaseAddress);
+        mix(base);
+        mix(info.RegionSize);
+        mix(info.State);
+        mix(info.Protect);
+        at = base + info.RegionSize;
+    }
+    return print;
+}
+
+bool HostIsBbport(const wchar_t* exe) {
+    const std::wstring name = std::filesystem::path{exe}.filename().wstring();
+    return _wcsicmp(name.c_str(), L"bb-probe.exe") == 0;
+}
+
+// See HostStableMs. Returns ms waited.
+DWORD WaitForBbportLoad() {
+    const DWORD started = GetTickCount();
+    u64 last = ImageProtectionPrint();
+    DWORD stable_since = started;
+    while (GetTickCount() - stable_since < HostStableMs) {
+        if (GetTickCount() - started > HostWaitMaxMs) {
+            LOG_WARNING(Mod, "BBport: image protections still changing after {} s - going on",
+                        HostWaitMaxMs / 1000);
+            break;
+        }
+        Sleep(HostSampleMs);
+        const u64 now = ImageProtectionPrint();
+        if (now != last) {
+            last = now;
+            stable_since = GetTickCount();
+        }
+    }
+    return GetTickCount() - started;
+}
+
 bool AllSitesKnown(const Site** first_bad) {
     for (const Site& s : sites) {
         if (!GroupEnabled(s.group)) {
@@ -391,6 +443,10 @@ DWORD WINAPI Worker(void*) {
     }
     LOG_INFO(Mod, "Game image found at {:#x}{}", EbootBase,
              EbootBase == ForkEbootBase ? "" : " (not the shadp2p fork's address)");
+    // Before anything below: BBport's final protect pass would undo a writable mapping made here.
+    if (HostIsBbport(exe)) {
+        LOG_INFO(Mod, "BBport: waited {} ms for its loader to finish", WaitForBbportLoad());
+    }
     // shadPS4 maps the game's code writable; other hosts (bbhost) keep it read-only, and the
     // shared hook code writes some code bytes directly. Make the image's code writable like shadPS4.
     {
@@ -863,16 +919,17 @@ int PS4_SYSV_ABI PadReadState(s32 handle, u8* data) {
 }
 
 void InstallPadWrapper() {
-    auto* slot = reinterpret_cast<u64*>(EbootBase + PadReadStateSlot);
+    // BBport links the imports itself; a raw read of an unreadable slot page closes the game.
+    const u64 slot = EbootBase + PadReadStateSlot;
     for (int i = 0; i < 60'000; ++i) {
-        const u64 value = *slot;
-        if (value != 0 && (value < EbootBase || value >= EbootBase + EbootSize)) {
+        u64 value = 0;
+        if (BbscMod::ReadSlotSafely(slot, &value) && value != 0 &&
+            (value < EbootBase || value >= EbootBase + EbootSize)) {
             original_pad_read = reinterpret_cast<PadReadStateFn>(value);
-            DWORD old = 0;
-            VirtualProtect(slot, 8, PAGE_READWRITE, &old);
-            *slot = reinterpret_cast<u64>(&PadReadState);
-            DWORD ignored = 0;
-            VirtualProtect(slot, 8, old, &ignored);
+            if (!BbscMod::WriteSlotSafely(slot, reinterpret_cast<u64>(&PadReadState))) {
+                Sleep(1);
+                continue;
+            }
             LOG_INFO(Mod, "Pad: controller works the F1 camera too (L3 + R3)");
             return;
         }
