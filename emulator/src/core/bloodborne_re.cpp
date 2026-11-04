@@ -104,6 +104,7 @@ enum class TraceKind : u8 {
     WorldStateValidation,
     EnginePanic,
     LuaSessionEvent,
+    SummonPostBuild,
 };
 
 struct TraceSite {
@@ -508,6 +509,8 @@ constexpr auto Sites = std::to_array<TraceSite>({
      {0x8B, 0x02, 0x89, 0x85, 0xE8, 0xFE, 0xFF, 0xFF},
      8},
     {"CSRequestGetSos.InsertType", 0x01E5F970, TraceKind::GetSosInsert, StandardR15Prologue, 6},
+    // Builds the sign post/request body. r9 = sign data, role byte at +0x76 (role table 0x01E90F18).
+    {"SummonPost.Build", 0x01E90E30, TraceKind::SummonPostBuild, StandardR15Prologue, 6},
     {"SosStatus.Update", SosStatusUpdateOffset, TraceKind::SosStatus, StandardR15Prologue, 6},
     {"SosStatus.NativeResult",
      0x0187239E,
@@ -15991,12 +15994,43 @@ void ApplyBbscBellsAnywhere(const GuestRegisterSnapshot* registers) {
     }
 }
 
+// SummonPost.Build (0x01E90E30) fills the sign's request body from the sign data in r9; the role
+// is the byte at +0x76.
+constexpr u64 SummonPostBuildOffset = 0x01E90E30;
+
+void WriteSummonPostBuild(std::ostream& out, const GuestRegisterSnapshot& registers) {
+    const u64 return_address = ReadValue<u64>(registers.rsp, 0);
+    out << ",\"summon_post\":{\"role_code\":"
+        << static_cast<s32>(ReadValue<s8>(registers.r9, 0x76)) << ",\"caller_offset\":\"0x"
+        << std::hex << (return_address >= image_base ? return_address - image_base : 0)
+        << std::dec << "\"}";
+}
+
+// With an oath rune the sign posts as role 21-23, but a host's search only asks for role 7, so no host
+// rings it. The same guest posts role 7 with the rune off. Runs before the builder reads the byte.
+constexpr s8 PlainCoopSignRole = 7;
+
+void ApplyBbscOathSignAsPlain(const TraceSite& site, const GuestRegisterSnapshot& registers) {
+    if (site.offset != SummonPostBuildOffset || !ReadablePointer(registers.r9, 0x77)) {
+        return;
+    }
+    const s8 role = ReadValue<s8>(registers.r9, 0x76);
+    if (role < 21 || role > 23) {
+        return;
+    }
+    const bool written = WriteValue<s8>(registers.r9, 0x76, PlainCoopSignRole);
+    LOG_INFO(Debug, "BBSC sign: oath role {} posted as role {}: {}",
+             static_cast<s32>(role), static_cast<s32>(PlainCoopSignRole),
+             written ? "written" : "write failed");
+}
+
 void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
     if (tag >= Sites.size() || registers == nullptr) {
         return;
     }
 
     const auto& site = Sites[tag];
+    ApplyBbscOathSignAsPlain(site, *registers);
     if (site.offset == ItemUsableResultOffset) {
         ApplyBbscBellsAnywhere(registers);
     }
@@ -16669,6 +16703,9 @@ void PS4_SYSV_ABI TraceEntry(u64 tag, const GuestRegisterSnapshot* registers) {
             break;
         case TraceKind::LuaSessionEvent:
             WriteLuaSessionEvent(capture_file, *registers);
+            break;
+        case TraceKind::SummonPostBuild:
+            WriteSummonPostBuild(capture_file, *registers);
             break;
         case TraceKind::EnginePanic:
             WriteEnginePanicStack(capture_file, *registers);

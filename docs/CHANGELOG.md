@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-04 - Oath rune: a guest with the rune can be found
+
+- With an oath rune equipped the sign is posted with role 21, 22 or 23 (sign data +0x76), but a host's
+  search only asks for role 7, so no host ever saw it. SummonPost.Build (0x01E90E30) now posts these
+  signs as role 7. The guest joins as a white phantom (chr_type 1) like a guest without the rune.
+
 ## 2026-10-04 (c) - mod 11: Silencing Blank ends the co-op cleanly; Memory Altar for the guest
 
 - New tool: tools\gamedata\lua50.py - reads the game's compiled Lua (Lua 5.0 with one extra empty list
