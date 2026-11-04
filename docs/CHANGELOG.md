@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-04 - Boss rewards: Logarius's crown and the m35 boss reward reach the guest
+
+- Two rewards given by a follow-up event were missing from the table: Logarius (12501800, Crown of
+  Illusions, lot 2502000) and m35 (13501800, Celestial Dial, lot 3501800). The other rewards of that
+  kind were already listed.
+
 ## 2026-10-04 (c) - mod 11: Silencing Blank ends the co-op cleanly; Memory Altar for the guest
 
 - New tool: tools\gamedata\lua50.py - reads the game's compiled Lua (Lua 5.0 with one extra empty list
