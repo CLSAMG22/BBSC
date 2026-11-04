@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-04 - A dead guest left in the host's world is sent home too
+
+- A guest who died and was still in another player's world 15 s after the session ended stayed on a
+  grey screen, because the check for a stranded guest only looked at living players. It now sends
+  a dead one home as well, after releasing the leave locks a dead guest keeps (they make the game's
+  leave scripts return early).
+
 ## 2026-10-04 (c) - mod 11: Silencing Blank ends the co-op cleanly; Memory Altar for the guest
 
 - New tool: tools\gamedata\lua50.py - reads the game's compiled Lua (Lua 5.0 with one extra empty list

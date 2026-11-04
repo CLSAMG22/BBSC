@@ -9408,7 +9408,7 @@ void TickBbscStrandedGuest() {
     const u64 me = GetLocalPlayerCharacter();
     const bool stranded = GetSessionState() == 0 && ReadablePointer(global, 0x1598) &&
                           ReadValue<u8>(global, 0x1592) == 0 && ReadValue<u8>(global, 0x08) == 0 &&
-                          me != 0 && GetCharacterHp(me) > 0;
+                          me != 0;
     if (!stranded) {
         since_ms = 0;
         return;
@@ -9433,6 +9433,10 @@ void TickBbscStrandedGuest() {
     BBSC_TIMELINE("LEAVE", "leave: still in another player's world {} s after the session ended - "
                        "BBSC sends us home",
                 BbscStrandedMs / 1000);
+    if (GetCharacterHp(me) <= 0) {
+        // A dead guest keeps the locks that make the game's leave scripts return early.
+        ReleaseBbscLeaveLocks("dead and stranded after the session ended");
+    }
     WriteValue<s32>(event_state, 0, 2);
     WriteValue<u8>(global, 0x1520, 1);
     using HomePoint = void PS4_SYSV_ABI (*)(u64 lua, s32 point);
